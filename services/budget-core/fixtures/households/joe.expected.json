@@ -1,0 +1,342 @@
+{
+  "name": "Semi-monthly day job plus monthly rental income",
+  "month": "2026-03",
+  "money": {
+    "income_cents": 810000,
+    "income_normalized_cents": 810000,
+    "surplus_cents": 0,
+    "extra_paycheck": false,
+    "fixed_cents": 525299,
+    "lumpy_cents": 167320,
+    "lumpy_steady_cents": 127988,
+    "savings_cents": 104800,
+    "planned_free_cents": 12581,
+    "spent": {
+      "discretionary": 55686,
+      "fixed": 263300,
+      "lumpy": 0,
+      "savings": 40000,
+      "transfer": 0,
+      "total": 358986
+    },
+    "available_cents": -43105
+  },
+  "paychecks": [
+    {
+      "date": "2026-02-05",
+      "stream": "Rental",
+      "prior_month": true,
+      "amount_cents": 185000,
+      "holds": [
+        "Childcare 92000"
+      ],
+      "hold_total_cents": 92000,
+      "lumpy_cents": 0,
+      "savings_cents": 0,
+      "free_cents": 93000,
+      "over_committed": false
+    },
+    {
+      "date": "2026-02-15",
+      "stream": "Day job",
+      "prior_month": true,
+      "amount_cents": 312500,
+      "holds": [
+        "Mortgage 241800"
+      ],
+      "hold_total_cents": 241800,
+      "lumpy_cents": 0,
+      "savings_cents": 0,
+      "free_cents": 70700,
+      "over_committed": false
+    },
+    {
+      "date": "2026-02-28",
+      "stream": "Day job",
+      "prior_month": true,
+      "amount_cents": 312500,
+      "holds": [
+        "Trash pickup 3500"
+      ],
+      "hold_total_cents": 3500,
+      "lumpy_cents": 0,
+      "savings_cents": 0,
+      "free_cents": 309000,
+      "over_committed": false
+    },
+    {
+      "date": "2026-03-05",
+      "stream": "Rental",
+      "prior_month": false,
+      "amount_cents": 185000,
+      "holds": [
+        "Cell phone 11000",
+        "Rental property mgmt 14800",
+        "Gas & electric 21500",
+        "Health insurance 38000",
+        "Car loan 48900"
+      ],
+      "hold_total_cents": 134200,
+      "lumpy_cents": 38215,
+      "savings_cents": 23936,
+      "free_cents": -11351,
+      "over_committed": true
+    },
+    {
+      "date": "2026-03-15",
+      "stream": "Day job",
+      "prior_month": false,
+      "amount_cents": 312500,
+      "holds": [
+        "Internet 8999",
+        "Gym 4900",
+        "Water & sewer 7200",
+        "Student loan 32700"
+      ],
+      "hold_total_cents": 53799,
+      "lumpy_cents": 64553,
+      "savings_cents": 40432,
+      "free_cents": 153716,
+      "over_committed": false
+    },
+    {
+      "date": "2026-03-31",
+      "stream": "Day job",
+      "prior_month": false,
+      "amount_cents": 312500,
+      "holds": [],
+      "hold_total_cents": 0,
+      "lumpy_cents": 64552,
+      "savings_cents": 40432,
+      "free_cents": 207516,
+      "over_committed": false
+    }
+  ],
+  "periods": [
+    {
+      "window": "2026-03-05..2026-03-14",
+      "income_cents": 185000,
+      "planned_free_cents": -11351,
+      "spent_discretionary_cents": 15665,
+      "available_cents": -27016
+    },
+    {
+      "window": "2026-03-15..2026-03-30",
+      "income_cents": 312500,
+      "planned_free_cents": 153716,
+      "spent_discretionary_cents": 21279,
+      "available_cents": 132437
+    },
+    {
+      "window": "2026-03-31..2026-04-04",
+      "income_cents": 312500,
+      "planned_free_cents": 207516,
+      "spent_discretionary_cents": 99999,
+      "available_cents": 107517
+    }
+  ],
+  "unfunded": [],
+  "lumpy": {
+    "monthly_contribution_cents": 167320,
+    "total_outflow_cents": 1542100,
+    "worst_balance_cents": 250000,
+    "first_short_month": null,
+    "rows": [
+      {
+        "month": "2026-03",
+        "start": 250000,
+        "in": 167320,
+        "out": 0,
+        "end": 417320,
+        "due": [],
+        "short": false
+      },
+      {
+        "month": "2026-04",
+        "start": 417320,
+        "in": 167320,
+        "out": 45000,
+        "end": 539640,
+        "due": [
+          "HOA dues"
+        ],
+        "short": false
+      },
+      {
+        "month": "2026-05",
+        "start": 539640,
+        "in": 167320,
+        "out": 142800,
+        "end": 564160,
+        "due": [
+          "Car insurance"
+        ],
+        "short": false
+      },
+      {
+        "month": "2026-06",
+        "start": 564160,
+        "in": 167320,
+        "out": 8600,
+        "end": 722880,
+        "due": [
+          "Domain renewals"
+        ],
+        "short": false
+      },
+      {
+        "month": "2026-07",
+        "start": 722880,
+        "in": 167320,
+        "out": 465000,
+        "end": 425200,
+        "due": [
+          "Property taxes",
+          "HOA dues"
+        ],
+        "short": false
+      },
+      {
+        "month": "2026-08",
+        "start": 425200,
+        "in": 167320,
+        "out": 9500,
+        "end": 583020,
+        "due": [
+          "Credit card annual fee"
+        ],
+        "short": false
+      },
+      {
+        "month": "2026-09",
+        "start": 583020,
+        "in": 167320,
+        "out": 168000,
+        "end": 582340,
+        "due": [
+          "Home insurance"
+        ],
+        "short": false
+      },
+      {
+        "month": "2026-10",
+        "start": 582340,
+        "in": 167320,
+        "out": 69000,
+        "end": 680660,
+        "due": [
+          "HOA dues",
+          "Furnace service"
+        ],
+        "short": false
+      },
+      {
+        "month": "2026-11",
+        "start": 680660,
+        "in": 167320,
+        "out": 156700,
+        "end": 691280,
+        "due": [
+          "Car insurance",
+          "Amazon Prime"
+        ],
+        "short": false
+      },
+      {
+        "month": "2026-12",
+        "start": 691280,
+        "in": 167320,
+        "out": 0,
+        "end": 858600,
+        "due": [],
+        "short": false
+      },
+      {
+        "month": "2027-01",
+        "start": 858600,
+        "in": 167320,
+        "out": 465000,
+        "end": 560920,
+        "due": [
+          "Property taxes",
+          "HOA dues"
+        ],
+        "short": false
+      },
+      {
+        "month": "2027-02",
+        "start": 560920,
+        "in": 167320,
+        "out": 12500,
+        "end": 715740,
+        "due": [
+          "Car registration"
+        ],
+        "short": false
+      }
+    ]
+  },
+  "income_calendar": [
+    {
+      "month": "2026-01",
+      "total_cents": 810000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2026-02",
+      "total_cents": 810000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2026-03",
+      "total_cents": 810000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2026-04",
+      "total_cents": 810000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2026-05",
+      "total_cents": 810000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2026-06",
+      "total_cents": 810000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2026-07",
+      "total_cents": 810000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2026-08",
+      "total_cents": 810000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2026-09",
+      "total_cents": 810000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2026-10",
+      "total_cents": 810000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2026-11",
+      "total_cents": 810000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2026-12",
+      "total_cents": 810000,
+      "extra_paycheck": false
+    }
+  ],
+  "invariants": []
+}

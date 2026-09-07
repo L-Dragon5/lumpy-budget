@@ -1,0 +1,290 @@
+{
+  "name": "Everything on the last day of a short month, in a leap year",
+  "month": "2024-02",
+  "money": {
+    "income_cents": 730000,
+    "income_normalized_cents": 647500,
+    "surplus_cents": 82500,
+    "extra_paycheck": true,
+    "fixed_cents": 212000,
+    "lumpy_cents": 5000,
+    "lumpy_steady_cents": 5000,
+    "savings_cents": 100000,
+    "planned_free_cents": 413000,
+    "spent": {
+      "discretionary": 5000,
+      "fixed": 0,
+      "lumpy": 0,
+      "savings": 0,
+      "transfer": 0,
+      "total": 5000
+    },
+    "available_cents": 408000
+  },
+  "paychecks": [
+    {
+      "date": "2024-02-29",
+      "stream": "Salary",
+      "prior_month": false,
+      "amount_cents": 400000,
+      "holds": [
+        "Rent 200000"
+      ],
+      "hold_total_cents": 200000,
+      "lumpy_cents": 2740,
+      "savings_cents": 54795,
+      "free_cents": 142465,
+      "over_committed": false
+    },
+    {
+      "date": "2024-02-29",
+      "stream": "Consulting",
+      "prior_month": false,
+      "amount_cents": 120000,
+      "holds": [],
+      "hold_total_cents": 0,
+      "lumpy_cents": 822,
+      "savings_cents": 16438,
+      "free_cents": 102740,
+      "over_committed": false
+    },
+    {
+      "date": "2024-02-29",
+      "stream": "Consulting",
+      "prior_month": false,
+      "amount_cents": 120000,
+      "holds": [],
+      "hold_total_cents": 0,
+      "lumpy_cents": 822,
+      "savings_cents": 16438,
+      "free_cents": 102740,
+      "over_committed": false
+    },
+    {
+      "date": "2024-02-29",
+      "stream": "Dividend",
+      "prior_month": false,
+      "amount_cents": 90000,
+      "holds": [
+        "Storage unit 12000"
+      ],
+      "hold_total_cents": 12000,
+      "lumpy_cents": 616,
+      "savings_cents": 12329,
+      "free_cents": 65055,
+      "over_committed": false
+    }
+  ],
+  "periods": [
+    {
+      "window": "2024-02-29..2024-03-30",
+      "income_cents": 400000,
+      "planned_free_cents": 142465,
+      "spent_discretionary_cents": 5000,
+      "available_cents": 137465
+    },
+    {
+      "window": "2024-02-29..2024-03-30",
+      "income_cents": 120000,
+      "planned_free_cents": 102740,
+      "spent_discretionary_cents": 5000,
+      "available_cents": 97740
+    },
+    {
+      "window": "2024-02-29..2024-03-30",
+      "income_cents": 120000,
+      "planned_free_cents": 102740,
+      "spent_discretionary_cents": 5000,
+      "available_cents": 97740
+    },
+    {
+      "window": "2024-02-29..2024-03-30",
+      "income_cents": 90000,
+      "planned_free_cents": 65055,
+      "spent_discretionary_cents": 5000,
+      "available_cents": 60055
+    }
+  ],
+  "unfunded": [],
+  "lumpy": {
+    "monthly_contribution_cents": 5000,
+    "total_outflow_cents": 60000,
+    "worst_balance_cents": 45000,
+    "first_short_month": null,
+    "rows": [
+      {
+        "month": "2024-02",
+        "start": 100000,
+        "in": 5000,
+        "out": 60000,
+        "end": 45000,
+        "due": [
+          "Leap-day fee"
+        ],
+        "short": false
+      },
+      {
+        "month": "2024-03",
+        "start": 45000,
+        "in": 5000,
+        "out": 0,
+        "end": 50000,
+        "due": [],
+        "short": false
+      },
+      {
+        "month": "2024-04",
+        "start": 50000,
+        "in": 5000,
+        "out": 0,
+        "end": 55000,
+        "due": [],
+        "short": false
+      },
+      {
+        "month": "2024-05",
+        "start": 55000,
+        "in": 5000,
+        "out": 0,
+        "end": 60000,
+        "due": [],
+        "short": false
+      },
+      {
+        "month": "2024-06",
+        "start": 60000,
+        "in": 5000,
+        "out": 0,
+        "end": 65000,
+        "due": [],
+        "short": false
+      },
+      {
+        "month": "2024-07",
+        "start": 65000,
+        "in": 5000,
+        "out": 0,
+        "end": 70000,
+        "due": [],
+        "short": false
+      },
+      {
+        "month": "2024-08",
+        "start": 70000,
+        "in": 5000,
+        "out": 0,
+        "end": 75000,
+        "due": [],
+        "short": false
+      },
+      {
+        "month": "2024-09",
+        "start": 75000,
+        "in": 5000,
+        "out": 0,
+        "end": 80000,
+        "due": [],
+        "short": false
+      },
+      {
+        "month": "2024-10",
+        "start": 80000,
+        "in": 5000,
+        "out": 0,
+        "end": 85000,
+        "due": [],
+        "short": false
+      },
+      {
+        "month": "2024-11",
+        "start": 85000,
+        "in": 5000,
+        "out": 0,
+        "end": 90000,
+        "due": [],
+        "short": false
+      },
+      {
+        "month": "2024-12",
+        "start": 90000,
+        "in": 5000,
+        "out": 0,
+        "end": 95000,
+        "due": [],
+        "short": false
+      },
+      {
+        "month": "2025-01",
+        "start": 95000,
+        "in": 5000,
+        "out": 0,
+        "end": 100000,
+        "due": [],
+        "short": false
+      }
+    ]
+  },
+  "income_calendar": [
+    {
+      "month": "2024-01",
+      "total_cents": 640000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2024-02",
+      "total_cents": 730000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2024-03",
+      "total_cents": 640000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2024-04",
+      "total_cents": 640000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2024-05",
+      "total_cents": 640000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2024-06",
+      "total_cents": 640000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2024-07",
+      "total_cents": 640000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2024-08",
+      "total_cents": 640000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2024-09",
+      "total_cents": 640000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2024-10",
+      "total_cents": 640000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2024-11",
+      "total_cents": 640000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2024-12",
+      "total_cents": 640000,
+      "extra_paycheck": false
+    }
+  ],
+  "invariants": []
+}

@@ -14,37 +14,55 @@ export type LumpyPlan = {
   /** The number to actually save this month: the larger of the two. */
   recommended_cents: Cents;
   behind: boolean;
+  /** How much of this item is already sitting in the fund. */
+  already_covered_cents: Cents;
 };
 
 /**
  * Steady state is the honest long-run number. Catch-up is the honest number
  * *right now*: a $1,200 annual bill due in 3 months needs $400/mo, not $100/mo,
  * because you did not start saving for it a year ago.
+ *
+ * Money already in the fund is claimed by whatever comes due first, so an
+ * account with a balance is not told to save as if it were empty.
  */
-export function plan(items: LumpyItem[], fromMonth: ISOMonth): LumpyPlan[] {
-  return items
-    .filter((i) => i.active)
-    .map((item) => {
-      const steady = divRound(item.amount_cents, item.frequency_months);
-      const due = nextDueOnOrAfter(item, d.monthStart(fromMonth));
-      const monthsUntil = Math.max(0, d.monthsBetween(fromMonth, d.monthOf(due)));
-      const catchUp = monthsUntil <= 0 ? item.amount_cents : divRound(item.amount_cents, monthsUntil);
-      return {
-        item,
-        steady_cents: steady,
-        months_until_due: monthsUntil,
-        catch_up_cents: catchUp,
-        recommended_cents: Math.max(steady, catchUp),
-        behind: catchUp > steady,
-      };
-    });
+export function plan(items: LumpyItem[], fromMonth: ISOMonth, balanceCents: Cents = 0): LumpyPlan[] {
+  const active = items.filter((i) => i.active);
+  const from = d.monthStart(fromMonth);
+
+  const withDue = active.map((item) => ({ item, due: nextDueOnOrAfter(item, from) }));
+  // Soonest bills get first claim on the balance: that is the order they will spend it.
+  const claimOrder = [...withDue].sort((a, b) => d.compare(a.due, b.due) || a.item.id - b.item.id);
+  const covered = new Map<number, Cents>();
+  let left = Math.max(0, balanceCents);
+  for (const { item } of claimOrder) {
+    const take = Math.min(left, item.amount_cents);
+    covered.set(item.id, take);
+    left -= take;
+  }
+
+  return withDue.map(({ item, due }) => {
+    const steady = divRound(item.amount_cents, item.frequency_months);
+    const monthsUntil = Math.max(0, d.monthsBetween(fromMonth, d.monthOf(due)));
+    const needed = Math.max(0, item.amount_cents - (covered.get(item.id) ?? 0));
+    const catchUp = monthsUntil <= 0 ? needed : divRound(needed, monthsUntil);
+    return {
+      item,
+      steady_cents: steady,
+      months_until_due: monthsUntil,
+      catch_up_cents: catchUp,
+      recommended_cents: Math.max(steady, catchUp),
+      behind: catchUp > steady,
+      already_covered_cents: covered.get(item.id) ?? 0,
+    };
+  });
 }
 
 export const steadyMonthlyTotal = (items: LumpyItem[], fromMonth: ISOMonth): Cents =>
   sum(plan(items, fromMonth).map((p) => p.steady_cents));
 
-export const recommendedMonthlyTotal = (items: LumpyItem[], fromMonth: ISOMonth): Cents =>
-  sum(plan(items, fromMonth).map((p) => p.recommended_cents));
+export const recommendedMonthlyTotal = (items: LumpyItem[], fromMonth: ISOMonth, balanceCents: Cents = 0): Cents =>
+  sum(plan(items, fromMonth, balanceCents).map((p) => p.recommended_cents));
 
 export type TimelineRow = {
   month: ISOMonth;
@@ -80,7 +98,9 @@ export function timeline(
 ): Timeline {
   const active = items.filter((i) => i.active);
   const contribution = sum(
-    plan(active, startMonth).map((p) => (mode === "steady" ? p.steady_cents : p.recommended_cents)),
+    plan(active, startMonth, openingBalanceCents).map((p) =>
+      mode === "steady" ? p.steady_cents : p.recommended_cents,
+    ),
   );
 
   const monthsList = d.monthRange(startMonth, months);

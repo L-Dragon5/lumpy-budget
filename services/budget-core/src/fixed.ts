@@ -2,7 +2,7 @@ import type { FixedCost, IncomeStream } from "@lumpy/contracts";
 import { allocate, sum, type Cents } from "./money";
 import * as d from "./dates";
 import type { ISODate, ISOMonth } from "./dates";
-import { allOccurrences, occurrencesInMonth } from "./schedule";
+import { allOccurrences } from "./schedule";
 
 export type Hold = {
   fixed_cost_id: number;
@@ -61,41 +61,47 @@ export function allocateMonth(args: {
     lookback,
     d.monthEnd(month),
   );
-  const thisMonth = occurrencesInMonth(streams.filter((s) => s.active), month);
 
-  const plans = new Map<string, PaycheckPlan>();
-  const key = (date: ISODate, streamId: number) => `${date}#${streamId}`;
-  const ensure = (o: (typeof candidates)[number]): PaycheckPlan => {
-    const k = key(o.date, o.stream_id);
-    let p = plans.get(k);
-    if (!p) {
-      p = {
-        date: o.date,
-        stream_id: o.stream_id,
-        stream_name: o.stream_name,
-        amount_cents: o.amount_cents,
-        prior_month: d.monthOf(o.date) !== month,
-        holds: [],
-        hold_total_cents: 0,
-        lumpy_cents: 0,
-        savings_cents: 0,
-        free_cents: 0,
-        over_committed: false,
-      };
-      plans.set(k, p);
-    }
-    return p;
-  };
-  // Every paycheck landing inside the month always shows up, even with no holds.
-  for (const o of thisMonth) ensure(o);
+  // One plan per occurrence, keyed by position rather than by date: two pay
+  // events can legitimately land on the same day (semimonthly on the 30th and
+  // the last day both clamp to Feb 28), and collapsing them loses real money.
+  const plans: PaycheckPlan[] = candidates.map((o) => ({
+    date: o.date,
+    stream_id: o.stream_id,
+    stream_name: o.stream_name,
+    amount_cents: o.amount_cents,
+    prior_month: d.monthOf(o.date) !== month,
+    holds: [],
+    hold_total_cents: 0,
+    lumpy_cents: 0,
+    savings_cents: 0,
+    free_cents: 0,
+    over_committed: false,
+  }));
 
   const unfunded: Hold[] = [];
-  for (const c of fixedCosts.filter((f) => f.active)) {
-    const dueDate = d.clampDay(y, m, c.due_day);
+  // Soonest bills first, so the paycheck nearest each due date is claimed by the
+  // bill that actually needs it.
+  const bills = fixedCosts
+    .filter((f) => f.active)
+    .map((c) => ({ cost: c, dueDate: d.clampDay(y, m, c.due_day) }))
+    .sort((a, b) => d.compare(a.dueDate, b.dueDate) || a.cost.id - b.cost.id);
+
+  for (const { cost: c, dueDate } of bills) {
     const target = d.addDays(dueDate, -c.lead_days);
-    // The last paycheck that lands on or before the money is needed.
-    const covering = [...candidates].reverse().find((o) => d.compare(o.date, target) <= 0);
-    const fallback = covering ?? candidates[0];
+    // Hold the money as late as is still safe, but only from a paycheck that can
+    // actually cover it: otherwise a small rental deposit ends up "holding" the
+    // mortgage while a big paycheck two days earlier sits empty.
+    let idx = -1;
+    let latest = -1;
+    for (let i = plans.length - 1; i >= 0; i--) {
+      if (d.compare(plans[i]!.date, target) > 0) continue;
+      if (latest < 0) latest = i;
+      if (plans[i]!.amount_cents - plans[i]!.hold_total_cents >= c.amount_cents) { idx = i; break; }
+    }
+    if (idx < 0) idx = latest;
+    const covering = idx >= 0;
+    const carrier = covering ? plans[idx]! : plans[0];
     const hold: Hold = {
       fixed_cost_id: c.id,
       name: c.name,
@@ -103,20 +109,17 @@ export function allocateMonth(args: {
       due_date: dueDate,
       late: !covering,
     };
-    if (!fallback) {
+    if (!carrier) {
       unfunded.push(hold);
       continue;
     }
-    const p = ensure(fallback);
-    p.holds.push(hold);
-    p.hold_total_cents += c.amount_cents;
+    carrier.holds.push(hold);
+    carrier.hold_total_cents += c.amount_cents;
   }
 
   // Lumpy and savings come out of this month's paychecks, split in proportion
   // to paycheck size so a small check is not asked to carry a big transfer.
-  const inMonth = [...plans.values()]
-    .filter((p) => !p.prior_month)
-    .sort((a, b) => d.compare(a.date, b.date) || a.stream_id - b.stream_id);
+  const inMonth = plans.filter((p) => !p.prior_month);
   const weights = inMonth.map((p) => p.amount_cents);
   const lumpySplit = allocate(lumpyMonthlyCents, weights);
   const savingsSplit = allocate(savingsMonthlyCents, weights);
@@ -125,14 +128,13 @@ export function allocateMonth(args: {
     p.savings_cents = savingsSplit[i] ?? 0;
   });
 
-  const paychecks = [...plans.values()].sort(
-    (a, b) => d.compare(a.date, b.date) || a.stream_id - b.stream_id,
-  );
-  for (const p of paychecks) {
+  for (const p of plans) {
     p.holds.sort((a, b) => d.compare(a.due_date, b.due_date));
     p.free_cents = p.amount_cents - p.hold_total_cents - p.lumpy_cents - p.savings_cents;
     p.over_committed = p.free_cents < 0;
   }
+  // A prior-month paycheck only appears when it is carrying one of this month's bills.
+  const paychecks = plans.filter((p) => !p.prior_month || p.holds.length > 0);
 
   return {
     month,

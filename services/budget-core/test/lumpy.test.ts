@@ -90,3 +90,22 @@ test("inactive items are invisible", () => {
   expect(t.monthly_contribution_cents).toBe(0);
   expect(t.total_outflow_cents).toBe(0);
 });
+
+test("money already in the fund is claimed by whatever comes due first", () => {
+  const soon = lumpy({ id: 1, name: "HOA", amount_cents: 45000, frequency_months: 3, next_due_date: "2026-04-01" });
+  const later = lumpy({ id: 2, name: "Insurance", amount_cents: 120000, frequency_months: 12, next_due_date: "2026-07-01" });
+
+  const empty = plan([soon, later], "2026-03", 0);
+  expect(empty[0]!.catch_up_cents).toBe(45000); // all of it, this month
+  expect(empty[1]!.catch_up_cents).toBe(30000); // 120000 over 4 months
+
+  const funded = plan([soon, later], "2026-03", 45000);
+  expect(funded[0]!.already_covered_cents).toBe(45000);
+  expect(funded[0]!.catch_up_cents).toBe(0);
+  expect(funded[0]!.recommended_cents).toBe(15000); // falls back to steady state
+  expect(funded[1]!.already_covered_cents).toBe(0);
+
+  const overFunded = plan([soon, later], "2026-03", 200000);
+  expect(overFunded[1]!.already_covered_cents).toBe(120000);
+  expect(overFunded[1]!.catch_up_cents).toBe(0);
+});

@@ -19,6 +19,8 @@ export type BudgetInputs = {
   month: ISOMonth;
   /** Use steady-state lumpy contributions instead of catch-up. */
   lumpyMode?: "steady" | "recommended";
+  /** What is already sitting in the lumpy-fund savings account. */
+  lumpyOpeningBalanceCents?: number;
 };
 
 export type PeriodSummary = {
@@ -69,7 +71,7 @@ export function monthSummary(input: BudgetInputs): MonthSummary {
   const normalized = monthlyNormalized(streams);
   const lumpy = mode === "steady"
     ? steadyMonthlyTotal(lumpyItems, month)
-    : recommendedMonthlyTotal(lumpyItems, month);
+    : recommendedMonthlyTotal(lumpyItems, month, input.lumpyOpeningBalanceCents ?? 0);
   const savings = savingsMonthlyTotal(savingsGoals, income);
 
   const alloc = allocateMonth({

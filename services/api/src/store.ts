@@ -26,11 +26,15 @@ export async function setSetting(name: string, value: string): Promise<void> {
 
 /** Everything monthSummary needs, in one round trip's worth of queries. */
 export async function budgetInputs(month: string, lumpyMode: "steady" | "recommended") {
-  const [s, f, l, g, c] = await Promise.all([
+  const [s, f, l, g, c, opening] = await Promise.all([
     streams(), fixedCosts(), lumpyItems(), savingsGoals(), categories(),
+    setting("lumpy_opening_balance_cents", "0"),
   ]);
   const expenses = await expensesBetween(core.monthStart(month), core.monthEnd(month));
-  return { streams: s, fixedCosts: f, lumpyItems: l, savingsGoals: g, categories: c, expenses, month, lumpyMode };
+  return {
+    streams: s, fixedCosts: f, lumpyItems: l, savingsGoals: g, categories: c, expenses, month, lumpyMode,
+    lumpyOpeningBalanceCents: Number(opening) || 0,
+  };
 }
 
 export const hash = (key: string): string => new Bun.CryptoHasher("sha256").update(key).digest("hex");

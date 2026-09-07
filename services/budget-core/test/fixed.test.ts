@@ -97,3 +97,59 @@ test("inactive bills and inactive streams are excluded", () => {
   expect(a.fixed_total_cents).toBe(0);
   expect(a.income_cents).toBe(600000);
 });
+
+test("two paychecks on the same day are two paychecks, not one", () => {
+  // Semimonthly on the 30th and the last day both clamp to Feb 28.
+  const s = stream({ name: "Consulting", frequency: "semimonthly", anchor_date: null, day_1: 30, day_2: 0, amount_cents: 120000 });
+  const a = allocateMonth({ streams: [s], fixedCosts: [], month: "2026-02", lumpyMonthlyCents: 10001 });
+  expect(a.paychecks.map((p) => p.date)).toEqual(["2026-02-28", "2026-02-28"]);
+  expect(a.income_cents).toBe(240000);
+  expect(a.paychecks.reduce((x, p) => x + p.lumpy_cents, 0)).toBe(10001);
+});
+
+test("a bill goes to a paycheck that can actually cover it, not just the nearest one", () => {
+  const big = stream({ name: "Salary", frequency: "monthly", anchor_date: null, day_of_month: 1, amount_cents: 400000 });
+  const tiny = stream({ name: "Rental", frequency: "monthly", anchor_date: null, day_of_month: 5, amount_cents: 18000 });
+  const a = allocateMonth({
+    streams: [big, tiny],
+    fixedCosts: [fixedCost({ name: "Mortgage", amount_cents: 240000, due_day: 10, lead_days: 2 })],
+    month: "2026-03",
+  });
+  const carrier = a.paychecks.find((p) => p.holds.length > 0)!;
+  expect(carrier.stream_name).toBe("Salary"); // the $180 rental cheque cannot hold $2,400
+  expect(carrier.over_committed).toBe(false);
+});
+
+test("when one paycheck cannot hold everything, the overflow moves to an earlier one", () => {
+  const monthly = stream({ name: "Salary", frequency: "monthly", anchor_date: null, day_of_month: 1, amount_cents: 100000 });
+  const a = allocateMonth({
+    streams: [monthly],
+    fixedCosts: [
+      fixedCost({ name: "Rent", amount_cents: 90000, due_day: 10, lead_days: 0 }),
+      fixedCost({ name: "Car", amount_cents: 40000, due_day: 12, lead_days: 0 }),
+    ],
+    month: "2026-03",
+  });
+  // March's paycheck takes the rent; the car payment has to be set aside in February.
+  expect(a.paychecks.map((p) => [p.date, p.holds.map((h) => h.name)])).toEqual([
+    ["2026-02-01", ["Car"]],
+    ["2026-03-01", ["Rent"]],
+  ]);
+  expect(a.paychecks.every((p) => !p.over_committed)).toBe(true);
+});
+
+test("with only one paycheck in the whole window, everything stacks on it and it is flagged", () => {
+  const yearly = stream({ name: "Annual draw", frequency: "annual", anchor_date: "2026-03-01", amount_cents: 100000 });
+  const a = allocateMonth({
+    streams: [yearly],
+    fixedCosts: [
+      fixedCost({ name: "Rent", amount_cents: 90000, due_day: 10, lead_days: 0 }),
+      fixedCost({ name: "Car", amount_cents: 40000, due_day: 12, lead_days: 0 }),
+    ],
+    month: "2026-03",
+  });
+  expect(a.paychecks).toHaveLength(1);
+  expect(a.paychecks[0]!.holds.map((h) => h.name)).toEqual(["Rent", "Car"]);
+  expect(a.paychecks[0]!.free_cents).toBe(-30000);
+  expect(a.paychecks[0]!.over_committed).toBe(true);
+});

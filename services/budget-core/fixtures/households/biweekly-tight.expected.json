@@ -1,0 +1,290 @@
+{
+  "name": "One biweekly paycheck, bills that barely fit, a lumpy fund behind schedule",
+  "month": "2026-01",
+  "money": {
+    "income_cents": 534000,
+    "income_normalized_cents": 385667,
+    "surplus_cents": 148333,
+    "extra_paycheck": true,
+    "fixed_cents": 209800,
+    "lumpy_cents": 72000,
+    "lumpy_steady_cents": 18000,
+    "savings_cents": 26700,
+    "planned_free_cents": 225500,
+    "spent": {
+      "discretionary": 25650,
+      "fixed": 0,
+      "lumpy": 0,
+      "savings": 0,
+      "transfer": 0,
+      "total": 25650
+    },
+    "available_cents": 199850
+  },
+  "paychecks": [
+    {
+      "date": "2025-12-19",
+      "stream": "Paycheck",
+      "prior_month": true,
+      "amount_cents": 178000,
+      "holds": [
+        "Rent 145000"
+      ],
+      "hold_total_cents": 145000,
+      "lumpy_cents": 0,
+      "savings_cents": 0,
+      "free_cents": 33000,
+      "over_committed": false
+    },
+    {
+      "date": "2026-01-02",
+      "stream": "Paycheck",
+      "prior_month": false,
+      "amount_cents": 178000,
+      "holds": [
+        "Car payment 39500"
+      ],
+      "hold_total_cents": 39500,
+      "lumpy_cents": 24000,
+      "savings_cents": 8900,
+      "free_cents": 105600,
+      "over_committed": false
+    },
+    {
+      "date": "2026-01-16",
+      "stream": "Paycheck",
+      "prior_month": false,
+      "amount_cents": 178000,
+      "holds": [
+        "Electric 16800",
+        "Phone 8500"
+      ],
+      "hold_total_cents": 25300,
+      "lumpy_cents": 24000,
+      "savings_cents": 8900,
+      "free_cents": 119800,
+      "over_committed": false
+    },
+    {
+      "date": "2026-01-30",
+      "stream": "Paycheck",
+      "prior_month": false,
+      "amount_cents": 178000,
+      "holds": [],
+      "hold_total_cents": 0,
+      "lumpy_cents": 24000,
+      "savings_cents": 8900,
+      "free_cents": 145100,
+      "over_committed": false
+    }
+  ],
+  "periods": [
+    {
+      "window": "2026-01-02..2026-01-15",
+      "income_cents": 178000,
+      "planned_free_cents": 105600,
+      "spent_discretionary_cents": 8200,
+      "available_cents": 97400
+    },
+    {
+      "window": "2026-01-16..2026-01-29",
+      "income_cents": 178000,
+      "planned_free_cents": 119800,
+      "spent_discretionary_cents": 11350,
+      "available_cents": 108450
+    },
+    {
+      "window": "2026-01-30..2026-02-12",
+      "income_cents": 178000,
+      "planned_free_cents": 145100,
+      "spent_discretionary_cents": 6100,
+      "available_cents": 139000
+    }
+  ],
+  "unfunded": [],
+  "lumpy": {
+    "monthly_contribution_cents": 72000,
+    "total_outflow_cents": 216000,
+    "worst_balance_cents": 0,
+    "first_short_month": null,
+    "rows": [
+      {
+        "month": "2026-01",
+        "start": 0,
+        "in": 72000,
+        "out": 0,
+        "end": 72000,
+        "due": [],
+        "short": false
+      },
+      {
+        "month": "2026-02",
+        "start": 72000,
+        "in": 72000,
+        "out": 24000,
+        "end": 120000,
+        "due": [
+          "Renters insurance"
+        ],
+        "short": false
+      },
+      {
+        "month": "2026-03",
+        "start": 120000,
+        "in": 72000,
+        "out": 96000,
+        "end": 96000,
+        "due": [
+          "Car insurance"
+        ],
+        "short": false
+      },
+      {
+        "month": "2026-04",
+        "start": 96000,
+        "in": 72000,
+        "out": 0,
+        "end": 168000,
+        "due": [],
+        "short": false
+      },
+      {
+        "month": "2026-05",
+        "start": 168000,
+        "in": 72000,
+        "out": 0,
+        "end": 240000,
+        "due": [],
+        "short": false
+      },
+      {
+        "month": "2026-06",
+        "start": 240000,
+        "in": 72000,
+        "out": 0,
+        "end": 312000,
+        "due": [],
+        "short": false
+      },
+      {
+        "month": "2026-07",
+        "start": 312000,
+        "in": 72000,
+        "out": 0,
+        "end": 384000,
+        "due": [],
+        "short": false
+      },
+      {
+        "month": "2026-08",
+        "start": 384000,
+        "in": 72000,
+        "out": 0,
+        "end": 456000,
+        "due": [],
+        "short": false
+      },
+      {
+        "month": "2026-09",
+        "start": 456000,
+        "in": 72000,
+        "out": 96000,
+        "end": 432000,
+        "due": [
+          "Car insurance"
+        ],
+        "short": false
+      },
+      {
+        "month": "2026-10",
+        "start": 432000,
+        "in": 72000,
+        "out": 0,
+        "end": 504000,
+        "due": [],
+        "short": false
+      },
+      {
+        "month": "2026-11",
+        "start": 504000,
+        "in": 72000,
+        "out": 0,
+        "end": 576000,
+        "due": [],
+        "short": false
+      },
+      {
+        "month": "2026-12",
+        "start": 576000,
+        "in": 72000,
+        "out": 0,
+        "end": 648000,
+        "due": [],
+        "short": false
+      }
+    ]
+  },
+  "income_calendar": [
+    {
+      "month": "2026-01",
+      "total_cents": 534000,
+      "extra_paycheck": true
+    },
+    {
+      "month": "2026-02",
+      "total_cents": 356000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2026-03",
+      "total_cents": 356000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2026-04",
+      "total_cents": 356000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2026-05",
+      "total_cents": 356000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2026-06",
+      "total_cents": 356000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2026-07",
+      "total_cents": 534000,
+      "extra_paycheck": true
+    },
+    {
+      "month": "2026-08",
+      "total_cents": 356000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2026-09",
+      "total_cents": 356000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2026-10",
+      "total_cents": 356000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2026-11",
+      "total_cents": 356000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2026-12",
+      "total_cents": 356000,
+      "extra_paycheck": false
+    }
+  ],
+  "invariants": []
+}

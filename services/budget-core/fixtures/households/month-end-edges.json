@@ -1,0 +1,30 @@
+{
+  "name": "Everything on the last day of a short month, in a leap year",
+  "month": "2024-02",
+  "year": 2024,
+  "lumpyMode": "steady",
+  "openingBalance": 100000,
+  "streams": [
+    { "id": 1, "name": "Salary", "amount_cents": 400000, "frequency": "monthly", "anchor_date": null, "day_1": null, "day_2": null, "day_of_month": 31, "active": true },
+    { "id": 2, "name": "Consulting", "amount_cents": 120000, "frequency": "semimonthly", "anchor_date": null, "day_1": 31, "day_2": 0, "day_of_month": null, "active": true },
+    { "id": 3, "name": "Dividend", "amount_cents": 90000, "frequency": "annual", "anchor_date": "2024-02-29", "day_1": null, "day_2": null, "day_of_month": null, "active": true },
+    { "id": 4, "name": "Retired stream", "amount_cents": 500000, "frequency": "weekly", "anchor_date": "2024-02-01", "day_1": null, "day_2": null, "day_of_month": null, "active": false }
+  ],
+  "fixedCosts": [
+    { "id": 1, "name": "Rent", "amount_cents": 200000, "due_day": 31, "lead_days": 0, "category_id": null, "active": true },
+    { "id": 2, "name": "Storage unit", "amount_cents": 12000, "due_day": 0, "lead_days": 0, "category_id": null, "active": true },
+    { "id": 3, "name": "Old subscription", "amount_cents": 9900, "due_day": 15, "lead_days": 0, "category_id": null, "active": false }
+  ],
+  "lumpyItems": [
+    { "id": 1, "name": "Leap-day fee", "amount_cents": 60000, "frequency_months": 12, "next_due_date": "2024-02-29", "category_id": null, "active": true }
+  ],
+  "savingsGoals": [
+    { "id": 1, "name": "Down payment", "mode": "fixed", "amount_cents": 100000, "percent": null, "active": true }
+  ],
+  "categories": [
+    { "id": 1, "name": "Misc", "bucket": "discretionary", "color": null }
+  ],
+  "expenses": [
+    { "id": 1, "txn_date": "2024-02-29", "amount_cents": 5000, "merchant": "LEAP DAY LUNCH", "description": "", "category_id": 1, "source": "manual", "import_batch_id": null, "dedupe_hash": "c1" }
+  ]
+}

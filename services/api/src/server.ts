@@ -94,8 +94,9 @@ async function allocation(url: URL): Promise<Response> {
   const month = url.searchParams.get("month");
   if (!isMonth(month)) return fail("month must be YYYY-MM");
   const mode = lumpyMode(url.searchParams.get("lumpy_mode"));
-  const [s, f, l, g] = await Promise.all([
+  const [s, f, l, g, opening] = await Promise.all([
     store.streams(), store.fixedCosts(), store.lumpyItems(), store.savingsGoals(),
+    store.setting("lumpy_opening_balance_cents", "0"),
   ]);
   const income = core.monthlyActual(s, month);
   return json(
@@ -103,7 +104,10 @@ async function allocation(url: URL): Promise<Response> {
       streams: s,
       fixedCosts: f,
       month,
-      lumpyMonthlyCents: mode === "steady" ? core.steadyMonthlyTotal(l, month) : core.recommendedMonthlyTotal(l, month),
+      lumpyMonthlyCents:
+        mode === "steady"
+          ? core.steadyMonthlyTotal(l, month)
+          : core.recommendedMonthlyTotal(l, month, Number(opening) || 0),
       savingsMonthlyCents: core.savingsMonthlyTotal(g, income),
     }),
   );
@@ -120,7 +124,7 @@ async function lumpyTimeline(url: URL): Promise<Response> {
   return json({
     ...core.timeline(items, start, months, opening, lumpyMode(url.searchParams.get("lumpy_mode"))),
     opening_balance_cents: opening,
-    plan: core.plan(items, start),
+    plan: core.plan(items, start, opening),
   });
 }
 

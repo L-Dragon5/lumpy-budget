@@ -2,7 +2,11 @@
   "name": "lumpy-budget",
   "private": true,
   "type": "module",
-  "workspaces": ["contracts", "services/*", "apps/*"],
+  "workspaces": [
+    "contracts",
+    "services/*",
+    "apps/*"
+  ],
   "scripts": {
     "migrate": "bun run services/db/src/migrate.ts",
     "seed": "bun run services/db/src/seed.ts",
@@ -10,7 +14,8 @@
     "web": "bun run --cwd apps/web dev",
     "dev": "bun run api & bun run web",
     "test": "bun test",
-    "scenarios": "bun run services/budget-core/scenarios.ts"
+    "scenarios": "bun run services/budget-core/scenarios.ts",
+    "scenarios:update": "bun run services/budget-core/scenarios.ts --update"
   },
   "devDependencies": {
     "@types/bun": "latest",
