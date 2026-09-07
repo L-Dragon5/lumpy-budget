@@ -12,5 +12,5 @@ const TITLES: Record<string, string> = {
 
 export function pageTitle(pathname: string): string {
   const name = TITLES[pathname.replace(/\/+$/, "") || "/"];
-  return name ? `${name} · Lumpy` : "Lumpy";
+  return `${name ?? "Page not found"} · Lumpy`;
 }

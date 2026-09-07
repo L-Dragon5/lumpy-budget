@@ -13,6 +13,7 @@ import Savings from "@/pages/Savings";
 import Expenses from "@/pages/Expenses";
 import Reports from "@/pages/Reports";
 import Settings from "@/pages/Settings";
+import NotFound from "@/pages/NotFound";
 import "./index.css";
 
 const queryClient = new QueryClient({
@@ -34,6 +35,7 @@ createRoot(document.getElementById("root")!).render(
             <Route path="expenses" element={<Expenses />} />
             <Route path="reports" element={<Reports />} />
             <Route path="settings" element={<Settings />} />
+            <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>
       </BrowserRouter>

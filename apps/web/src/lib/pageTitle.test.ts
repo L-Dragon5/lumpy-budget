@@ -12,5 +12,5 @@ test("ignores a trailing slash", () => {
 });
 
 test("falls back for unknown paths", () => {
-  expect(pageTitle("/nope")).toBe("Lumpy");
+  expect(pageTitle("/nope")).toBe("Page not found · Lumpy");
 });
