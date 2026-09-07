@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { treaty } from "@elysiajs/eden";
 import type { App } from "@lumpy/api";
 import { EDEN_OPTIONS } from "./eden-options";
@@ -47,8 +47,19 @@ async function unwrap<R extends EdenResponse>(call: Promise<R>): Promise<Payload
   return res.data as Payload<R>;
 }
 
+/**
+ * keepPreviousData is why changing a filter does not blink. A new key (another
+ * month, another bucket) is a cache miss, so without it `isLoading` goes true and
+ * every page's `if (isLoading) return <Loading />` tears the whole screen down to
+ * a spinner and rebuilds it. Holding the last key's data keeps `isLoading` true
+ * only on a genuine first load; the numbers swap in place when the fetch lands.
+ */
 export function useApi<R extends EdenResponse>(key: readonly unknown[], call: () => Promise<R>) {
-  return useQuery<Payload<R>, ApiError>({ queryKey: key, queryFn: () => unwrap(call()) });
+  return useQuery<Payload<R>, ApiError>({
+    queryKey: key,
+    queryFn: () => unwrap(call()),
+    placeholderData: keepPreviousData,
+  });
 }
 
 /**
