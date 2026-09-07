@@ -222,7 +222,10 @@ export default function Income() {
                   </span>
                   <span className="flex items-center gap-3">
                     <Money cents={m.total_cents} className="text-sm" />
-                    {m.surplus_cents !== 0 ? (
+                    {/* Only the surplus is worth calling out: every other month
+                        is just the average, and a red minus on nine of twelve
+                        months reads as a problem when nothing is wrong. */}
+                    {m.surplus_cents > 0 ? (
                       <Money cents={m.surplus_cents} sign tone className="w-24 text-right text-xs" />
                     ) : (
                       <span className="w-24" />

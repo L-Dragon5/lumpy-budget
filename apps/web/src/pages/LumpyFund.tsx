@@ -14,6 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { SelectField } from "@/components/app/controls";
 import { AddButton, DeleteButton, MoneyField, RecordDialog } from "@/components/app/record-dialog";
 import { Money } from "@/components/app/money";
+import { BalanceTile } from "@/components/app/balance-tile";
 import { StatTile } from "@/components/app/stat-tile";
 import { Loading, LoadError, PageHeader } from "@/components/app/page";
 import { useApi, useCreate, useDelete, useUpdate } from "@/lib/api";
@@ -116,7 +117,12 @@ export default function LumpyFund() {
               : "You are on schedule: this is the steady-state number."
           }
         />
-        <StatTile label="In the fund now" cents={timeline.data?.opening_balance_cents ?? 0} caption="Set this on the Settings page." tone="muted" />
+        <BalanceTile
+          settingKey="lumpy_opening_balance_cents"
+          label="In the fund now"
+          caption="What the savings account behind this fund actually holds."
+          editCaption="Whatever the account says right now. The 12-month runway starts from it."
+        />
         <StatTile
           label="Leaves next month"
           cents={nextMonth?.outflow_cents ?? 0}

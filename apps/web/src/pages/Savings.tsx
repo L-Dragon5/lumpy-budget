@@ -13,10 +13,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { SingleToggle } from "@/components/app/controls";
 import { AddButton, DeleteButton, MoneyField, RecordDialog } from "@/components/app/record-dialog";
 import { Money } from "@/components/app/money";
+import { BalanceTile } from "@/components/app/balance-tile";
 import { StatTile } from "@/components/app/stat-tile";
 import { Loading, LoadError, MonthNav, PageHeader } from "@/components/app/page";
 import { useApi, useCreate, useDelete, useUpdate } from "@/lib/api";
-import { dateLabel, monthLabel, thisMonth } from "@/lib/format";
+import { dateLabel, money, monthLabel, thisMonth } from "@/lib/format";
 
 type Draft = {
   name: string;
@@ -47,6 +48,7 @@ const toBody = (d: Draft) => ({
 export default function Savings() {
   const [month, setMonth] = useState(thisMonth());
   const goals = useApi<SavingsGoal[]>("/api/savings-goals");
+  const settings = useApi<Record<string, string>>("/api/settings");
   const summary = useApi<MonthSummary>(`/api/summary?month=${month}`);
   const create = useCreate("savings-goals");
   const update = useUpdate("savings-goals");
@@ -68,6 +70,7 @@ export default function Savings() {
   if (summary.error) return <LoadError error={summary.error} />;
 
   const rows = goals.data ?? [];
+  const savingsBalance = Number(settings.data?.savings_balance_cents ?? "0") || 0;
   const s = summary.data!;
   const perGoal = new Map(s.savings_breakdown.map((b) => [b.name, b.amount_cents]));
   const paychecks = s.paychecks.filter((p) => !p.prior_month);
@@ -85,8 +88,18 @@ export default function Savings() {
         }
       />
 
-      <div className="mb-4 grid gap-4 sm:grid-cols-3">
+      <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile label={`Saving in ${monthLabel(month)}`} cents={s.savings_cents} caption={`${((s.savings_cents / Math.max(1, s.income_cents)) * 100).toFixed(1)}% of this month's income`} />
+        <BalanceTile
+          settingKey="savings_balance_cents"
+          label="In savings now"
+          caption={
+            s.savings_cents > 0
+              ? `At ${money(s.savings_cents)} a month, ${money(savingsBalance + s.savings_cents * 12)} a year from now.`
+              : "Add a goal to start putting money in."
+          }
+          editCaption="Whatever the savings account says right now."
+        />
         <StatTile label="Income this month" cents={s.income_cents} tone="muted" caption="What percent goals are measured against." />
         <StatTile label="Left after everything" cents={s.planned_free_cents} tone={s.planned_free_cents < 0 ? "critical" : "good"} caption="Income minus bills, lumpy fund and savings." />
       </div>

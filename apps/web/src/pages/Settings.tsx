@@ -11,8 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SelectField } from "@/components/app/controls";
 import { AddButton, DeleteButton, RecordDialog } from "@/components/app/record-dialog";
 import { Loading, LoadError, PageHeader } from "@/components/app/page";
-import { api, useApi, useCreate, useDelete, useInvalidateAll, useUpdate } from "@/lib/api";
-import { centsToInput, toCents } from "@/lib/format";
+import { useApi, useCreate, useDelete, useUpdate } from "@/lib/api";
 
 const BUCKETS = [
   { value: "discretionary", label: "Discretionary — counts against what you can spend" },
@@ -26,8 +25,6 @@ export default function Settings() {
   const categories = useApi<Category[]>("/api/categories");
   const rules = useApi<CategoryRule[]>("/api/category-rules");
   const profiles = useApi<ImportProfile[]>("/api/import-profiles");
-  const settings = useApi<Record<string, string>>("/api/settings");
-  const invalidate = useInvalidateAll();
 
   const createCategory = useCreate("categories");
   const updateCategory = useUpdate("categories");
@@ -38,22 +35,12 @@ export default function Settings() {
 
   const [catDraft, setCatDraft] = useState<{ id: number | null; name: string; bucket: string } | null>(null);
   const [ruleDraft, setRuleDraft] = useState<{ pattern: string; category_id: string; priority: string } | null>(null);
-  const [balance, setBalance] = useState<string | null>(null);
 
-  if (categories.isLoading || settings.isLoading) return <Loading />;
+  if (categories.isLoading) return <Loading />;
   if (categories.error) return <LoadError error={categories.error} />;
 
   const cats = categories.data ?? [];
   const catName = (id: number) => cats.find((c) => c.id === id)?.name ?? `#${id}`;
-  const openingBalance = Number(settings.data?.lumpy_opening_balance_cents ?? "0");
-
-  const saveBalance = async () => {
-    const cents = toCents(balance ?? "");
-    if (cents === null) return;
-    await api.put("/api/settings", { name: "lumpy_opening_balance_cents", value: String(cents) });
-    setBalance(null);
-    invalidate();
-  };
 
   return (
     <>
@@ -64,7 +51,6 @@ export default function Settings() {
           <TabsTrigger value="categories">Categories</TabsTrigger>
           <TabsTrigger value="rules">Rules</TabsTrigger>
           <TabsTrigger value="imports">Import formats</TabsTrigger>
-          <TabsTrigger value="fund">Lumpy fund</TabsTrigger>
         </TabsList>
 
         <TabsContent value="categories">
@@ -209,34 +195,6 @@ export default function Settings() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="fund">
-          <Card>
-            <CardHeader>
-              <CardTitle>Lumpy fund balance</CardTitle>
-              <CardDescription>
-                What is actually in the savings account behind the lumpy fund. The 12-month runway starts from
-                this number, and money already saved is claimed by whatever comes due first.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Field className="max-w-sm">
-                <FieldLabel htmlFor="fund-balance">Current balance</FieldLabel>
-                <div className="flex gap-2">
-                  <Input
-                    id="fund-balance"
-                    inputMode="decimal"
-                    value={balance ?? centsToInput(openingBalance)}
-                    onChange={(e) => setBalance(e.target.value)}
-                  />
-                  <Button variant="outline" onClick={saveBalance} disabled={balance === null}>
-                    Save
-                  </Button>
-                </div>
-                <FieldDescription>Update this whenever you check the account.</FieldDescription>
-              </Field>
-            </CardContent>
-          </Card>
-        </TabsContent>
       </Tabs>
 
       {catDraft ? (

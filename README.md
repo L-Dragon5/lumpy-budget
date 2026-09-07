@@ -120,6 +120,9 @@ month, not $100, because you did not start saving for it a year ago. Money
 already in the account is claimed by whatever comes due first. The timeline runs
 12 months and names the first month the fund would run dry.
 
+Both account balances — the lumpy fund and savings — are kept up to date by hand
+on the page that reads them, not on a settings page two clicks away.
+
 **Available to spend**, both ways. Over the whole month, and per paycheck period
 — from the day money lands until the next paycheck arrives, which is how it is
 actually spent. The month can look fine while one period inside it does not.
