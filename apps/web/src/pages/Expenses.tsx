@@ -160,7 +160,7 @@ export default function Expenses() {
                         />
                       </TableCell>
                       <TableCell className="text-right">
-                        <Money cents={e.amount_cents} tone={e.amount_cents < 0} />
+                        <Money cents={e.amount_cents} className={e.amount_cents < 0 ? "text-[var(--good)]" : undefined} />
                       </TableCell>
                       <TableCell>
                         <DeleteButton label={e.merchant} onConfirm={() => remove.mutate(e.id)} />

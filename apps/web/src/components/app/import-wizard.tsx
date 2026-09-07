@@ -77,11 +77,14 @@ export function ImportWizard({ open, onOpenChange }: { open: boolean; onOpenChan
     try {
       let savedProfileId: number | null = profileId === NONE ? null : Number(profileId);
       if (profileName.trim() && profileId === NONE && mapping) {
-        const created = await api.post<ImportProfile>("/api/import-profiles", {
-          name: profileName.trim(),
-          mapping,
-        }).catch(() => null); // A name clash just means we reuse nothing; the import still runs.
-        savedProfileId = created?.id ?? null;
+        const name = profileName.trim();
+        // Importing next month's statement under the same name updates that saved
+        // format rather than failing on the unique name or orphaning the batch.
+        const existing = (profiles.data ?? []).find((p) => p.name.toLowerCase() === name.toLowerCase());
+        const saved = existing
+          ? await api.put<ImportProfile>(`/api/import-profiles/${existing.id}`, { name, mapping })
+          : await api.post<ImportProfile>("/api/import-profiles", { name, mapping });
+        savedProfileId = saved.id;
       }
       const res = await api.post<{ inserted: number; skipped: number }>("/api/import", {
         filename: filename || "import.csv",
@@ -300,7 +303,7 @@ export function ImportWizard({ open, onOpenChange }: { open: boolean; onOpenChan
                           {categoryName(r.category_id) ?? "—"}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Money cents={r.amount_cents} tone />
+                          <Money cents={r.amount_cents} className={r.amount_cents < 0 ? "text-[var(--good)]" : undefined} />
                         </TableCell>
                       </TableRow>
                     ))}
