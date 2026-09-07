@@ -110,8 +110,8 @@ export default function LumpyTimeline() {
         <CardHeader>
           <CardTitle>Balance and outflow</CardTitle>
           <CardDescription>
-            The area is what is in the account at the end of each month; the bars are what was paid out of it.
-            Every figure is in the table below.
+            The area is what the account holds at the end of each month. The bars are what left it. Every figure
+            is in the table below.
           </CardDescription>
         </CardHeader>
         <CardContent>

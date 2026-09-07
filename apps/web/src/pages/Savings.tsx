@@ -177,7 +177,7 @@ export default function Savings() {
           <CardHeader>
             <CardTitle>Take from each paycheck</CardTitle>
             <CardDescription>
-              Split in proportion to paycheck size, so a small cheque is never asked to carry a big transfer.
+              Split in proportion to paycheck size, so a small paycheck carries a small share.
             </CardDescription>
           </CardHeader>
           <CardContent>

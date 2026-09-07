@@ -165,10 +165,10 @@ export default function FixedCosts() {
 
         <Card className="lg:col-span-3">
           <CardHeader>
-            <CardTitle>Safety first — {monthLabel(month)}</CardTitle>
+            <CardTitle>Set aside first — {monthLabel(month)}</CardTitle>
             <CardDescription>
-              Each paycheck, and what to set aside from it before spending anything. A bill lands on the last
-              paycheck that arrives in time to pay it and is big enough to carry it.
+              Each paycheck, and what to hold back from it before you spend anything. A bill goes to the last
+              paycheck that arrives in time to pay it and is big enough to cover it.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">

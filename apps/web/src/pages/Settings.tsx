@@ -14,15 +14,12 @@ import { cn } from "@/lib/utils";
 import { AddButton, DeleteButton, RecordDialog } from "@/components/app/record-dialog";
 import { Loading, LoadError, PageHeader } from "@/components/app/page";
 import { eden, useApi, useMutate } from "@/lib/api";
-import { BUCKET_LABEL } from "@/lib/format";
+import { BUCKET_HINT, BUCKET_LABEL, BUCKET_ORDER } from "@/lib/format";
 
-const BUCKETS: { value: Bucket; label: string }[] = [
-  { value: "discretionary", label: "Discretionary — counts against what you can spend" },
-  { value: "fixed", label: "Fixed — a monthly bill being paid" },
-  { value: "lumpy", label: "Lumpy — paid out of the lumpy fund" },
-  { value: "savings", label: "Savings — money moved, not spent" },
-  { value: "transfer", label: "Transfer — card payments, moving money around" },
-];
+const BUCKETS: { value: Bucket; label: string }[] = BUCKET_ORDER.map((value) => ({
+  value,
+  label: `${BUCKET_LABEL[value]} — ${BUCKET_HINT[value]}`,
+}));
 
 export default function Settings() {
   const categories = useApi(["categories"], () => eden.api.categories.get());
@@ -63,7 +60,7 @@ export default function Settings() {
               <CardTitle>Categories</CardTitle>
               <CardDescription>
                 The bucket is what matters: only <strong>discretionary</strong> spending reduces what is available.
-                A mortgage payment landing in your statement is the fixed cost being paid, not a second expense.
+                A mortgage payment in your statement is that fixed cost going out, not a second expense.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -115,8 +112,8 @@ export default function Settings() {
             <CardHeader>
               <CardTitle>Categorization rules</CardTitle>
               <CardDescription>
-                On import, the first rule whose text appears in the merchant or description wins. Lower priority
-                numbers are checked first.
+                On import, a rule applies when its text appears in the merchant or description. If several match,
+                the lowest priority number wins.
               </CardDescription>
             </CardHeader>
             <CardContent>

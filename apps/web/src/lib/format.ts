@@ -68,6 +68,17 @@ export const BUCKET_LABEL: Record<string, string> = {
   transfer: "Transfer",
 };
 
+/** What each bucket means, in the reader's words. Written to follow the label: "Fixed — a bill that arrives every month". */
+export const BUCKET_HINT: Record<string, string> = {
+  discretionary: "counts against what you can spend",
+  fixed: "a bill that arrives every month",
+  lumpy: "paid out of the lumpy fund",
+  savings: "money moved into a goal, not spent",
+  transfer: "card payments and moving money between accounts",
+};
+
+export const BUCKET_ORDER = ["discretionary", "fixed", "lumpy", "savings", "transfer"] as const;
+
 export const CYCLE_LABEL = (months: number): string =>
   months === 1 ? "Monthly" :
   months === 3 ? "Quarterly" :

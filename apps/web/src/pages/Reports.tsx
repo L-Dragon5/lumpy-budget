@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import type { Bucket } from "@lumpy/contracts";
 import { addDays, addMonths, monthEnd, monthOf, monthStart, todayISO, weekStart } from "@lumpy/budget-core";
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, XAxis, YAxis } from "recharts";
-import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon, CircleHelpIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
@@ -14,7 +14,8 @@ import { SelectField, SingleToggle } from "@/components/app/controls";
 import { Money } from "@/components/app/money";
 import { Loading, LoadError, PageHeader } from "@/components/app/page";
 import { eden, useApi } from "@/lib/api";
-import { BUCKET_LABEL, dateLabel, money, monthLabel } from "@/lib/format";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { BUCKET_HINT, BUCKET_LABEL, BUCKET_ORDER, dateLabel, money, monthLabel } from "@/lib/format";
 import { MAX_SERIES, OTHER_COLOR, seriesColor } from "@/lib/palette";
 import { CategoryIcon } from "@/lib/icons";
 
@@ -273,7 +274,30 @@ export default function Reports() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Category</TableHead>
-                  <TableHead>Bucket</TableHead>
+                  <TableHead>
+                    <span className="inline-flex items-center gap-1">
+                      Bucket
+                      <Tooltip>
+                        <TooltipTrigger
+                          aria-label="What the buckets mean"
+                          className="text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground"
+                        >
+                          <CircleHelpIcon className="size-3.5" />
+                        </TooltipTrigger>
+                        <TooltipContent className="block max-w-80 py-2">
+                          <p className="mb-1.5">How a category is treated when the month is added up.</p>
+                          <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1">
+                            {BUCKET_ORDER.map((b) => (
+                              <Fragment key={b}>
+                                <dt className="font-medium">{BUCKET_LABEL[b]}</dt>
+                                <dd className="opacity-80">{BUCKET_HINT[b]}</dd>
+                              </Fragment>
+                            ))}
+                          </dl>
+                        </TooltipContent>
+                      </Tooltip>
+                    </span>
+                  </TableHead>
                   <TableHead className="text-right">Transactions</TableHead>
                   <TableHead className="text-right">Share</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
