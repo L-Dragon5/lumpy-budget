@@ -10,7 +10,7 @@ export default function NotFound() {
       <EmptyHeader>
         <EmptyTitle>No page at {pathname}</EmptyTitle>
         <EmptyDescription>
-          That link is wrong or the page moved. Pick a section above, or head back to the dashboard.
+          That link is wrong or the page moved. Pick a section above, or go back to the dashboard.
         </EmptyDescription>
       </EmptyHeader>
       <EmptyContent>

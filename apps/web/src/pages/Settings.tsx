@@ -256,7 +256,7 @@ export default function Settings() {
                 </button>
               ))}
             </div>
-            <FieldDescription>Click the chosen one again to clear it.</FieldDescription>
+            <FieldDescription>Click the selected icon again to clear it.</FieldDescription>
           </Field>
         </RecordDialog>
       ) : null}
@@ -266,7 +266,7 @@ export default function Settings() {
           open
           onOpenChange={(o) => !o && setRuleDraft(null)}
           title="Add rule"
-          description="Case-insensitive; matched against the merchant and description together."
+          description="The rule matches the merchant and description together. Capital letters do not matter."
           onSubmit={() =>
             createRule.mutate(
               {
@@ -305,7 +305,7 @@ export default function Settings() {
               value={ruleDraft.priority}
               onChange={(e) => setRuleDraft({ ...ruleDraft, priority: e.target.value })}
             />
-            <FieldDescription>Checked lowest first, so 10 beats 100.</FieldDescription>
+            <FieldDescription>The lowest number wins, so 10 beats 100.</FieldDescription>
           </Field>
         </RecordDialog>
       ) : null}

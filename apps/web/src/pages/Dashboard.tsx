@@ -39,7 +39,7 @@ export default function Dashboard() {
     <>
       <PageHeader
         title={monthLabel(month)}
-        description="What is left after the bills, the lumpy fund and savings have all been taken out."
+        description="What is left after bills, the lumpy fund and savings."
         actions={
           <>
             <SingleToggle<"month" | "period">

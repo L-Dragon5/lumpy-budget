@@ -293,10 +293,10 @@ export default function Income() {
               />
               <FieldDescription>
                 {draft.frequency === "one_time"
-                  ? "It counts in that month only, and lands whole as surplus rather than lifting the monthly average."
+                  ? "It counts in that month only, as surplus. It does not lift the monthly average."
                   : draft.frequency === "biweekly"
-                    ? "Every other week counts forward and back from this date, which is what decides the 3-paycheck months."
-                    : "Any known payment date works; the schedule is counted from it."}
+                    ? "Pay dates count forward and back from this date. That is what sets the extra-paycheck months."
+                    : "Any known payment date works. The schedule counts from it."}
               </FieldDescription>
             </Field>
           ) : null}

@@ -77,7 +77,7 @@ export function FormError({ error }: { error: unknown }) {
           ? issues.map((i) => `${i.path}: ${i.message}`).join("; ")
           : error instanceof Error
             ? error.message
-            : "Something went wrong"}
+            : "Could not save. Try again."}
       </AlertDescription>
     </Alert>
   );

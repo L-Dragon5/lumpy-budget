@@ -114,15 +114,15 @@ export default function LumpyFund() {
           tone={recommended > steady ? "critical" : "neutral"}
           caption={
             recommended > steady
-              ? `Includes catch-up. At a steady state it would be ${new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(steady / 100)}.`
-              : "You are on schedule: this is the steady-state number."
+              ? `Includes catch-up. Once you are on schedule it would be ${new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(steady / 100)}.`
+              : "You are on schedule. This is the flat monthly amount."
           }
         />
         <BalanceTile
           settingKey="lumpy_opening_balance_cents"
           label="In the fund now"
           caption="What the savings account behind this fund actually holds."
-          editCaption="Whatever the account says right now. The 12-month runway starts from it."
+          editCaption="Whatever the account says right now. The 12-month timeline starts from it."
         />
         <StatTile
           label="Leaves next month"

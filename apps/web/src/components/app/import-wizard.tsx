@@ -323,7 +323,7 @@ export function ImportWizard({ open, onOpenChange }: { open: boolean; onOpenChan
                   onChange={(e) => setProfileName(e.target.value)}
                   placeholder="Chase Sapphire"
                 />
-                <FieldDescription>Next month's statement from the same bank is then one click.</FieldDescription>
+                <FieldDescription>Then next month's statement from the same bank takes one click.</FieldDescription>
               </Field>
             ) : null}
 

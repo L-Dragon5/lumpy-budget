@@ -62,7 +62,7 @@ export default function LumpyTimeline() {
               onChange={setMode}
               options={[
                 { value: "recommended" as const, label: "Catch up" },
-                { value: "steady" as const, label: "Steady state" },
+                { value: "steady" as const, label: "On schedule" },
               ]}
             />
             <Button variant="outline" render={<Link to="/lumpy" />} nativeButton={false}>

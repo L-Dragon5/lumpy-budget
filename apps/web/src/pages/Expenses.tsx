@@ -136,7 +136,7 @@ export default function Expenses() {
               <EmptyHeader>
                 <EmptyTitle>Nothing here</EmptyTitle>
                 <EmptyDescription>
-                  No transactions match this month and filter. Import a statement to fill it in.
+                  No transactions match this month and these filters. Import a statement to fill it in.
                 </EmptyDescription>
               </EmptyHeader>
             </Empty>

@@ -54,7 +54,7 @@ export function LoadError({ error }: { error: unknown }) {
     <Alert variant="destructive">
       <AlertTitle>Could not load</AlertTitle>
       <AlertDescription>
-        {error instanceof Error ? error.message : "Unknown error"}. Is the API running on port 3001?
+        {error instanceof Error ? error.message : "Unknown error"}. Start the API with bun run api, then reload this page.
       </AlertDescription>
     </Alert>
   );

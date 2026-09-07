@@ -100,7 +100,7 @@ export default function Savings() {
     <>
       <PageHeader
         title="Savings"
-        description="Each goal is its own bucket, with its own balance and its own finish line."
+        description="Each goal has its own balance and its own finish line."
         actions={
           <>
             <MonthNav month={month} onChange={setMonth} />
@@ -116,7 +116,7 @@ export default function Savings() {
           caption={`${((s.savings_cents / Math.max(1, s.income_cents)) * 100).toFixed(1)}% of this month's income`}
         />
         <StatTile
-          label="Across every bucket"
+          label="Across every goal"
           cents={totalBalance}
           tone="muted"
           caption={
@@ -274,7 +274,7 @@ export default function Savings() {
             cents={draft.target_cents}
             required={false}
             onChange={(c) => set({ target_cents: c })}
-            description="Leave empty for an open-ended fund. With a target, the bucket shows how far along it is and when it gets there."
+            description="Leave empty for an open-ended fund. With a target, the goal shows how far along it is and when it gets there."
           />
 
           <Field orientation="horizontal">
