@@ -12,7 +12,7 @@ export function AnimatedMoney({ cents, className }: { cents: number; className?:
   return (
     <span className={cn("tabular", className)}>
       {cents < 0 ? "-$" : "$"}
-      <CountUp to={dollars} duration={0.9} separator="," />
+      <CountUp to={dollars} separator="," />
     </span>
   );
 }

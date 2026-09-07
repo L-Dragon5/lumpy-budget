@@ -1,4 +1,4 @@
-import { useInView, useMotionValue, useSpring } from 'motion/react';
+import { animate, useInView, useMotionValue } from 'motion/react';
 import { useCallback, useEffect, useRef } from 'react';
 
 interface CountUpProps {
@@ -19,7 +19,7 @@ export default function CountUp({
   from = 0,
   direction = 'up',
   delay = 0,
-  duration = 2,
+  duration = 1.5,
   className = '',
   startWhen = true,
   separator = '',
@@ -28,14 +28,6 @@ export default function CountUp({
 }: CountUpProps) {
   const ref = useRef<HTMLSpanElement>(null);
   const motionValue = useMotionValue(direction === 'down' ? to : from);
-
-  const damping = 20 + 40 * (1 / duration);
-  const stiffness = 100 * (1 / duration);
-
-  const springValue = useSpring(motionValue, {
-    damping,
-    stiffness
-  });
 
   const isInView = useInView(ref, { once: true, margin: '0px' });
 
@@ -75,41 +67,35 @@ export default function CountUp({
     }
   }, [from, to, direction, formatValue]);
 
+  /**
+   * A linear tween, not a spring. A spring only ever approaches its target, so
+   * the last few dollars crawl and `duration` was really just a stiffness knob.
+   * Here the count moves at one constant rate and lands on the exact number at
+   * `duration` seconds, every time.
+   */
   useEffect(() => {
-    if (isInView && startWhen) {
-      if (typeof onStart === 'function') {
-        onStart();
-      }
+    if (!isInView || !startWhen) return;
 
-      const timeoutId = setTimeout(() => {
-        motionValue.set(direction === 'down' ? from : to);
-      }, delay * 1000);
+    onStart?.();
+    const controls = animate(motionValue, direction === 'down' ? from : to, {
+      duration,
+      delay,
+      ease: 'linear',
+      onComplete: onEnd
+    });
 
-      const durationTimeoutId = setTimeout(
-        () => {
-          if (typeof onEnd === 'function') {
-            onEnd();
-          }
-        },
-        delay * 1000 + duration * 1000
-      );
-
-      return () => {
-        clearTimeout(timeoutId);
-        clearTimeout(durationTimeoutId);
-      };
-    }
-  }, [isInView, startWhen, motionValue, direction, from, to, delay, onStart, onEnd, duration]);
+    return () => controls.stop();
+  }, [isInView, startWhen, motionValue, direction, from, to, delay, duration, onStart, onEnd]);
 
   useEffect(() => {
-    const unsubscribe = springValue.on('change', (latest: number) => {
+    const unsubscribe = motionValue.on('change', (latest: number) => {
       if (ref.current) {
         ref.current.textContent = formatValue(latest);
       }
     });
 
     return () => unsubscribe();
-  }, [springValue, formatValue]);
+  }, [motionValue, formatValue]);
 
   return <span className={className} ref={ref} />;
 }
