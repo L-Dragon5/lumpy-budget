@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Link } from "react-router";
-import type { LumpyPlan, Timeline } from "@lumpy/budget-core";
 import { Area, Bar, CartesianGrid, ComposedChart, XAxis, YAxis } from "recharts";
 import { AlertTriangleIcon, ArrowLeftIcon } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -16,10 +15,9 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { SingleToggle } from "@/components/app/controls";
 import { Money } from "@/components/app/money";
 import { Loading, LoadError, PageHeader } from "@/components/app/page";
-import { api, useApi, useInvalidateAll } from "@/lib/api";
+import { eden, useApi, useInvalidateAll } from "@/lib/api";
 import { centsToInput, money, monthLabel, toCents, thisMonth } from "@/lib/format";
 
-type TimelineResponse = Timeline & { opening_balance_cents: number; plan: LumpyPlan[] };
 
 const chartConfig = {
   balance: { label: "Balance at month end", color: "var(--chart-1)" },
@@ -29,7 +27,8 @@ const chartConfig = {
 export default function LumpyTimeline() {
   const [mode, setMode] = useState<"recommended" | "steady">("recommended");
   const start = thisMonth();
-  const timeline = useApi<TimelineResponse>(`/api/lumpy-timeline?start=${start}&months=12&lumpy_mode=${mode}`);
+  const timeline = useApi(["lumpy-timeline", start, mode], () =>
+    eden.api["lumpy-timeline"].get({ query: { start, months: 12, lumpy_mode: mode } }));
   const invalidate = useInvalidateAll();
   const [balanceText, setBalanceText] = useState<string | null>(null);
 
@@ -40,7 +39,7 @@ export default function LumpyTimeline() {
   const saveBalance = async () => {
     const cents = toCents(balanceText ?? "");
     if (cents === null) return;
-    await api.put("/api/settings", { name: "lumpy_opening_balance_cents", value: String(cents) });
+    await eden.api.settings.put({ name: "lumpy_opening_balance_cents", value: String(cents) });
     setBalanceText(null);
     invalidate();
   };

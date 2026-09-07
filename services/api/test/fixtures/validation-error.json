@@ -1,0 +1,16 @@
+{
+  "_comment": "Recorded from elysia@1.4.30 + zod@3.25.76 standard-schema. POST /api/fixed-costs with {name:'',amount_cents:-5,due_day:99}. apps/web/src/lib/api.ts parses this shape; if an Elysia upgrade changes it, api.test.ts fails before the error toast does.",
+  "status": 422,
+  "body": {
+    "type": "validation",
+    "on": "body",
+    "property": "name",
+    "message": "String must contain at least 1 character(s)",
+    "found": { "name": "", "amount_cents": -5, "due_day": 99 },
+    "errors": [
+      { "code": "too_small", "message": "String must contain at least 1 character(s)", "path": ["name"] },
+      { "code": "too_small", "message": "Number must be greater than or equal to 0", "path": ["amount_cents"] },
+      { "code": "too_big", "message": "Number must be less than or equal to 31", "path": ["due_day"] }
+    ]
+  }
+}

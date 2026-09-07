@@ -6,7 +6,6 @@
 export const TEST_URL =
   process.env.TEST_DATABASE_URL ?? "mysql://root@127.0.0.1:3306/lumpy_budget_test";
 process.env.DATABASE_URL = TEST_URL;
-process.env.API_PORT = process.env.API_TEST_PORT ?? "3999";
 
 const { migrate } = await import("@lumpy/db/migrate");
 await migrate(TEST_URL);
@@ -27,14 +26,15 @@ export async function resetDb({ withSeed = false } = {}) {
   if (withSeed) await seed();
 }
 
-const { server } = await import("../src/server");
-export const base = `http://localhost:${server.port}`;
+const { app } = await import("../src/app");
+export const base = "http://localhost";
 
+/** Straight through the app, no socket: same routing, same hooks, no port to pick. */
 export const api = async (path: string, init?: RequestInit) => {
-  const res = await fetch(`${base}${path}`, {
+  const res = await app.handle(new Request(`${base}${path}`, {
     ...init,
     headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
-  });
+  }));
   const text = await res.text();
   return { status: res.status, body: text ? JSON.parse(text) : null };
 };

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router";
-import type { Category, LumpyItem } from "@lumpy/contracts";
-import type { LumpyPlan, Timeline } from "@lumpy/budget-core";
+import type { LumpyItem, LumpyItemInput } from "@lumpy/contracts";
 import { ArrowRightIcon, PencilIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,10 +17,9 @@ import { Money } from "@/components/app/money";
 import { BalanceTile } from "@/components/app/balance-tile";
 import { StatTile } from "@/components/app/stat-tile";
 import { Loading, LoadError, PageHeader } from "@/components/app/page";
-import { useApi, useCreate, useDelete, useUpdate } from "@/lib/api";
+import { eden, useApi, useMutate } from "@/lib/api";
 import { CYCLE_LABEL, dateLabelFull, monthLabel, thisMonth } from "@/lib/format";
 
-type TimelineResponse = Timeline & { opening_balance_cents: number; plan: LumpyPlan[] };
 
 type Draft = {
   name: string;
@@ -58,12 +56,14 @@ const toBody = (d: Draft) => ({
 
 export default function LumpyFund() {
   const month = thisMonth();
-  const items = useApi<LumpyItem[]>("/api/lumpy-items");
-  const categories = useApi<Category[]>("/api/categories");
-  const timeline = useApi<TimelineResponse>(`/api/lumpy-timeline?start=${month}&months=12`);
-  const create = useCreate("lumpy-items");
-  const update = useUpdate("lumpy-items");
-  const remove = useDelete("lumpy-items");
+  const items = useApi(["lumpy-items"], () => eden.api["lumpy-items"].get());
+  const categories = useApi(["categories"], () => eden.api.categories.get());
+  const timeline = useApi(["lumpy-timeline", month], () =>
+    eden.api["lumpy-timeline"].get({ query: { start: month, months: 12 } }));
+  const create = useMutate((body: LumpyItemInput) => eden.api["lumpy-items"].post(body));
+  const update = useMutate((v: { id: number; body: LumpyItemInput }) =>
+    eden.api["lumpy-items"]({ id: v.id }).put(v.body));
+  const remove = useMutate((id: number) => eden.api["lumpy-items"]({ id }).delete());
 
   const [editing, setEditing] = useState<LumpyItem | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);

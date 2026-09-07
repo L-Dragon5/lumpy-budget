@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { StatTile } from "@/components/app/stat-tile";
 import { MoneyEditor } from "@/components/app/money-editor";
-import { api, useApi, useInvalidateAll } from "@/lib/api";
+import { eden, useApi, useInvalidateAll } from "@/lib/api";
 
 /**
  * A stat tile whose number is a real account balance you keep up to date by
@@ -20,7 +20,7 @@ export function BalanceTile({
   caption?: ReactNode;
   editCaption?: string;
 }) {
-  const settings = useApi<Record<string, string>>("/api/settings");
+  const settings = useApi(["settings"], () => eden.api.settings.get());
   const invalidate = useInvalidateAll();
   const cents = Number(settings.data?.[settingKey] ?? "0") || 0;
   const [editing, setEditing] = useState(false);
@@ -34,7 +34,7 @@ export function BalanceTile({
           label={label}
           onCancel={() => setEditing(false)}
           onSave={async (next) => {
-            await api.put("/api/settings", { name: settingKey, value: String(next) });
+            await eden.api.settings.put({ name: settingKey, value: String(next) });
             setEditing(false);
             invalidate();
           }}

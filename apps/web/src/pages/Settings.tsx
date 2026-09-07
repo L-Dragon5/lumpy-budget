@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CATEGORY_ICONS, type Category, type CategoryIconName, type CategoryRule, type ImportProfile } from "@lumpy/contracts";
+import { CATEGORY_ICONS, type Bucket, type CategoryIconName, type CategoryInput, type CategoryRuleInput } from "@lumpy/contracts";
 import { PencilIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,9 +13,9 @@ import { CategoryIcon, CategoryLabel } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 import { AddButton, DeleteButton, RecordDialog } from "@/components/app/record-dialog";
 import { Loading, LoadError, PageHeader } from "@/components/app/page";
-import { useApi, useCreate, useDelete, useUpdate } from "@/lib/api";
+import { eden, useApi, useMutate } from "@/lib/api";
 
-const BUCKETS = [
+const BUCKETS: { value: Bucket; label: string }[] = [
   { value: "discretionary", label: "Discretionary — counts against what you can spend" },
   { value: "fixed", label: "Fixed — a monthly bill being paid" },
   { value: "lumpy", label: "Lumpy — paid out of the lumpy fund" },
@@ -24,18 +24,19 @@ const BUCKETS = [
 ];
 
 export default function Settings() {
-  const categories = useApi<Category[]>("/api/categories");
-  const rules = useApi<CategoryRule[]>("/api/category-rules");
-  const profiles = useApi<ImportProfile[]>("/api/import-profiles");
+  const categories = useApi(["categories"], () => eden.api.categories.get());
+  const rules = useApi(["category-rules"], () => eden.api["category-rules"].get());
+  const profiles = useApi(["import-profiles"], () => eden.api["import-profiles"].get());
 
-  const createCategory = useCreate("categories");
-  const updateCategory = useUpdate("categories");
-  const removeCategory = useDelete("categories");
-  const createRule = useCreate("category-rules");
-  const removeRule = useDelete("category-rules");
-  const removeProfile = useDelete("import-profiles");
+  const createCategory = useMutate((body: CategoryInput) => eden.api.categories.post(body));
+  const updateCategory = useMutate((v: { id: number; body: CategoryInput }) =>
+    eden.api.categories({ id: v.id }).put(v.body));
+  const removeCategory = useMutate((id: number) => eden.api.categories({ id }).delete());
+  const createRule = useMutate((body: CategoryRuleInput) => eden.api["category-rules"].post(body));
+  const removeRule = useMutate((id: number) => eden.api["category-rules"]({ id }).delete());
+  const removeProfile = useMutate((id: number) => eden.api["import-profiles"]({ id }).delete());
 
-  const [catDraft, setCatDraft] = useState<{ id: number | null; name: string; bucket: string; icon: CategoryIconName | null } | null>(null);
+  const [catDraft, setCatDraft] = useState<{ id: number | null; name: string; bucket: Bucket; icon: CategoryIconName | null } | null>(null);
   const [ruleDraft, setRuleDraft] = useState<{ pattern: string; category_id: string; priority: string } | null>(null);
 
   if (categories.isLoading) return <Loading />;
@@ -227,7 +228,7 @@ export default function Settings() {
             <FieldLabel>Bucket</FieldLabel>
             <SelectField
               value={catDraft.bucket}
-              onChange={(bucket) => setCatDraft({ ...catDraft, bucket })}
+              onChange={(bucket) => setCatDraft({ ...catDraft, bucket: bucket as Bucket })}
               options={BUCKETS}
             />
           </Field>

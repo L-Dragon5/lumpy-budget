@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
-import type { Bucket, Category } from "@lumpy/contracts";
-import type { BucketTotals, CategorySlice, SeriesPoint } from "@lumpy/budget-core";
+import type { Bucket } from "@lumpy/contracts";
 import { addDays, addMonths, monthEnd, monthOf, monthStart, todayISO, weekStart } from "@lumpy/budget-core";
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, XAxis, YAxis } from "recharts";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
@@ -14,16 +13,10 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { SelectField, SingleToggle } from "@/components/app/controls";
 import { Money } from "@/components/app/money";
 import { Loading, LoadError, PageHeader } from "@/components/app/page";
-import { useApi } from "@/lib/api";
+import { eden, useApi } from "@/lib/api";
 import { dateLabel, money, monthLabel } from "@/lib/format";
 import { MAX_SERIES, OTHER_COLOR, seriesColor } from "@/lib/palette";
 import { CategoryIcon } from "@/lib/icons";
-
-type ReportsResponse = {
-  breakdown: { slices: CategorySlice[]; total_cents: number; txn_count: number };
-  series: SeriesPoint[];
-  totals: BucketTotals;
-};
 
 const OTHER = "Other";
 const BUCKETS: { value: Bucket | "all"; label: string }[] = [
@@ -45,24 +38,21 @@ export default function Reports() {
   const end = granularity === "month" ? monthEnd(month) : addDays(week, 6);
   const label = granularity === "month" ? monthLabel(month) : `${dateLabel(week)} – ${dateLabel(addDays(week, 6))}`;
 
-  const detail = useApi<ReportsResponse>(
-    `/api/reports?granularity=${granularity}&start=${start}&end=${end}&bucket=${bucket}`,
-  );
+  const detail = useApi(["reports", granularity, start, end, bucket], () =>
+    eden.api.reports.get({ query: { granularity, start, end, bucket } }));
 
   // A wider window for the trend, so the selected period sits in context.
   const trendStart = granularity === "month" ? monthStart(addMonths(month, -11)) : addDays(week, -7 * 11);
-  const trend = useApi<ReportsResponse>(
-    `/api/reports?granularity=${granularity}&start=${trendStart}&end=${end}&bucket=${bucket}`,
-  );
-  const categories = useApi<Category[]>("/api/categories");
+  const trend = useApi(["reports", granularity, trendStart, end, bucket], () =>
+    eden.api.reports.get({ query: { granularity, start: trendStart, end, bucket } }));
+  const categories = useApi(["categories"], () => eden.api.categories.get());
 
   // Colors are assigned from the whole ledger for the chosen bucket, not from what
   // this period happens to contain, so paging between weeks never repaints a
   // category. There are more categories than slots, so the smallest ones share the
   // "Other" grey rather than cycling a hue onto two visible slices at once.
-  const ranking = useApi<ReportsResponse>(
-    `/api/reports?granularity=month&start=2020-01-01&end=2035-12-31&bucket=${bucket}`,
-  );
+  const ranking = useApi(["reports-ranking", bucket], () =>
+    eden.api.reports.get({ query: { granularity: "month", start: "2020-01-01", end: "2035-12-31", bucket } }));
   const slots = useMemo(() => {
     const ranked = (ranking.data?.breakdown.slices ?? []).filter((s) => s.category_id !== null);
     return new Map(ranked.slice(0, MAX_SERIES).map((s, i) => [s.category_id!, i]));

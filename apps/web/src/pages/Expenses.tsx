@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import type { Category, Expense, ImportBatch } from "@lumpy/contracts";
+import type { Expense, ExpenseInput } from "@lumpy/contracts";
 import { monthEnd, monthStart } from "@lumpy/budget-core";
 import { SearchIcon, UploadIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +16,7 @@ import { Money } from "@/components/app/money";
 import { AddButton, DeleteButton, MoneyField, RecordDialog } from "@/components/app/record-dialog";
 import { Loading, LoadError, MonthNav, PageHeader } from "@/components/app/page";
 import { CategoryLabel } from "@/lib/icons";
-import { useApi, useCreate, useDelete, useUpdate } from "@/lib/api";
+import { eden, useApi, useMutate } from "@/lib/api";
 import { dateLabelFull, thisMonth } from "@/lib/format";
 
 const ALL = "__all__";
@@ -30,17 +30,22 @@ export default function Expenses() {
   const [search, setSearch] = useState("");
   const [importing, setImporting] = useState(false);
 
-  const params = new URLSearchParams({ start: monthStart(month), end: monthEnd(month), limit: "2000" });
-  if (category !== ALL) params.set("category_id", category);
-  if (search.trim()) params.set("q", search.trim());
+  const query = {
+    start: monthStart(month),
+    end: monthEnd(month),
+    limit: 2000,
+    ...(category === ALL ? {} : { category_id: category === "none" ? ("none" as const) : Number(category) }),
+    ...(search.trim() ? { q: search.trim() } : {}),
+  };
 
-  const expenses = useApi<Expense[]>(`/api/expenses?${params}`);
-  const categories = useApi<Category[]>("/api/categories");
-  const batches = useApi<ImportBatch[]>("/api/import-batches");
-  const create = useCreate("expenses");
-  const update = useUpdate("expenses");
-  const remove = useDelete("expenses");
-  const removeBatch = useDelete("import-batches");
+  const expenses = useApi(["expenses", query], () => eden.api.expenses.get({ query }));
+  const categories = useApi(["categories"], () => eden.api.categories.get());
+  const batches = useApi(["import-batches"], () => eden.api["import-batches"].get());
+  const create = useMutate((body: ExpenseInput) => eden.api.expenses.post(body));
+  const update = useMutate((v: { id: number; body: ExpenseInput }) =>
+    eden.api.expenses({ id: v.id }).put(v.body));
+  const remove = useMutate((id: number) => eden.api.expenses({ id }).delete());
+  const removeBatch = useMutate((id: number) => eden.api["import-batches"]({ id }).delete());
 
   const [draft, setDraft] = useState<Draft | null>(null);
   const set = (patch: Partial<Draft>) => setDraft((d) => (d ? { ...d, ...patch } : d));

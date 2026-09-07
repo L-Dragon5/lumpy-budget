@@ -1,6 +1,5 @@
 import { useState } from "react";
-import type { Frequency, IncomeStream } from "@lumpy/contracts";
-import type { MonthIncome } from "@lumpy/budget-core";
+import type { Frequency, IncomeStream, IncomeStreamInput } from "@lumpy/contracts";
 import { PencilIcon, SparklesIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,14 +13,8 @@ import { SelectField } from "@/components/app/controls";
 import { AddButton, DeleteButton, MoneyField, RecordDialog } from "@/components/app/record-dialog";
 import { Money } from "@/components/app/money";
 import { Loading, LoadError, PageHeader } from "@/components/app/page";
-import { useApi, useCreate, useDelete, useUpdate } from "@/lib/api";
+import { eden, useApi, useMutate } from "@/lib/api";
 import { FREQUENCY_LABEL, monthLabel, ordinal, thisMonth } from "@/lib/format";
-
-type CalendarResponse = {
-  year: number;
-  months: MonthIncome[];
-  streams: { id: number; name: string; frequency: Frequency; amount_cents: number; extra_paycheck_months: string[] }[];
-};
 
 type Draft = {
   name: string;
@@ -84,11 +77,13 @@ function scheduleText(s: IncomeStream): string {
 
 export default function Income() {
   const year = Number(thisMonth().slice(0, 4));
-  const streams = useApi<IncomeStream[]>("/api/income-streams");
-  const calendar = useApi<CalendarResponse>(`/api/income-calendar?year=${year}`);
-  const create = useCreate("income-streams");
-  const update = useUpdate("income-streams");
-  const remove = useDelete("income-streams");
+  const streams = useApi(["income-streams"], () => eden.api["income-streams"].get());
+  const calendar = useApi(["income-calendar", year], () =>
+    eden.api["income-calendar"].get({ query: { year } }));
+  const create = useMutate((body: IncomeStreamInput) => eden.api["income-streams"].post(body));
+  const update = useMutate((v: { id: number; body: IncomeStreamInput }) =>
+    eden.api["income-streams"]({ id: v.id }).put(v.body));
+  const remove = useMutate((id: number) => eden.api["income-streams"]({ id }).delete());
 
   const [editing, setEditing] = useState<IncomeStream | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);

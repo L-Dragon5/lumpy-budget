@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { Category, CategoryRule, ImportMapping, ImportProfile } from "@lumpy/contracts";
+import type { ImportMapping } from "@lumpy/contracts";
 import { applyRules, guessMapping, normalize, parseCsv, type ParsedCsv } from "@lumpy/csv-import";
 import { CheckCircle2Icon, FileTextIcon, TriangleAlertIcon } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { SelectField } from "@/components/app/controls";
 import { Money } from "@/components/app/money";
 import { FormError } from "@/components/app/record-dialog";
-import { api, useApi, useInvalidateAll } from "@/lib/api";
+import { ApiError, eden, useApi, useInvalidateAll } from "@/lib/api";
 
 const NONE = "__none__";
 
@@ -22,9 +22,9 @@ const NONE = "__none__";
  * upload plumbing, and the server still validates every row it stores.
  */
 export function ImportWizard({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  const categories = useApi<Category[]>("/api/categories");
-  const rules = useApi<CategoryRule[]>("/api/category-rules");
-  const profiles = useApi<ImportProfile[]>("/api/import-profiles");
+  const categories = useApi(["categories"], () => eden.api.categories.get());
+  const rules = useApi(["category-rules"], () => eden.api["category-rules"].get());
+  const profiles = useApi(["import-profiles"], () => eden.api["import-profiles"].get());
   const invalidate = useInvalidateAll();
 
   const [filename, setFilename] = useState("");
@@ -82,16 +82,18 @@ export function ImportWizard({ open, onOpenChange }: { open: boolean; onOpenChan
         // format rather than failing on the unique name or orphaning the batch.
         const existing = (profiles.data ?? []).find((p) => p.name.toLowerCase() === name.toLowerCase());
         const saved = existing
-          ? await api.put<ImportProfile>(`/api/import-profiles/${existing.id}`, { name, mapping })
-          : await api.post<ImportProfile>("/api/import-profiles", { name, mapping });
-        savedProfileId = saved.id;
+          ? await eden.api["import-profiles"]({ id: existing.id }).put({ name, mapping })
+          : await eden.api["import-profiles"].post({ name, mapping });
+        if (saved.error) throw ApiError.from(saved.error);
+        savedProfileId = saved.data.id;
       }
-      const res = await api.post<{ inserted: number; skipped: number }>("/api/import", {
+      const res = await eden.api.import.post({
         filename: filename || "import.csv",
         profile_id: savedProfileId,
         rows: result.rows,
       });
-      setDone(res);
+      if (res.error) throw ApiError.from(res.error);
+      setDone(res.data);
       invalidate();
     } catch (e) {
       setError(e);

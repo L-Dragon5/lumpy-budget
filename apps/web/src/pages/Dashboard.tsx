@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Link } from "react-router";
-import type { LumpyPlan, MonthSummary, Timeline } from "@lumpy/budget-core";
 import { AlertTriangleIcon, SparklesIcon } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -14,16 +13,16 @@ import { Money } from "@/components/app/money";
 import { StatTile } from "@/components/app/stat-tile";
 import { Loading, LoadError, MonthNav, PageHeader } from "@/components/app/page";
 import AnimatedContent from "@/components/AnimatedContent";
-import { useApi } from "@/lib/api";
+import { eden, useApi } from "@/lib/api";
 import { dateLabel, dateLabelFull, money, monthLabel, thisMonth } from "@/lib/format";
 
-type TimelineResponse = Timeline & { opening_balance_cents: number; plan: LumpyPlan[] };
 
 export default function Dashboard() {
   const [month, setMonth] = useState(thisMonth());
   const [view, setView] = useState<"month" | "period">("month");
-  const summary = useApi<MonthSummary>(`/api/summary?month=${month}`);
-  const timeline = useApi<TimelineResponse>(`/api/lumpy-timeline?start=${month}&months=12`);
+  const summary = useApi(["summary", month], () => eden.api.summary.get({ query: { month } }));
+  const timeline = useApi(["lumpy-timeline", month], () =>
+    eden.api["lumpy-timeline"].get({ query: { start: month, months: 12 } }));
 
   if (summary.isLoading) return <Loading rows={4} />;
   if (summary.error) return <LoadError error={summary.error} />;

@@ -1,19 +1,91 @@
+import { Elysia, status } from "elysia";
 import {
-  categoryInput, categoryRuleInput, expenseInput, fixedCostInput, importProfileInput,
-  incomeStreamInput, lumpyItemInput, savingsGoalInput,
+  category, categoryInput, categoryRule, categoryRuleInput, expenseInput, fixedCost,
+  fixedCostInput, importProfile, importProfileInput, incomeStream, incomeStreamInput,
+  isoDate, lumpyItem, lumpyItemInput, savingsGoal, savingsGoalInput,
 } from "@lumpy/contracts";
-import type { TableName } from "@lumpy/db";
-import type { z } from "zod";
+import type { Expense, ImportBatch } from "@lumpy/contracts";
+import { byId, remove, rows, update } from "@lumpy/db";
+import { z } from "zod";
+import { crud, idParam, notFound } from "./crud";
+import * as store from "./store";
 
-/** URL segment -> table + the schema every write to it must satisfy. */
-export const RESOURCES: Record<string, { table: TableName; schema: z.ZodTypeAny; readonly?: boolean }> = {
-  "income-streams": { table: "income_streams", schema: incomeStreamInput },
-  "fixed-costs": { table: "fixed_costs", schema: fixedCostInput },
-  "lumpy-items": { table: "lumpy_items", schema: lumpyItemInput },
-  "savings-goals": { table: "savings_goals", schema: savingsGoalInput },
-  categories: { table: "categories", schema: categoryInput },
-  "category-rules": { table: "category_rules", schema: categoryRuleInput },
-  "import-profiles": { table: "import_profiles", schema: importProfileInput },
-  "import-batches": { table: "import_batches", schema: importProfileInput, readonly: true },
-  expenses: { table: "expenses", schema: expenseInput },
-};
+/** Expenses are the only table big enough to need filtering. */
+const expenseQuery = z.object({
+  start: isoDate.optional(),
+  end: isoDate.optional(),
+  category_id: z.union([z.literal("none"), z.coerce.number().int().positive()]).optional(),
+  q: z.string().optional(),
+  // Optional, not defaulted: a zod default lands in the output type, which is what
+  // Eden hands the client, and a defaulted param becomes one the caller must pass.
+  limit: z.coerce.number().int().optional(),
+});
+
+const expenses = new Elysia({ name: "expenses" })
+  .get(
+    "/expenses",
+    async ({ query }) => {
+      const where: string[] = [];
+      const params: unknown[] = [];
+      if (query.start) { where.push("txn_date >= ?"); params.push(query.start); }
+      if (query.end) { where.push("txn_date <= ?"); params.push(query.end); }
+      if (query.category_id === "none") where.push("category_id IS NULL");
+      else if (query.category_id !== undefined) { where.push("category_id = ?"); params.push(query.category_id); }
+      if (query.q) { where.push("(merchant LIKE ? OR description LIKE ?)"); params.push(`%${query.q}%`, `%${query.q}%`); }
+      // Clamped rather than rejected: an out-of-range limit is a caller being loose,
+      // not a caller being wrong, and that is how it has always behaved.
+      const limit = Math.min(5000, Math.max(1, query.limit ?? 500));
+      const found = await rows<Expense>("expenses", where.join(" AND "), params);
+      return found.slice(0, limit);
+    },
+    { query: expenseQuery },
+  )
+  .get("/expenses/:id", async ({ params }) => (await byId<Expense>("expenses", params.id)) ?? notFound(), {
+    params: idParam,
+  })
+  // A manual expense still gets a dedupe hash, so the generic insert will not do.
+  .post(
+    "/expenses",
+    async ({ body }) => status(201, (await byId<Expense>("expenses", await store.insertExpense(body))) as Expense),
+    { body: expenseInput },
+  )
+  // ponytail: like the generic update it replaces, this leaves dedupe_hash alone.
+  // Editing a merchant therefore keeps the original hash. Recompute it here the day
+  // an edited row needs to re-dedupe.
+  .put(
+    "/expenses/:id",
+    async ({ params, body }) => {
+      if (!(await byId("expenses", params.id))) return notFound();
+      await update("expenses", params.id, body);
+      return (await byId<Expense>("expenses", params.id)) as Expense;
+    },
+    { params: idParam, body: expenseInput },
+  )
+  .delete("/expenses/:id", async ({ params }) => ((await remove("expenses", params.id)) ? { deleted: params.id } : notFound()), {
+    params: idParam,
+  });
+
+/** Batches are written by the importer, never by a client. Deleting one takes its expenses with it. */
+const importBatches = new Elysia({ name: "import-batches" })
+  .get("/import-batches", () => rows<ImportBatch>("import_batches"))
+  .get("/import-batches/:id", async ({ params }) => (await byId("import_batches", params.id)) ?? notFound(), {
+    params: idParam,
+  })
+  .delete(
+    "/import-batches/:id",
+    async ({ params }) => ((await remove("import_batches", params.id)) ? { deleted: params.id } : notFound()),
+    { params: idParam },
+  )
+  // 405 is a truer answer than the 404 an undeclared route would give.
+  .post("/import-batches", () => status(405, { error: "import-batches is not writable" }));
+
+export const resources = new Elysia({ prefix: "/api" })
+  .use(crud("income-streams", "income_streams", incomeStreamInput, incomeStream))
+  .use(crud("fixed-costs", "fixed_costs", fixedCostInput, fixedCost))
+  .use(crud("lumpy-items", "lumpy_items", lumpyItemInput, lumpyItem))
+  .use(crud("savings-goals", "savings_goals", savingsGoalInput, savingsGoal))
+  .use(crud("categories", "categories", categoryInput, category))
+  .use(crud("category-rules", "category_rules", categoryRuleInput, categoryRule))
+  .use(crud("import-profiles", "import_profiles", importProfileInput, importProfile))
+  .use(expenses)
+  .use(importBatches);

@@ -30,14 +30,19 @@ describe("crud", () => {
     expect((await api(`/api/income-streams/${created.body.id}`)).status).toBe(404);
   });
 
-  test("a bad body is a 400 that names the field", async () => {
+  test("a bad body is a 422 that names the field", async () => {
     const res = await post("/api/income-streams", { ...semiMonthly, frequency: "biweekly", anchor_date: null });
-    expect(res.status).toBe(400);
-    expect(res.body.issues[0]!.path).toBe("anchor_date");
+    expect(res.status).toBe(422);
+    expect(res.body.errors[0]!.path).toEqual(["anchor_date"]);
 
     const bad = await post("/api/fixed-costs", { name: "", amount_cents: -5, due_day: 99 });
-    expect(bad.status).toBe(400);
-    expect(bad.body.issues.map((i: { path: string }) => i.path).sort()).toEqual(["amount_cents", "due_day", "name"]);
+    expect(bad.status).toBe(422);
+    expect(bad.body.errors.map((i: { path: string[] }) => i.path.join(".")).sort())
+      .toEqual(["amount_cents", "due_day", "name"]);
+    // The shape apps/web/src/lib/api.ts parses. Recorded in fixtures/validation-error.json;
+    // if an Elysia upgrade moves it, this fails before the error toast does.
+    expect(bad.body).toMatchObject({ type: "validation", on: "body" });
+    expect(typeof bad.body.errors[0]!.message).toBe("string");
   });
 
   test("unknown resources and ids 404 instead of leaking SQL", async () => {
@@ -238,9 +243,19 @@ describe("computed endpoints", () => {
   });
 
   test("computed endpoints reject a malformed month instead of guessing", async () => {
-    expect((await api("/api/summary?month=March")).status).toBe(400);
-    expect((await api("/api/summary")).status).toBe(400);
-    expect((await api("/api/allocation?month=2026-3")).status).toBe(400);
-    expect((await api("/api/reports?start=2026-03-01")).status).toBe(400);
+    const bad = await api("/api/summary?month=March");
+    expect(bad.status).toBe(422);
+    expect(bad.body).toMatchObject({ type: "validation", on: "query" });
+    expect((await api("/api/summary")).status).toBe(422);
+    expect((await api("/api/allocation?month=2026-3")).status).toBe(422);
+    expect((await api("/api/reports?start=2026-03-01")).status).toBe(422);
+  });
+
+  // Replaces the intParam unit tests: out-of-range numbers clamp, they do not 422.
+  test("an out-of-range range clamps instead of failing", async () => {
+    expect((await api("/api/lumpy-timeline?start=2026-03&months=999")).body.rows).toHaveLength(60);
+    expect((await api("/api/lumpy-timeline?start=2026-03&months=0")).body.rows).toHaveLength(1);
+    expect((await api("/api/expenses?limit=99999")).status).toBe(200);
+    expect((await api("/api/income-calendar?year=0")).body.year).toBe(1970);
   });
 });

@@ -1,4 +1,18 @@
-import { useMutation, useQuery, useQueryClient, type UseQueryOptions } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { treaty } from "@elysiajs/eden";
+import type { App } from "@lumpy/api";
+import { EDEN_OPTIONS } from "./eden-options";
+
+/**
+ * Same origin: Vite proxies /api to the API in dev, and in a build the two are
+ * served together. The client's types come from the server's own route types,
+ * so a renamed route or a changed column is a typecheck failure here.
+ * EDEN_OPTIONS is load-bearing, not cosmetic -- see eden-options.ts.
+ */
+export const eden = treaty<App>(window.location.origin, EDEN_OPTIONS);
+
+/** The shape Elysia returns for a 422. Recorded in services/api/test/fixtures/validation-error.json. */
+type ValidationBody = { errors?: { path?: unknown; message?: string }[]; message?: string };
 
 export class ApiError extends Error {
   status: number;
@@ -9,28 +23,32 @@ export class ApiError extends Error {
     this.status = status;
     this.issues = issues;
   }
+
+  /** Takes an Eden failure ({ status, value }) exactly as it comes off a call. */
+  static from(failure: unknown): ApiError {
+    const { status, value } = (failure ?? {}) as { status?: unknown; value?: unknown };
+    const code = typeof status === "number" ? status : 0;
+    const body = (value ?? failure ?? {}) as ValidationBody & { error?: string };
+    const issues = (Array.isArray(body.errors) ? body.errors : []).map((e) => ({
+      path: Array.isArray(e.path) ? e.path.join(".") : String(e.path ?? ""),
+      message: e.message ?? "is invalid",
+    }));
+    return new ApiError(body.error ?? body.message ?? `request failed (${code})`, code, issues);
+  }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
-  });
-  const text = await res.text();
-  const body = text ? JSON.parse(text) : null;
-  if (!res.ok) throw new ApiError(body?.error ?? res.statusText, res.status, body?.issues ?? []);
-  return body as T;
+type EdenResponse = { data: unknown; error: unknown; status: number };
+type Payload<R> = R extends { data: infer D } ? Exclude<D, null> : never;
+
+/** Eden hands failures back in `error`; react-query needs a throw to see them. */
+async function unwrap<R extends EdenResponse>(call: Promise<R>): Promise<Payload<R>> {
+  const res = await call;
+  if (res.error) throw ApiError.from(res.error);
+  return res.data as Payload<R>;
 }
 
-export const api = {
-  get: <T>(path: string) => request<T>(path),
-  post: <T>(path: string, body: unknown) => request<T>(path, { method: "POST", body: JSON.stringify(body) }),
-  put: <T>(path: string, body: unknown) => request<T>(path, { method: "PUT", body: JSON.stringify(body) }),
-  del: <T>(path: string) => request<T>(path, { method: "DELETE" }),
-};
-
-export function useApi<T>(path: string, options: Partial<UseQueryOptions<T>> = {}) {
-  return useQuery<T>({ queryKey: [path], queryFn: () => api.get<T>(path), ...options });
+export function useApi<R extends EdenResponse>(key: readonly unknown[], call: () => Promise<R>) {
+  return useQuery<Payload<R>, ApiError>({ queryKey: key, queryFn: () => unwrap(call()) });
 }
 
 /**
@@ -43,26 +61,18 @@ export function useInvalidateAll() {
   return () => qc.invalidateQueries();
 }
 
-export function useCreate<T>(resource: string) {
+/**
+ * One mutation hook instead of a create/update/delete trio: the call site passes
+ * the Eden call itself, so the body type is checked against the server's schema.
+ *
+ *   const create = useMutate((body: FixedCostInput) => eden.api["fixed-costs"].post(body))
+ *   const update = useMutate((v: { id: number; body: FixedCostInput }) => eden.api["fixed-costs"]({ id: v.id }).put(v.body))
+ *   const remove = useMutate((id: number) => eden.api["fixed-costs"]({ id }).delete())
+ */
+export function useMutate<V, R extends EdenResponse>(call: (vars: V) => Promise<R>) {
   const invalidate = useInvalidateAll();
-  return useMutation({
-    mutationFn: (body: unknown) => api.post<T>(`/api/${resource}`, body),
-    onSuccess: invalidate,
-  });
-}
-
-export function useUpdate<T>(resource: string) {
-  const invalidate = useInvalidateAll();
-  return useMutation({
-    mutationFn: ({ id, body }: { id: number; body: unknown }) => api.put<T>(`/api/${resource}/${id}`, body),
-    onSuccess: invalidate,
-  });
-}
-
-export function useDelete(resource: string) {
-  const invalidate = useInvalidateAll();
-  return useMutation({
-    mutationFn: (id: number) => api.del(`/api/${resource}/${id}`),
+  return useMutation<Payload<R>, ApiError, V>({
+    mutationFn: (vars) => unwrap(call(vars)),
     onSuccess: invalidate,
   });
 }

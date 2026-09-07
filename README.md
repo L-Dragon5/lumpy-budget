@@ -70,7 +70,7 @@ theater; this is the honest equivalent, and it has already caught two real bugs.
 contracts/types.ts      zod schemas + types, imported by the API and the web app
 services/budget-core/   the engine: pure functions, no DB, no HTTP, no I/O
 services/db/            Bun.sql client, numbered .sql migrations, seed data
-services/api/           Bun.serve routes
+services/api/           Elysia routes; exports its own type, which Eden gives the web app
 services/csv-import/    CSV parse / normalize / dedupe; runs in the browser too
 apps/web/               Vite + React + Tailwind v4 + shadcn/ui + React Bits
 scripts/demo.ts         fills a running instance through the public API
@@ -91,6 +91,11 @@ the total and a penny is never lost.
 `2026-03-15` arrives as `2026-03-15T04:00:00.000Z` — so every date column is
 selected as `DATE_FORMAT(col,'%Y-%m-%d')` and no `Date` object ever crosses the
 DB or HTTP boundary. There is a test for exactly this.
+
+The HTTP client has the same trap on the other side: Eden's JSON reviver turns
+any date-shaped string back into a `Date` by default, and the inferred type
+still says `string`, so the compiler cannot see the lie. It is switched off in
+`apps/web/src/lib/eden-options.ts` and pinned by a test.
 
 **Only discretionary spending reduces what is available.** Every category
 carries a bucket (and an icon, so a fifty-row dropdown is scannable instead of a

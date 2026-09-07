@@ -1,6 +1,5 @@
 import { useState } from "react";
-import type { Category, FixedCost } from "@lumpy/contracts";
-import type { Allocation } from "@lumpy/budget-core";
+import type { FixedCost, FixedCostInput } from "@lumpy/contracts";
 import { AlertTriangleIcon, PencilIcon } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +15,7 @@ import { CategoryLabel } from "@/lib/icons";
 import { AddButton, DeleteButton, MoneyField, RecordDialog } from "@/components/app/record-dialog";
 import { Money } from "@/components/app/money";
 import { Loading, LoadError, MonthNav, PageHeader } from "@/components/app/page";
-import { useApi, useCreate, useDelete, useUpdate } from "@/lib/api";
+import { eden, useApi, useMutate } from "@/lib/api";
 import { dateLabel, monthLabel, ordinal, thisMonth } from "@/lib/format";
 
 type Draft = {
@@ -50,12 +49,13 @@ const toBody = (d: Draft) => ({
 
 export default function FixedCosts() {
   const [month, setMonth] = useState(thisMonth());
-  const costs = useApi<FixedCost[]>("/api/fixed-costs");
-  const categories = useApi<Category[]>("/api/categories");
-  const allocation = useApi<Allocation>(`/api/allocation?month=${month}`);
-  const create = useCreate("fixed-costs");
-  const update = useUpdate("fixed-costs");
-  const remove = useDelete("fixed-costs");
+  const costs = useApi(["fixed-costs"], () => eden.api["fixed-costs"].get());
+  const categories = useApi(["categories"], () => eden.api.categories.get());
+  const allocation = useApi(["allocation", month], () => eden.api.allocation.get({ query: { month } }));
+  const create = useMutate((body: FixedCostInput) => eden.api["fixed-costs"].post(body));
+  const update = useMutate((v: { id: number; body: FixedCostInput }) =>
+    eden.api["fixed-costs"]({ id: v.id }).put(v.body));
+  const remove = useMutate((id: number) => eden.api["fixed-costs"]({ id }).delete());
 
   const [editing, setEditing] = useState<FixedCost | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);

@@ -1,6 +1,6 @@
 import { useState } from "react";
-import type { SavingsGoal } from "@lumpy/contracts";
-import type { GoalProgress, MonthSummary } from "@lumpy/budget-core";
+import type { SavingsGoal, SavingsGoalInput } from "@lumpy/contracts";
+import type { GoalProgress } from "@lumpy/budget-core";
 import { goalProgress, savingsBalanceTotal } from "@lumpy/budget-core";
 import { CheckCircle2Icon, PencilIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +19,7 @@ import { AddButton, DeleteButton, MoneyField, RecordDialog } from "@/components/
 import { Money } from "@/components/app/money";
 import { StatTile } from "@/components/app/stat-tile";
 import { Loading, LoadError, MonthNav, PageHeader } from "@/components/app/page";
-import { useApi, useCreate, useDelete, useUpdate } from "@/lib/api";
+import { eden, useApi, useMutate } from "@/lib/api";
 import { dateLabel, money, monthLabel, shiftMonth, thisMonth } from "@/lib/format";
 
 type Draft = {
@@ -57,11 +57,12 @@ const toBody = (d: Draft, balance_cents: number) => ({
 
 export default function Savings() {
   const [month, setMonth] = useState(thisMonth());
-  const goals = useApi<SavingsGoal[]>("/api/savings-goals");
-  const summary = useApi<MonthSummary>(`/api/summary?month=${month}`);
-  const create = useCreate("savings-goals");
-  const update = useUpdate("savings-goals");
-  const remove = useDelete("savings-goals");
+  const goals = useApi(["savings-goals"], () => eden.api["savings-goals"].get());
+  const summary = useApi(["summary", month], () => eden.api.summary.get({ query: { month } }));
+  const create = useMutate((body: SavingsGoalInput) => eden.api["savings-goals"].post(body));
+  const update = useMutate((v: { id: number; body: SavingsGoalInput }) =>
+    eden.api["savings-goals"]({ id: v.id }).put(v.body));
+  const remove = useMutate((id: number) => eden.api["savings-goals"]({ id }).delete());
 
   const [editing, setEditing] = useState<SavingsGoal | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
