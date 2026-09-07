@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { AddButton, DeleteButton, RecordDialog } from "@/components/app/record-dialog";
 import { Loading, LoadError, PageHeader } from "@/components/app/page";
 import { eden, useApi, useMutate } from "@/lib/api";
+import { BUCKET_LABEL } from "@/lib/format";
 
 const BUCKETS: { value: Bucket; label: string }[] = [
   { value: "discretionary", label: "Discretionary — counts against what you can spend" },
@@ -86,7 +87,7 @@ export default function Settings() {
                         <CategoryLabel name={c.name} icon={c.icon} />
                       </TableCell>
                       <TableCell>
-                        <Badge variant={c.bucket === "discretionary" ? "default" : "secondary"}>{c.bucket}</Badge>
+                        <Badge variant={c.bucket === "discretionary" ? "default" : "secondary"}>{BUCKET_LABEL[c.bucket] ?? c.bucket}</Badge>
                       </TableCell>
                       <TableCell>
                         <div className="flex justify-end">

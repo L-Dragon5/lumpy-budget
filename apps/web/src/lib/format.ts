@@ -60,6 +60,14 @@ export const FREQUENCY_LABEL: Record<string, string> = {
   one_time: "One-off",
 };
 
+export const BUCKET_LABEL: Record<string, string> = {
+  discretionary: "Discretionary",
+  fixed: "Fixed",
+  lumpy: "Lumpy",
+  savings: "Savings",
+  transfer: "Transfer",
+};
+
 export const CYCLE_LABEL = (months: number): string =>
   months === 1 ? "Monthly" :
   months === 3 ? "Quarterly" :

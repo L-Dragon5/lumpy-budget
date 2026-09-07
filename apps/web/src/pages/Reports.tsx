@@ -14,7 +14,7 @@ import { SelectField, SingleToggle } from "@/components/app/controls";
 import { Money } from "@/components/app/money";
 import { Loading, LoadError, PageHeader } from "@/components/app/page";
 import { eden, useApi } from "@/lib/api";
-import { dateLabel, money, monthLabel } from "@/lib/format";
+import { BUCKET_LABEL, dateLabel, money, monthLabel } from "@/lib/format";
 import { MAX_SERIES, OTHER_COLOR, seriesColor } from "@/lib/palette";
 import { CategoryIcon } from "@/lib/icons";
 
@@ -292,7 +292,7 @@ export default function Reports() {
                         {s.name}
                       </span>
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{s.bucket}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{BUCKET_LABEL[s.bucket] ?? s.bucket}</TableCell>
                     <TableCell className="text-right tabular text-muted-foreground">{s.txn_count}</TableCell>
                     <TableCell className="text-right tabular text-muted-foreground">{s.pct.toFixed(1)}%</TableCell>
                     <TableCell className="text-right">
