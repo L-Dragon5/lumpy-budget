@@ -65,6 +65,16 @@ export function run(h: Household) {
       available_cents: p.available_cents,
     })),
     unfunded: summary.unfunded,
+    savings_goals: core.goalProgress(h.savingsGoals, summary.income_cents).map((p) => ({
+      name: p.goal.name,
+      balance_cents: p.balance_cents,
+      target_cents: p.target_cents,
+      monthly_cents: p.monthly_cents,
+      pct: p.pct === null ? null : Math.round(p.pct * 10) / 10,
+      remaining_cents: p.remaining_cents,
+      months_to_target: p.months_to_target,
+      funded: p.funded,
+    })),
     lumpy: {
       monthly_contribution_cents: t.monthly_contribution_cents,
       total_outflow_cents: t.total_outflow_cents,

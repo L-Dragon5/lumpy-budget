@@ -2,10 +2,13 @@
 /**
  * Fills a running instance with a realistic household through the public API,
  * so what you see in the browser went through exactly the same path a real
- * entry would. Safe to re-run: the expense dedupe hash makes imports idempotent.
+ * entry would.
+ *
+ * Safe to re-run: setup rows are matched by name and updated rather than added
+ * again, and the expense dedupe hash makes the import a no-op the second time.
  *
  *   bun run demo            # against http://localhost:3001
- *   bun run demo --reset    # wipe the budget setup first
+ *   bun run demo --reset    # delete the existing setup first
  */
 import { addMonths, monthOf, todayISO } from "@lumpy/budget-core";
 
@@ -24,6 +27,19 @@ const call = async (method: string, path: string, body?: unknown) => {
   return parsed;
 };
 
+/**
+ * Create, or update the row that already has this name. Without this a second
+ * run would quietly double the household's income, since nothing but the
+ * expense hash is unique.
+ */
+async function upsert(resource: string, body: { name: string } & Record<string, unknown>) {
+  const existing: { id: number; name: string }[] = await call("GET", `/api/${resource}`);
+  const match = existing.find((r) => r.name.toLowerCase() === body.name.toLowerCase());
+  return match
+    ? call("PUT", `/api/${resource}/${match.id}`, body)
+    : call("POST", `/api/${resource}`, body);
+}
+
 const month = monthOf(todayISO());
 const rel = (n: number) => addMonths(month, n);
 
@@ -35,15 +51,15 @@ if (reset) {
   console.log("cleared existing setup");
 }
 
-await call("POST", "/api/income-streams", {
+await upsert("income-streams", {
   name: "Day job", amount_cents: 312500, frequency: "semimonthly",
   anchor_date: null, day_1: 15, day_2: 0, day_of_month: null, active: true,
 });
-await call("POST", "/api/income-streams", {
+await upsert("income-streams", {
   name: "Rental income", amount_cents: 185000, frequency: "monthly",
   anchor_date: null, day_1: null, day_2: null, day_of_month: 5, active: true,
 });
-await call("POST", "/api/income-streams", {
+await upsert("income-streams", {
   name: "Consulting retainer", amount_cents: 90000, frequency: "biweekly",
   anchor_date: `${rel(0)}-06`, day_1: null, day_2: null, day_of_month: null, active: true,
 });
@@ -66,7 +82,7 @@ const fixed: [string, number, number, number, string | null][] = [
   ["Trash pickup", 3500, 5, 2, "Utilities"],
 ];
 for (const [name, amount_cents, due_day, lead_days, category] of fixed) {
-  await call("POST", "/api/fixed-costs", {
+  await upsert("fixed-costs", {
     name, amount_cents, due_day, lead_days,
     category_id: category ? cat(category) : null, active: true,
   });
@@ -84,17 +100,23 @@ const lumpy: [string, number, number, string][] = [
   ["Furnace service", 24000, 12, `${rel(7)}-01`],
 ];
 for (const [name, amount_cents, frequency_months, next_due_date] of lumpy) {
-  await call("POST", "/api/lumpy-items", {
+  await upsert("lumpy-items", {
     name, amount_cents, frequency_months, next_due_date,
     category_id: cat("Insurance"), active: true,
   });
 }
 
-await call("POST", "/api/savings-goals", {
-  name: "Emergency fund", mode: "fixed", amount_cents: 40000, percent: null, active: true,
+await upsert("savings-goals", {
+  name: "Emergency fund", mode: "fixed", amount_cents: 40000, percent: null,
+  target_cents: 1800000, balance_cents: 640000, active: true,
 });
-await call("POST", "/api/savings-goals", {
-  name: "Brokerage", mode: "percent", amount_cents: null, percent: 8, active: true,
+await upsert("savings-goals", {
+  name: "Brokerage", mode: "percent", amount_cents: null, percent: 8,
+  target_cents: null, balance_cents: 1215000, active: true,
+});
+await upsert("savings-goals", {
+  name: "New roof", mode: "fixed", amount_cents: 25000, percent: null,
+  target_cents: 1200000, balance_cents: 1245000, active: true,
 });
 
 await call("PUT", "/api/settings", { name: "lumpy_opening_balance_cents", value: "250000" });

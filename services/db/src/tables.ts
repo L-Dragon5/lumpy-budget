@@ -36,7 +36,7 @@ export const TABLES = {
     order: "active DESC, next_due_date ASC",
   },
   savings_goals: {
-    cols: ["id", "name", "mode", "amount_cents", "percent", "active"],
+    cols: ["id", "name", "mode", "amount_cents", "percent", "target_cents", "balance_cents", "active"],
     bool: ["active"],
     num: ["percent"],
     order: "active DESC, name ASC",

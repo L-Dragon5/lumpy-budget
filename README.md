@@ -36,8 +36,12 @@ To see it full of data without typing anything in:
 
 ```bash
 bun run demo                  # a realistic household + 3 months of transactions
-bun run demo --reset          # clear the budget setup first
+bun run demo --reset          # delete the existing setup first
 ```
+
+Re-running it is safe: setup rows are matched by name and updated rather than
+added again, and the expense dedupe hash makes the import a no-op the second
+time.
 
 ## Checks
 
@@ -120,8 +124,13 @@ month, not $100, because you did not start saving for it a year ago. Money
 already in the account is claimed by whatever comes due first. The timeline runs
 12 months and names the first month the fund would run dry.
 
-Both account balances — the lumpy fund and savings — are kept up to date by hand
-on the page that reads them, not on a settings page two clicks away.
+**Savings goals are buckets.** Each one holds its own balance and can carry its
+own target. With a target it shows how far along it is — past 100% when it is
+overfunded, rather than capping and pretending it is merely full — and the month
+it lands in at the current rate. Without one it is open-ended and the balance is
+the whole story. Balances are kept up to date by hand on the page that reads
+them, not on a settings page two clicks away; the same is true of the lumpy
+fund's balance.
 
 **Available to spend**, both ways. Over the whole month, and per paycheck period
 — from the day money lands until the next paycheck arrives, which is how it is

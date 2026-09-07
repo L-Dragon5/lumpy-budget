@@ -113,6 +113,10 @@ export const savingsGoalInput = z
     amount_cents: positiveCents.nullable().default(null),
     /** Of that month's net income, when mode is "percent". */
     percent: z.number().min(0).max(100).nullable().default(null),
+    /** What the goal is aiming at. Null for an open-ended fund. */
+    target_cents: positiveCents.nullable().default(null),
+    /** What this bucket holds right now, kept up to date by hand. */
+    balance_cents: cents.default(0),
     active: z.boolean().default(true),
   })
   .superRefine((v, ctx) => {

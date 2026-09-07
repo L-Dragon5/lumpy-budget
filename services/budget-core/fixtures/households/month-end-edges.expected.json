@@ -106,6 +106,18 @@
     }
   ],
   "unfunded": [],
+  "savings_goals": [
+    {
+      "name": "Down payment",
+      "balance_cents": 4200000,
+      "target_cents": 4000000,
+      "monthly_cents": 100000,
+      "pct": 105,
+      "remaining_cents": 0,
+      "months_to_target": 0,
+      "funded": true
+    }
+  ],
   "lumpy": {
     "monthly_contribution_cents": 5000,
     "total_outflow_cents": 60000,

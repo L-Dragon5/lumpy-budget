@@ -136,6 +136,28 @@
     }
   ],
   "unfunded": [],
+  "savings_goals": [
+    {
+      "name": "Emergency fund",
+      "balance_cents": 640000,
+      "target_cents": 1800000,
+      "monthly_cents": 40000,
+      "pct": 35.6,
+      "remaining_cents": 1160000,
+      "months_to_target": 29,
+      "funded": false
+    },
+    {
+      "name": "Brokerage",
+      "balance_cents": 1215000,
+      "target_cents": null,
+      "monthly_cents": 64800,
+      "pct": null,
+      "remaining_cents": 0,
+      "months_to_target": null,
+      "funded": false
+    }
+  ],
   "lumpy": {
     "monthly_contribution_cents": 167320,
     "total_outflow_cents": 1542100,

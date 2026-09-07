@@ -5,54 +5,375 @@
   "lumpyMode": "recommended",
   "openingBalance": 250000,
   "streams": [
-    { "id": 1, "name": "Day job", "amount_cents": 312500, "frequency": "semimonthly", "anchor_date": null, "day_1": 15, "day_2": 0, "day_of_month": null, "active": true },
-    { "id": 2, "name": "Rental", "amount_cents": 185000, "frequency": "monthly", "anchor_date": null, "day_1": null, "day_2": null, "day_of_month": 5, "active": true }
+    {
+      "id": 1,
+      "name": "Day job",
+      "amount_cents": 312500,
+      "frequency": "semimonthly",
+      "anchor_date": null,
+      "day_1": 15,
+      "day_2": 0,
+      "day_of_month": null,
+      "active": true
+    },
+    {
+      "id": 2,
+      "name": "Rental",
+      "amount_cents": 185000,
+      "frequency": "monthly",
+      "anchor_date": null,
+      "day_1": null,
+      "day_2": null,
+      "day_of_month": 5,
+      "active": true
+    }
   ],
   "fixedCosts": [
-    { "id": 1, "name": "Mortgage", "amount_cents": 241800, "due_day": 1, "lead_days": 3, "category_id": null, "active": true },
-    { "id": 2, "name": "Car loan", "amount_cents": 48900, "due_day": 16, "lead_days": 2, "category_id": null, "active": true },
-    { "id": 3, "name": "Gas & electric", "amount_cents": 21500, "due_day": 12, "lead_days": 2, "category_id": null, "active": true },
-    { "id": 4, "name": "Internet", "amount_cents": 8999, "due_day": 20, "lead_days": 2, "category_id": null, "active": true },
-    { "id": 5, "name": "Water & sewer", "amount_cents": 7200, "due_day": 25, "lead_days": 2, "category_id": null, "active": true },
-    { "id": 6, "name": "Cell phone", "amount_cents": 11000, "due_day": 8, "lead_days": 2, "category_id": null, "active": true },
-    { "id": 7, "name": "Trash pickup", "amount_cents": 3500, "due_day": 5, "lead_days": 2, "category_id": null, "active": true },
-    { "id": 8, "name": "Childcare", "amount_cents": 92000, "due_day": 1, "lead_days": 3, "category_id": null, "active": true },
-    { "id": 9, "name": "Health insurance", "amount_cents": 38000, "due_day": 15, "lead_days": 2, "category_id": null, "active": true },
-    { "id": 10, "name": "Gym", "amount_cents": 4900, "due_day": 22, "lead_days": 0, "category_id": null, "active": true },
-    { "id": 11, "name": "Rental property mgmt", "amount_cents": 14800, "due_day": 10, "lead_days": 2, "category_id": null, "active": true },
-    { "id": 12, "name": "Student loan", "amount_cents": 32700, "due_day": 28, "lead_days": 2, "category_id": null, "active": true }
+    {
+      "id": 1,
+      "name": "Mortgage",
+      "amount_cents": 241800,
+      "due_day": 1,
+      "lead_days": 3,
+      "category_id": null,
+      "active": true
+    },
+    {
+      "id": 2,
+      "name": "Car loan",
+      "amount_cents": 48900,
+      "due_day": 16,
+      "lead_days": 2,
+      "category_id": null,
+      "active": true
+    },
+    {
+      "id": 3,
+      "name": "Gas & electric",
+      "amount_cents": 21500,
+      "due_day": 12,
+      "lead_days": 2,
+      "category_id": null,
+      "active": true
+    },
+    {
+      "id": 4,
+      "name": "Internet",
+      "amount_cents": 8999,
+      "due_day": 20,
+      "lead_days": 2,
+      "category_id": null,
+      "active": true
+    },
+    {
+      "id": 5,
+      "name": "Water & sewer",
+      "amount_cents": 7200,
+      "due_day": 25,
+      "lead_days": 2,
+      "category_id": null,
+      "active": true
+    },
+    {
+      "id": 6,
+      "name": "Cell phone",
+      "amount_cents": 11000,
+      "due_day": 8,
+      "lead_days": 2,
+      "category_id": null,
+      "active": true
+    },
+    {
+      "id": 7,
+      "name": "Trash pickup",
+      "amount_cents": 3500,
+      "due_day": 5,
+      "lead_days": 2,
+      "category_id": null,
+      "active": true
+    },
+    {
+      "id": 8,
+      "name": "Childcare",
+      "amount_cents": 92000,
+      "due_day": 1,
+      "lead_days": 3,
+      "category_id": null,
+      "active": true
+    },
+    {
+      "id": 9,
+      "name": "Health insurance",
+      "amount_cents": 38000,
+      "due_day": 15,
+      "lead_days": 2,
+      "category_id": null,
+      "active": true
+    },
+    {
+      "id": 10,
+      "name": "Gym",
+      "amount_cents": 4900,
+      "due_day": 22,
+      "lead_days": 0,
+      "category_id": null,
+      "active": true
+    },
+    {
+      "id": 11,
+      "name": "Rental property mgmt",
+      "amount_cents": 14800,
+      "due_day": 10,
+      "lead_days": 2,
+      "category_id": null,
+      "active": true
+    },
+    {
+      "id": 12,
+      "name": "Student loan",
+      "amount_cents": 32700,
+      "due_day": 28,
+      "lead_days": 2,
+      "category_id": null,
+      "active": true
+    }
   ],
   "lumpyItems": [
-    { "id": 1, "name": "Car insurance", "amount_cents": 142800, "frequency_months": 6, "next_due_date": "2026-05-01", "category_id": null, "active": true },
-    { "id": 2, "name": "Home insurance", "amount_cents": 168000, "frequency_months": 12, "next_due_date": "2026-09-15", "category_id": null, "active": true },
-    { "id": 3, "name": "Property taxes", "amount_cents": 420000, "frequency_months": 6, "next_due_date": "2026-07-01", "category_id": null, "active": true },
-    { "id": 4, "name": "Car registration", "amount_cents": 12500, "frequency_months": 24, "next_due_date": "2027-02-01", "category_id": null, "active": true },
-    { "id": 5, "name": "HOA dues", "amount_cents": 45000, "frequency_months": 3, "next_due_date": "2026-04-01", "category_id": null, "active": true },
-    { "id": 6, "name": "Amazon Prime", "amount_cents": 13900, "frequency_months": 12, "next_due_date": "2026-11-04", "category_id": null, "active": true },
-    { "id": 7, "name": "Domain renewals", "amount_cents": 8600, "frequency_months": 12, "next_due_date": "2026-06-18", "category_id": null, "active": true },
-    { "id": 8, "name": "Credit card annual fee", "amount_cents": 9500, "frequency_months": 12, "next_due_date": "2026-08-09", "category_id": null, "active": true },
-    { "id": 9, "name": "Furnace service", "amount_cents": 24000, "frequency_months": 12, "next_due_date": "2026-10-01", "category_id": null, "active": true }
+    {
+      "id": 1,
+      "name": "Car insurance",
+      "amount_cents": 142800,
+      "frequency_months": 6,
+      "next_due_date": "2026-05-01",
+      "category_id": null,
+      "active": true
+    },
+    {
+      "id": 2,
+      "name": "Home insurance",
+      "amount_cents": 168000,
+      "frequency_months": 12,
+      "next_due_date": "2026-09-15",
+      "category_id": null,
+      "active": true
+    },
+    {
+      "id": 3,
+      "name": "Property taxes",
+      "amount_cents": 420000,
+      "frequency_months": 6,
+      "next_due_date": "2026-07-01",
+      "category_id": null,
+      "active": true
+    },
+    {
+      "id": 4,
+      "name": "Car registration",
+      "amount_cents": 12500,
+      "frequency_months": 24,
+      "next_due_date": "2027-02-01",
+      "category_id": null,
+      "active": true
+    },
+    {
+      "id": 5,
+      "name": "HOA dues",
+      "amount_cents": 45000,
+      "frequency_months": 3,
+      "next_due_date": "2026-04-01",
+      "category_id": null,
+      "active": true
+    },
+    {
+      "id": 6,
+      "name": "Amazon Prime",
+      "amount_cents": 13900,
+      "frequency_months": 12,
+      "next_due_date": "2026-11-04",
+      "category_id": null,
+      "active": true
+    },
+    {
+      "id": 7,
+      "name": "Domain renewals",
+      "amount_cents": 8600,
+      "frequency_months": 12,
+      "next_due_date": "2026-06-18",
+      "category_id": null,
+      "active": true
+    },
+    {
+      "id": 8,
+      "name": "Credit card annual fee",
+      "amount_cents": 9500,
+      "frequency_months": 12,
+      "next_due_date": "2026-08-09",
+      "category_id": null,
+      "active": true
+    },
+    {
+      "id": 9,
+      "name": "Furnace service",
+      "amount_cents": 24000,
+      "frequency_months": 12,
+      "next_due_date": "2026-10-01",
+      "category_id": null,
+      "active": true
+    }
   ],
   "savingsGoals": [
-    { "id": 1, "name": "Emergency fund", "mode": "fixed", "amount_cents": 40000, "percent": null, "active": true },
-    { "id": 2, "name": "Brokerage", "mode": "percent", "amount_cents": null, "percent": 8, "active": true }
+    {
+      "id": 1,
+      "name": "Emergency fund",
+      "mode": "fixed",
+      "amount_cents": 40000,
+      "percent": null,
+      "active": true,
+      "target_cents": 1800000,
+      "balance_cents": 640000
+    },
+    {
+      "id": 2,
+      "name": "Brokerage",
+      "mode": "percent",
+      "amount_cents": null,
+      "percent": 8,
+      "active": true,
+      "target_cents": null,
+      "balance_cents": 1215000
+    }
   ],
   "categories": [
-    { "id": 1, "name": "Groceries", "bucket": "discretionary", "color": null },
-    { "id": 2, "name": "Dining", "bucket": "discretionary", "color": null },
-    { "id": 3, "name": "Housing", "bucket": "fixed", "color": null },
-    { "id": 4, "name": "Insurance", "bucket": "lumpy", "color": null },
-    { "id": 5, "name": "Savings Transfer", "bucket": "savings", "color": null }
+    {
+      "id": 1,
+      "name": "Groceries",
+      "bucket": "discretionary",
+      "color": null
+    },
+    {
+      "id": 2,
+      "name": "Dining",
+      "bucket": "discretionary",
+      "color": null
+    },
+    {
+      "id": 3,
+      "name": "Housing",
+      "bucket": "fixed",
+      "color": null
+    },
+    {
+      "id": 4,
+      "name": "Insurance",
+      "bucket": "lumpy",
+      "color": null
+    },
+    {
+      "id": 5,
+      "name": "Savings Transfer",
+      "bucket": "savings",
+      "color": null
+    }
   ],
   "expenses": [
-    { "id": 1, "txn_date": "2026-03-02", "amount_cents": 241800, "merchant": "MORTGAGE CO", "description": "", "category_id": 3, "source": "import", "import_batch_id": null, "dedupe_hash": "a1" },
-    { "id": 2, "txn_date": "2026-03-03", "amount_cents": 18742, "merchant": "WEGMANS", "description": "", "category_id": 1, "source": "import", "import_batch_id": null, "dedupe_hash": "a2" },
-    { "id": 3, "txn_date": "2026-03-07", "amount_cents": 6210, "merchant": "CHIPOTLE", "description": "", "category_id": 2, "source": "import", "import_batch_id": null, "dedupe_hash": "a3" },
-    { "id": 4, "txn_date": "2026-03-11", "amount_cents": 21500, "merchant": "NATIONAL GRID", "description": "", "category_id": 3, "source": "import", "import_batch_id": null, "dedupe_hash": "a4" },
-    { "id": 5, "txn_date": "2026-03-14", "amount_cents": 9455, "merchant": "TRADER JOES", "description": "", "category_id": 1, "source": "import", "import_batch_id": null, "dedupe_hash": "a5" },
-    { "id": 6, "txn_date": "2026-03-18", "amount_cents": 40000, "merchant": "TRANSFER TO SAVINGS", "description": "", "category_id": 5, "source": "import", "import_batch_id": null, "dedupe_hash": "a6" },
-    { "id": 7, "txn_date": "2026-03-21", "amount_cents": 13380, "merchant": "COSTCO", "description": "", "category_id": 1, "source": "import", "import_batch_id": null, "dedupe_hash": "a7" },
-    { "id": 8, "txn_date": "2026-03-27", "amount_cents": 7899, "merchant": "STARBUCKS", "description": "", "category_id": 2, "source": "import", "import_batch_id": null, "dedupe_hash": "a8" },
-    { "id": 9, "txn_date": "2026-04-02", "amount_cents": 99999, "merchant": "NEXT MONTH", "description": "", "category_id": 1, "source": "import", "import_batch_id": null, "dedupe_hash": "a9" }
+    {
+      "id": 1,
+      "txn_date": "2026-03-02",
+      "amount_cents": 241800,
+      "merchant": "MORTGAGE CO",
+      "description": "",
+      "category_id": 3,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "a1"
+    },
+    {
+      "id": 2,
+      "txn_date": "2026-03-03",
+      "amount_cents": 18742,
+      "merchant": "WEGMANS",
+      "description": "",
+      "category_id": 1,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "a2"
+    },
+    {
+      "id": 3,
+      "txn_date": "2026-03-07",
+      "amount_cents": 6210,
+      "merchant": "CHIPOTLE",
+      "description": "",
+      "category_id": 2,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "a3"
+    },
+    {
+      "id": 4,
+      "txn_date": "2026-03-11",
+      "amount_cents": 21500,
+      "merchant": "NATIONAL GRID",
+      "description": "",
+      "category_id": 3,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "a4"
+    },
+    {
+      "id": 5,
+      "txn_date": "2026-03-14",
+      "amount_cents": 9455,
+      "merchant": "TRADER JOES",
+      "description": "",
+      "category_id": 1,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "a5"
+    },
+    {
+      "id": 6,
+      "txn_date": "2026-03-18",
+      "amount_cents": 40000,
+      "merchant": "TRANSFER TO SAVINGS",
+      "description": "",
+      "category_id": 5,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "a6"
+    },
+    {
+      "id": 7,
+      "txn_date": "2026-03-21",
+      "amount_cents": 13380,
+      "merchant": "COSTCO",
+      "description": "",
+      "category_id": 1,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "a7"
+    },
+    {
+      "id": 8,
+      "txn_date": "2026-03-27",
+      "amount_cents": 7899,
+      "merchant": "STARBUCKS",
+      "description": "",
+      "category_id": 2,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "a8"
+    },
+    {
+      "id": 9,
+      "txn_date": "2026-04-02",
+      "amount_cents": 99999,
+      "merchant": "NEXT MONTH",
+      "description": "",
+      "category_id": 1,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "a9"
+    }
   ]
 }

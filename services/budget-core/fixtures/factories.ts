@@ -53,6 +53,8 @@ export function goal(p: Partial<SavingsGoal> = {}): SavingsGoal {
     mode: "fixed",
     amount_cents: 50000,
     percent: null,
+    target_cents: null,
+    balance_cents: 0,
     active: true,
     ...p,
   };

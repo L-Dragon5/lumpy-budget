@@ -102,6 +102,18 @@
     }
   ],
   "unfunded": [],
+  "savings_goals": [
+    {
+      "name": "Emergency fund",
+      "balance_cents": 18000,
+      "target_cents": 500000,
+      "monthly_cents": 26700,
+      "pct": 3.6,
+      "remaining_cents": 482000,
+      "months_to_target": 19,
+      "funded": false
+    }
+  ],
   "lumpy": {
     "monthly_contribution_cents": 72000,
     "total_outflow_cents": 216000,

@@ -5,28 +5,135 @@
   "lumpyMode": "recommended",
   "openingBalance": 0,
   "streams": [
-    { "id": 1, "name": "Paycheck", "amount_cents": 178000, "frequency": "biweekly", "anchor_date": "2026-01-02", "day_1": null, "day_2": null, "day_of_month": null, "active": true }
+    {
+      "id": 1,
+      "name": "Paycheck",
+      "amount_cents": 178000,
+      "frequency": "biweekly",
+      "anchor_date": "2026-01-02",
+      "day_1": null,
+      "day_2": null,
+      "day_of_month": null,
+      "active": true
+    }
   ],
   "fixedCosts": [
-    { "id": 1, "name": "Rent", "amount_cents": 145000, "due_day": 1, "lead_days": 3, "category_id": null, "active": true },
-    { "id": 2, "name": "Car payment", "amount_cents": 39500, "due_day": 5, "lead_days": 2, "category_id": null, "active": true },
-    { "id": 3, "name": "Electric", "amount_cents": 16800, "due_day": 18, "lead_days": 2, "category_id": null, "active": true },
-    { "id": 4, "name": "Phone", "amount_cents": 8500, "due_day": 22, "lead_days": 2, "category_id": null, "active": true }
+    {
+      "id": 1,
+      "name": "Rent",
+      "amount_cents": 145000,
+      "due_day": 1,
+      "lead_days": 3,
+      "category_id": null,
+      "active": true
+    },
+    {
+      "id": 2,
+      "name": "Car payment",
+      "amount_cents": 39500,
+      "due_day": 5,
+      "lead_days": 2,
+      "category_id": null,
+      "active": true
+    },
+    {
+      "id": 3,
+      "name": "Electric",
+      "amount_cents": 16800,
+      "due_day": 18,
+      "lead_days": 2,
+      "category_id": null,
+      "active": true
+    },
+    {
+      "id": 4,
+      "name": "Phone",
+      "amount_cents": 8500,
+      "due_day": 22,
+      "lead_days": 2,
+      "category_id": null,
+      "active": true
+    }
   ],
   "lumpyItems": [
-    { "id": 1, "name": "Car insurance", "amount_cents": 96000, "frequency_months": 6, "next_due_date": "2026-03-01", "category_id": null, "active": true },
-    { "id": 2, "name": "Renters insurance", "amount_cents": 24000, "frequency_months": 12, "next_due_date": "2026-02-15", "category_id": null, "active": true }
+    {
+      "id": 1,
+      "name": "Car insurance",
+      "amount_cents": 96000,
+      "frequency_months": 6,
+      "next_due_date": "2026-03-01",
+      "category_id": null,
+      "active": true
+    },
+    {
+      "id": 2,
+      "name": "Renters insurance",
+      "amount_cents": 24000,
+      "frequency_months": 12,
+      "next_due_date": "2026-02-15",
+      "category_id": null,
+      "active": true
+    }
   ],
   "savingsGoals": [
-    { "id": 1, "name": "Emergency fund", "mode": "percent", "amount_cents": null, "percent": 5, "active": true }
+    {
+      "id": 1,
+      "name": "Emergency fund",
+      "mode": "percent",
+      "amount_cents": null,
+      "percent": 5,
+      "active": true,
+      "target_cents": 500000,
+      "balance_cents": 18000
+    }
   ],
   "categories": [
-    { "id": 1, "name": "Groceries", "bucket": "discretionary", "color": null },
-    { "id": 2, "name": "Housing", "bucket": "fixed", "color": null }
+    {
+      "id": 1,
+      "name": "Groceries",
+      "bucket": "discretionary",
+      "color": null
+    },
+    {
+      "id": 2,
+      "name": "Housing",
+      "bucket": "fixed",
+      "color": null
+    }
   ],
   "expenses": [
-    { "id": 1, "txn_date": "2026-01-04", "amount_cents": 8200, "merchant": "ALDI", "description": "", "category_id": 1, "source": "import", "import_batch_id": null, "dedupe_hash": "b1" },
-    { "id": 2, "txn_date": "2026-01-19", "amount_cents": 11350, "merchant": "ALDI", "description": "", "category_id": 1, "source": "import", "import_batch_id": null, "dedupe_hash": "b2" },
-    { "id": 3, "txn_date": "2026-01-31", "amount_cents": 6100, "merchant": "ALDI", "description": "", "category_id": 1, "source": "import", "import_batch_id": null, "dedupe_hash": "b3" }
+    {
+      "id": 1,
+      "txn_date": "2026-01-04",
+      "amount_cents": 8200,
+      "merchant": "ALDI",
+      "description": "",
+      "category_id": 1,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "b1"
+    },
+    {
+      "id": 2,
+      "txn_date": "2026-01-19",
+      "amount_cents": 11350,
+      "merchant": "ALDI",
+      "description": "",
+      "category_id": 1,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "b2"
+    },
+    {
+      "id": 3,
+      "txn_date": "2026-01-31",
+      "amount_cents": 6100,
+      "merchant": "ALDI",
+      "description": "",
+      "category_id": 1,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "b3"
+    }
   ]
 }
