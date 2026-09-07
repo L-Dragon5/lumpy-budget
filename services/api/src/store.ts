@@ -1,7 +1,7 @@
 import type {
   Category, CategoryRule, Expense, ExpenseInput, FixedCost, IncomeStream, LumpyItem, SavingsGoal,
 } from "@lumpy/contracts";
-import { insert, rows, sql, type Executor } from "@lumpy/db";
+import { insert, rows, sql, update, type Executor } from "@lumpy/db";
 import { applyRules, dedupeKey } from "@lumpy/csv-import";
 import * as core from "@lumpy/budget-core";
 
@@ -91,4 +91,15 @@ export async function importExpenses(args: {
 /** A single manual expense still gets a dedupe hash, so it cannot be double-entered. */
 export async function insertExpense(e: ExpenseInput): Promise<number> {
   return insert("expenses", { ...e, dedupe_hash: hash(dedupeKey(e)) });
+}
+
+/**
+ * An edit rewrites the hash, because the hash covers date, amount and merchant
+ * and all three are editable. Leaving it stale would let an edit produce the
+ * duplicate the unique index exists to prevent, and would make the statement
+ * that row came from re-import as a no-op even though the row no longer matches
+ * it. A collision surfaces as errno 1062, which the API already reads as a 409.
+ */
+export async function updateExpense(id: number, e: ExpenseInput): Promise<number> {
+  return update("expenses", id, { ...e, dedupe_hash: hash(dedupeKey(e)) });
 }

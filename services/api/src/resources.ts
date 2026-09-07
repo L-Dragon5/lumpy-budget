@@ -5,7 +5,7 @@ import {
   expense, importBatch, isoDate, lumpyItem, lumpyItemInput, savingsGoal, savingsGoalInput,
 } from "@lumpy/contracts";
 import type { Expense, ImportBatch } from "@lumpy/contracts";
-import { byId, remove, rows, update } from "@lumpy/db";
+import { byId, remove, rows } from "@lumpy/db";
 import { z } from "zod";
 import { crud, deleted, errorBody, idParam, notFound } from "./crud";
 import * as store from "./store";
@@ -50,14 +50,11 @@ const expenses = new Elysia({ name: "expenses" })
     async ({ body }) => status(201, (await byId<Expense>("expenses", await store.insertExpense(body))) as Expense),
     { body: expenseInput, response: { 201: expense } },
   )
-  // ponytail: like the generic update it replaces, this leaves dedupe_hash alone.
-  // Editing a merchant therefore keeps the original hash. Recompute it here the day
-  // an edited row needs to re-dedupe.
   .put(
     "/expenses/:id",
     async ({ params, body }) => {
       if (!(await byId("expenses", params.id))) return notFound();
-      await update("expenses", params.id, body);
+      await store.updateExpense(params.id, body);
       return (await byId<Expense>("expenses", params.id)) as Expense;
     },
     { params: idParam, body: expenseInput, response: { 200: expense, 404: errorBody } },

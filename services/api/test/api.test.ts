@@ -138,12 +138,65 @@ describe("expenses and import", () => {
     expect((await api("/api/expenses?category_id=none")).body).toHaveLength(1);
   });
 
+  test("a malformed filter is refused rather than quietly ignored", async () => {
+    await post("/api/import", { filename: "chase.csv", profile_id: null, rows });
+    // Dropping an unparseable filter would answer a question nobody asked: you
+    // ask for March and get the whole ledger, with nothing to say it went wrong.
+    expect((await api("/api/expenses?start=March")).status).toBe(422);
+    expect((await api("/api/expenses?end=2026-3-1")).status).toBe(422);
+    // Absent is still absent, and a valid filter still filters.
+    expect((await api("/api/expenses")).body).toHaveLength(3);
+    expect((await api("/api/expenses?start=2026-03-15")).body).toHaveLength(2);
+  });
+
   test("a manual expense cannot be entered twice by accident", async () => {
     const body = { txn_date: "2026-03-18", amount_cents: 999, merchant: "Cash", description: "", category_id: null, source: "manual" };
     expect((await post("/api/expenses", body)).status).toBe(201);
     const dupe = await post("/api/expenses", body);
     expect(dupe.status).toBe(409);
     expect(dupe.body.error).toBe("that record already exists");
+  });
+
+  test("editing an expense onto another one is a 409, not a silent duplicate", async () => {
+    const base = { description: "", category_id: null, source: "manual" };
+    const a = await post("/api/expenses", { ...base, txn_date: "2026-03-18", amount_cents: 999, merchant: "Cash" });
+    const b = await post("/api/expenses", { ...base, txn_date: "2026-03-19", amount_cents: 500, merchant: "Kiosk" });
+    expect(b.status).toBe(201);
+
+    // The dedupe hash covers date, amount and merchant, so an edit that makes B
+    // identical to A has to collide the same way a second entry would.
+    const clash = await put(`/api/expenses/${b.body.id}`, {
+      ...base, txn_date: "2026-03-18", amount_cents: 999, merchant: "Cash",
+    });
+    expect(clash.status).toBe(409);
+    expect((await api("/api/expenses")).body).toHaveLength(2);
+
+    // And an edit that does not collide keeps the row reachable, with a hash
+    // that now describes what the row actually says.
+    const moved = await put(`/api/expenses/${b.body.id}`, {
+      ...base, txn_date: "2026-03-19", amount_cents: 500, merchant: "Corner Kiosk",
+    });
+    expect(moved.status).toBe(200);
+    expect(moved.body.merchant).toBe("Corner Kiosk");
+    expect(moved.body.dedupe_hash).not.toBe(b.body.dedupe_hash);
+    expect(a.body.dedupe_hash).not.toBe(moved.body.dedupe_hash);
+  });
+
+  test("re-importing a row whose expense was edited away inserts it again", async () => {
+    const first = await post("/api/import", { filename: "chase.csv", profile_id: null, rows });
+    expect(first.body.inserted).toBe(3);
+
+    const stored = (await api("/api/expenses")).body as { id: number; merchant: string }[];
+    const wegmans = stored.find((e) => e.merchant === "WEGMANS #123")!;
+    await put(`/api/expenses/${wegmans.id}`, {
+      txn_date: "2026-03-14", amount_cents: 8421, merchant: "Wegmans Rochester",
+      description: "Groceries", category_id: null, source: "import",
+    });
+
+    // The edited row is no longer the row the statement describes, so the
+    // statement's version is new. A stale hash would have skipped it.
+    const again = await post("/api/import", { filename: "chase.csv", profile_id: null, rows });
+    expect(again.body).toMatchObject({ inserted: 1, skipped: 2 });
   });
 
   test("a duplicate category name is a 409, not a 500", async () => {

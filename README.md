@@ -64,6 +64,35 @@ run — a month's paychecks must sum to its income, and every split must sum to
 its total. There is no model in this app, so a prompt-eval suite would be
 theater; this is the honest equivalent, and it has already caught two real bugs.
 
+## Talking to the API
+
+Every write is checked against the zod schema in `contracts/types.ts`, and every
+read is checked against it on the way out, so a column the contract does not
+describe cannot reach the client unannounced.
+
+A bad request is a **422** in Elysia's own shape, not a 400. `errors[]` is the
+part worth reading; `path` is an array, one segment per level:
+
+```jsonc
+{
+  "type": "validation",
+  "on": "body",              // or "query", or "response" if the server broke its own contract
+  "property": "name",
+  "message": "String must contain at least 1 character(s)",
+  "errors": [{ "path": ["name"], "message": "String must contain at least 1 character(s)" }]
+}
+```
+
+A recorded copy lives in `services/api/test/fixtures/validation-error.json` and
+is asserted, so an Elysia upgrade that moves this shape fails a test rather than
+the error toast that renders it.
+
+Other statuses worth knowing: **409** for a duplicate or a row something else
+still references, **405** on writes to `import-batches` (the importer owns it),
+**404** for an unknown id. CORS is restricted to localhost on any port, which
+only matters if you point a browser straight at port 3001 -- the app itself goes
+through the Vite proxy and is same-origin.
+
 ## Layout
 
 ```
