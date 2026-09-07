@@ -33,9 +33,16 @@ export function coerce<T>(table: TableName, row: Record<string, unknown>): T {
     const v = row[c];
     if (v instanceof Date) row[c] = v.toISOString().slice(0, 10);
   }
+  for (const c of spec.datetime ?? []) {
+    // A TIMESTAMP keeps its time, so it becomes a full ISO string rather than a
+    // date. Converted here rather than in SQL: the driver has already resolved
+    // the instant, while DATE_FORMAT would stamp a 'Z' on a session-local time.
+    const v = row[c];
+    if (v instanceof Date) row[c] = v.toISOString();
+  }
   return row as T;
 }
-type TableSpecLoose = { bool?: string[]; num?: string[]; json?: string[]; date?: string[] };
+type TableSpecLoose = { bool?: string[]; num?: string[]; json?: string[]; date?: string[]; datetime?: string[] };
 
 export type Executor = Pick<typeof sql, "unsafe">;
 

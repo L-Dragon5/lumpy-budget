@@ -2,12 +2,12 @@ import { Elysia, status } from "elysia";
 import {
   category, categoryInput, categoryRule, categoryRuleInput, expenseInput, fixedCost,
   fixedCostInput, importProfile, importProfileInput, incomeStream, incomeStreamInput,
-  isoDate, lumpyItem, lumpyItemInput, savingsGoal, savingsGoalInput,
+  expense, importBatch, isoDate, lumpyItem, lumpyItemInput, savingsGoal, savingsGoalInput,
 } from "@lumpy/contracts";
 import type { Expense, ImportBatch } from "@lumpy/contracts";
 import { byId, remove, rows, update } from "@lumpy/db";
 import { z } from "zod";
-import { crud, idParam, notFound } from "./crud";
+import { crud, deleted, errorBody, idParam, notFound } from "./crud";
 import * as store from "./store";
 
 /** Expenses are the only table big enough to need filtering. */
@@ -38,16 +38,17 @@ const expenses = new Elysia({ name: "expenses" })
       const found = await rows<Expense>("expenses", where.join(" AND "), params);
       return found.slice(0, limit);
     },
-    { query: expenseQuery },
+    { query: expenseQuery, response: z.array(expense) },
   )
   .get("/expenses/:id", async ({ params }) => (await byId<Expense>("expenses", params.id)) ?? notFound(), {
     params: idParam,
+    response: { 200: expense, 404: errorBody },
   })
   // A manual expense still gets a dedupe hash, so the generic insert will not do.
   .post(
     "/expenses",
     async ({ body }) => status(201, (await byId<Expense>("expenses", await store.insertExpense(body))) as Expense),
-    { body: expenseInput },
+    { body: expenseInput, response: { 201: expense } },
   )
   // ponytail: like the generic update it replaces, this leaves dedupe_hash alone.
   // Editing a merchant therefore keeps the original hash. Recompute it here the day
@@ -59,22 +60,24 @@ const expenses = new Elysia({ name: "expenses" })
       await update("expenses", params.id, body);
       return (await byId<Expense>("expenses", params.id)) as Expense;
     },
-    { params: idParam, body: expenseInput },
+    { params: idParam, body: expenseInput, response: { 200: expense, 404: errorBody } },
   )
   .delete("/expenses/:id", async ({ params }) => ((await remove("expenses", params.id)) ? { deleted: params.id } : notFound()), {
     params: idParam,
+    response: { 200: deleted, 404: errorBody },
   });
 
 /** Batches are written by the importer, never by a client. Deleting one takes its expenses with it. */
 const importBatches = new Elysia({ name: "import-batches" })
-  .get("/import-batches", () => rows<ImportBatch>("import_batches"))
-  .get("/import-batches/:id", async ({ params }) => (await byId("import_batches", params.id)) ?? notFound(), {
+  .get("/import-batches", () => rows<ImportBatch>("import_batches"), { response: z.array(importBatch) })
+  .get("/import-batches/:id", async ({ params }) => (await byId<ImportBatch>("import_batches", params.id)) ?? notFound(), {
     params: idParam,
+    response: { 200: importBatch, 404: errorBody },
   })
   .delete(
     "/import-batches/:id",
     async ({ params }) => ((await remove("import_batches", params.id)) ? { deleted: params.id } : notFound()),
-    { params: idParam },
+    { params: idParam, response: { 200: deleted, 404: errorBody } },
   )
   // 405 is a truer answer than the 404 an undeclared route would give.
   .post("/import-batches", () => status(405, { error: "import-batches is not writable" }));

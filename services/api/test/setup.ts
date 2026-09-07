@@ -44,3 +44,12 @@ export const post = (path: string, body: unknown) =>
 export const put = (path: string, body: unknown) =>
   api(path, { method: "PUT", body: JSON.stringify(body) });
 export const del = (path: string) => api(path, { method: "DELETE" });
+
+/** The CORS headers the API returns to a browser at a given Origin. */
+export const corsHeaders = async (origin: string): Promise<Headers> => {
+  const res = await app.handle(new Request(`${base}/api/categories`, { headers: { Origin: origin } }));
+  return res.headers;
+};
+
+export const allowedOrigin = async (origin: string): Promise<string | null> =>
+  (await corsHeaders(origin)).get("access-control-allow-origin");

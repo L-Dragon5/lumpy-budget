@@ -7,6 +7,8 @@
 export type TableSpec = {
   cols: string[];
   date?: string[];
+  /** TIMESTAMP columns: full ISO-8601 strings, not YYYY-MM-DD. */
+  datetime?: string[];
   bool?: string[];
   json?: string[];
   num?: string[];
@@ -52,6 +54,7 @@ export const TABLES = {
   },
   import_batches: {
     cols: ["id", "filename", "profile_id", "row_count", "inserted", "skipped", "created_at"],
+    datetime: ["created_at"],
     order: "created_at DESC, id DESC",
   },
   expenses: {

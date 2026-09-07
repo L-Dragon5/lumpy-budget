@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { api, del, post, put, resetDb } from "./setup";
+import { allowedOrigin, api, corsHeaders, del, post, put, resetDb } from "./setup";
 
 const semiMonthly = {
   name: "Day job", amount_cents: 300000, frequency: "semimonthly",
@@ -106,6 +106,16 @@ describe("expenses and import", () => {
       rows: [...rows, { ...rows[0]!, txn_date: "2026-04-01" }],
     });
     expect(third.body).toMatchObject({ inserted: 1, skipped: 3 });
+  });
+
+  test("an import batch timestamp crosses the wire as a string, not a Date", async () => {
+    await post("/api/import", { filename: "chase.csv", profile_id: null, rows });
+    const [batch] = (await api("/api/import-batches")).body as { created_at: string }[];
+    // A TIMESTAMP column arrives from the driver as a Date. services/db coerces
+    // it, because every date in this app is a string end to end.
+    expect(typeof batch!.created_at).toBe("string");
+    expect(batch!.created_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    expect(Number.isNaN(Date.parse(batch!.created_at))).toBe(false);
   });
 
   test("deleting an import batch takes its expenses with it", async () => {
@@ -257,5 +267,25 @@ describe("computed endpoints", () => {
     expect((await api("/api/lumpy-timeline?start=2026-03&months=0")).body.rows).toHaveLength(1);
     expect((await api("/api/expenses?limit=99999")).status).toBe(200);
     expect((await api("/api/income-calendar?year=0")).body.year).toBe(1970);
+  });
+});
+
+describe("cors", () => {
+  test("only a local origin is allowed to read this unauthenticated API", async () => {
+    expect(await allowedOrigin("http://localhost:5173")).toBe("http://localhost:5173");
+    // Vite increments the port when 5173 is taken, so any local port has to work.
+    expect(await allowedOrigin("http://localhost:5174")).toBe("http://localhost:5174");
+    expect(await allowedOrigin("http://127.0.0.1:5173")).toBe("http://127.0.0.1:5173");
+
+    expect(await allowedOrigin("https://evil.example.com")).toBeNull();
+    // The anchors matter: a hostname that merely contains "localhost" is not local.
+    expect(await allowedOrigin("https://localhost.evil.com")).toBeNull();
+    expect(await allowedOrigin("https://evil.com/?x=http://localhost")).toBeNull();
+  });
+
+  test("no credentials are advertised, because there are none to send", async () => {
+    // The plugin default is Allow-Credentials: true. Combined with an origin it
+    // reflects, that hands any site a credentialed read of this API.
+    expect((await corsHeaders("http://localhost:5173")).get("access-control-allow-credentials")).toBeNull();
   });
 });

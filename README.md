@@ -90,7 +90,8 @@ the total and a penny is never lost.
 `DATE` column read normally comes back as a `Date` at local midnight —
 `2026-03-15` arrives as `2026-03-15T04:00:00.000Z` — so every date column is
 selected as `DATE_FORMAT(col,'%Y-%m-%d')` and no `Date` object ever crosses the
-DB or HTTP boundary. There is a test for exactly this.
+DB or HTTP boundary. A `TIMESTAMP` keeps its time, so it becomes a full ISO
+string instead. There is a test for exactly this.
 
 The HTTP client has the same trap on the other side: Eden's JSON reviver turns
 any date-shaped string back into a `Date` by default, and the inferred type
