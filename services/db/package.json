@@ -1,0 +1,13 @@
+{
+  "name": "@lumpy/db",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/client.ts",
+  "exports": {
+    ".": "./src/client.ts",
+    "./migrate": "./src/migrate.ts",
+    "./seed": "./src/seed.ts",
+    "./tables": "./src/tables.ts"
+  },
+  "dependencies": { "@lumpy/contracts": "workspace:*" }
+}

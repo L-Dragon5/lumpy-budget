@@ -1,0 +1,11 @@
+{
+  "name": "@lumpy/csv-import",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "dependencies": {
+    "@lumpy/contracts": "workspace:*",
+    "papaparse": "^5.4.1"
+  },
+  "devDependencies": { "@types/papaparse": "^5.3.14" }
+}

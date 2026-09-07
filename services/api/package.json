@@ -1,0 +1,13 @@
+{
+  "name": "@lumpy/api",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/server.ts",
+  "dependencies": {
+    "@lumpy/budget-core": "workspace:*",
+    "@lumpy/contracts": "workspace:*",
+    "@lumpy/csv-import": "workspace:*",
+    "@lumpy/db": "workspace:*",
+    "zod": "^3.23.8"
+  }
+}
