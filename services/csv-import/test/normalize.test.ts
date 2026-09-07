@@ -82,7 +82,7 @@ test("rules categorize on import, lowest priority number first", () => {
 
 test("a rule can match on the description, not just the merchant", () => {
   const out = applyRules(
-    [{ merchant: "SQ *UNKNOWN", description: "COFFEE SHOP", category_id: null }],
+    [{ merchant: "SQ *UNKNOWN", description: "COFFEE SHOP", category_id: null as number | null }],
     [rule({ pattern: "coffee", category_id: 5 })],
   );
   expect(out[0]!.category_id).toBe(5);

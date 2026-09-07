@@ -153,3 +153,23 @@ test("with only one paycheck in the whole window, everything stacks on it and it
   expect(a.paychecks[0]!.free_cents).toBe(-30000);
   expect(a.paychecks[0]!.over_committed).toBe(true);
 });
+
+test("the lumpy and savings transfers are reserved before any bill is assigned", () => {
+  const big = stream({ name: "Salary", frequency: "monthly", anchor_date: null, day_of_month: 1, amount_cents: 200000 });
+  const small = stream({ name: "Side", frequency: "monthly", anchor_date: null, day_of_month: 6, amount_cents: 20000 });
+  const a = allocateMonth({
+    streams: [big, small],
+    fixedCosts: [fixedCost({ name: "Rent", amount_cents: 17000, due_day: 8, lead_days: 0 })],
+    month: "2026-03",
+    lumpyMonthlyCents: 22000,
+    savingsMonthlyCents: 22000,
+  });
+  // The 6th is the closest paycheck, but $40 of its $200 is already spoken for by
+  // its share of the transfers, so the rent falls back to the one that can carry it.
+  const carrier = a.paychecks.find((p) => p.holds.length > 0)!;
+  expect(carrier.stream_name).toBe("Salary");
+  expect(a.paychecks.every((p) => !p.over_committed)).toBe(true);
+  const side = a.paychecks.find((p) => p.stream_name === "Side")!;
+  expect([side.lumpy_cents, side.savings_cents]).toEqual([2000, 2000]);
+  expect(side.free_cents).toBe(16000);
+});

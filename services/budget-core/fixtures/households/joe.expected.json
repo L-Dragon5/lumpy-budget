@@ -56,12 +56,13 @@
       "prior_month": true,
       "amount_cents": 312500,
       "holds": [
-        "Trash pickup 3500"
+        "Trash pickup 3500",
+        "Car loan 48900"
       ],
-      "hold_total_cents": 3500,
+      "hold_total_cents": 52400,
       "lumpy_cents": 0,
       "savings_cents": 0,
-      "free_cents": 309000,
+      "free_cents": 260100,
       "over_committed": false
     },
     {
@@ -73,14 +74,13 @@
         "Cell phone 11000",
         "Rental property mgmt 14800",
         "Gas & electric 21500",
-        "Health insurance 38000",
-        "Car loan 48900"
+        "Health insurance 38000"
       ],
-      "hold_total_cents": 134200,
+      "hold_total_cents": 85300,
       "lumpy_cents": 38215,
       "savings_cents": 23936,
-      "free_cents": -11351,
-      "over_committed": true
+      "free_cents": 37549,
+      "over_committed": false
     },
     {
       "date": "2026-03-15",
@@ -116,9 +116,9 @@
     {
       "window": "2026-03-05..2026-03-14",
       "income_cents": 185000,
-      "planned_free_cents": -11351,
+      "planned_free_cents": 37549,
       "spent_discretionary_cents": 15665,
-      "available_cents": -27016
+      "available_cents": 21884
     },
     {
       "window": "2026-03-15..2026-03-30",

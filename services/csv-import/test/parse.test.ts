@@ -33,7 +33,7 @@ test("amounts parse as integer cents, no floats involved", () => {
   expect(parseAmountCents("")).toBeNull();
   expect(parseAmountCents("PENDING")).toBeNull();
   // The classic float trap: 0.1 + 0.2 stays exact in cents.
-  expect(parseAmountCents("0.10") + parseAmountCents("0.20")!).toBe(30);
+  expect(parseAmountCents("0.10")! + parseAmountCents("0.20")!).toBe(30);
 });
 
 test("dates parse in every shape a statement uses", () => {

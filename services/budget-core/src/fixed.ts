@@ -43,6 +43,10 @@ export type Allocation = {
  * lands at least `lead_days` before the due date. That is the whole point --
  * a monthly total can look fine while rent is due three days before you get paid.
  */
+/** What a paycheck can still carry: gross, less what is already committed from it. */
+const capacity = (p: PaycheckPlan): Cents =>
+  p.amount_cents - p.hold_total_cents - p.lumpy_cents - p.savings_cents;
+
 export function allocateMonth(args: {
   streams: IncomeStream[];
   fixedCosts: FixedCost[];
@@ -79,6 +83,18 @@ export function allocateMonth(args: {
     over_committed: false,
   }));
 
+  // The lumpy and savings transfers are obligations too, so they are carved out
+  // before any bill is assigned: a paycheck's capacity is what is left after them,
+  // not its gross. Split in proportion to paycheck size.
+  const inMonth = plans.filter((p) => !p.prior_month);
+  const weights = inMonth.map((p) => p.amount_cents);
+  const lumpySplit = allocate(lumpyMonthlyCents, weights);
+  const savingsSplit = allocate(savingsMonthlyCents, weights);
+  inMonth.forEach((p, i) => {
+    p.lumpy_cents = lumpySplit[i] ?? 0;
+    p.savings_cents = savingsSplit[i] ?? 0;
+  });
+
   const unfunded: Hold[] = [];
   // Soonest bills first, so the paycheck nearest each due date is claimed by the
   // bill that actually needs it.
@@ -97,7 +113,7 @@ export function allocateMonth(args: {
     for (let i = plans.length - 1; i >= 0; i--) {
       if (d.compare(plans[i]!.date, target) > 0) continue;
       if (latest < 0) latest = i;
-      if (plans[i]!.amount_cents - plans[i]!.hold_total_cents >= c.amount_cents) { idx = i; break; }
+      if (capacity(plans[i]!) >= c.amount_cents) { idx = i; break; }
     }
     if (idx < 0) idx = latest;
     const covering = idx >= 0;
@@ -119,18 +135,9 @@ export function allocateMonth(args: {
 
   // Lumpy and savings come out of this month's paychecks, split in proportion
   // to paycheck size so a small check is not asked to carry a big transfer.
-  const inMonth = plans.filter((p) => !p.prior_month);
-  const weights = inMonth.map((p) => p.amount_cents);
-  const lumpySplit = allocate(lumpyMonthlyCents, weights);
-  const savingsSplit = allocate(savingsMonthlyCents, weights);
-  inMonth.forEach((p, i) => {
-    p.lumpy_cents = lumpySplit[i] ?? 0;
-    p.savings_cents = savingsSplit[i] ?? 0;
-  });
-
   for (const p of plans) {
     p.holds.sort((a, b) => d.compare(a.due_date, b.due_date));
-    p.free_cents = p.amount_cents - p.hold_total_cents - p.lumpy_cents - p.savings_cents;
+    p.free_cents = capacity(p);
     p.over_committed = p.free_cents < 0;
   }
   // A prior-month paycheck only appears when it is carrying one of this month's bills.

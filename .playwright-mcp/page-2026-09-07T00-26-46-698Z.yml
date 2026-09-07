@@ -1,0 +1,26 @@
+- generic [ref=f3e2]:
+  - generic [ref=f3e3]:
+    - banner [ref=f3e4]:
+      - generic [ref=f3e5]:
+        - link "Lumpy" [ref=f3e6] [cursor=pointer]:
+          - /url: /
+        - navigation [ref=f3e9]:
+          - link "Dashboard" [ref=f3e10] [cursor=pointer]:
+            - /url: /
+          - link "Income" [ref=f3e11] [cursor=pointer]:
+            - /url: /income
+          - link "Fixed costs" [ref=f3e12] [cursor=pointer]:
+            - /url: /fixed-costs
+          - link "Lumpy fund" [ref=f3e13] [cursor=pointer]:
+            - /url: /lumpy
+          - link "Savings" [ref=f3e14] [cursor=pointer]:
+            - /url: /savings
+          - link "Expenses" [ref=f3e15] [cursor=pointer]:
+            - /url: /expenses
+          - link "Reports" [ref=f3e16] [cursor=pointer]:
+            - /url: /reports
+          - link "Settings" [ref=f3e17] [cursor=pointer]:
+            - /url: /settings
+        - button "Toggle theme" [ref=f3e18]
+    - main [ref=f3e19]
+  - region "Notifications alt+T"
