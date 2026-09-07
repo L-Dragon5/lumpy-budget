@@ -30,10 +30,33 @@ describe("crud", () => {
     expect((await api(`/api/income-streams/${created.body.id}`)).status).toBe(404);
   });
 
+  test("a one-off income stores and reads back as one_time", async () => {
+    // Also the proof the ENUM migration landed: MySQL rejects an unlisted value.
+    const gift = await post("/api/income-streams", {
+      ...semiMonthly, name: "Birthday gift", frequency: "one_time",
+      anchor_date: "2026-03-14", day_1: null, day_2: null, amount_cents: 50000,
+    });
+    expect(gift.status).toBe(201);
+    expect((await api(`/api/income-streams/${gift.body.id}`)).body).toMatchObject({
+      frequency: "one_time", anchor_date: "2026-03-14", amount_cents: 50000,
+    });
+
+    // It counts in March and nowhere else, and never lifts the average.
+    const cal = await api("/api/income-calendar?year=2026");
+    const byMonth = (m: string) => cal.body.months.find((x: { month: string }) => x.month === m);
+    expect(byMonth("2026-03").total_cents).toBe(50000);
+    expect(byMonth("2026-04").total_cents).toBe(0);
+    expect(byMonth("2026-03").normalized_cents).toBe(0);
+  });
+
   test("a bad body is a 422 that names the field", async () => {
     const res = await post("/api/income-streams", { ...semiMonthly, frequency: "biweekly", anchor_date: null });
     expect(res.status).toBe(422);
     expect(res.body.errors[0]!.path).toEqual(["anchor_date"]);
+
+    const noDate = await post("/api/income-streams", { ...semiMonthly, frequency: "one_time", day_1: null, day_2: null });
+    expect(noDate.status).toBe(422);
+    expect(noDate.body.errors[0]!.path).toEqual(["anchor_date"]);
 
     const bad = await post("/api/fixed-costs", { name: "", amount_cents: -5, due_day: 99 });
     expect(bad.status).toBe(422);

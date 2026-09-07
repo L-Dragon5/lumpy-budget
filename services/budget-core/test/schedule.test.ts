@@ -70,3 +70,12 @@ test("mixed streams merge in date order", () => {
   expect(dates(merged)).toEqual(["2026-03-05", "2026-03-15", "2026-03-31"]);
   expect(merged.map((o) => o.stream_name)).toEqual(["Rental", "Day job", "Day job"]);
 });
+
+test("a one-off pays exactly once, on its date, and never again", () => {
+  const gift = stream({ name: "Birthday gift", frequency: "one_time", anchor_date: "2026-03-14", amount_cents: 50000 });
+  expect(dates(occurrences(gift, "2026-01-01", "2026-12-31"))).toEqual(["2026-03-14"]);
+  expect(occurrences(gift, "2027-01-01", "2027-12-31")).toEqual([]);
+  expect(occurrences(gift, "2026-03-15", "2026-12-31")).toEqual([]);
+  // Never an "extra paycheck" month: it is surplus by construction.
+  expect(extraPaycheckMonths(gift, 2026)).toEqual([]);
+});

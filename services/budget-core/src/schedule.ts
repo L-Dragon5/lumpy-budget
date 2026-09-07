@@ -49,6 +49,11 @@ export function occurrences(s: IncomeStream, start: ISODate, end: ISODate): Occu
       }
       break;
     }
+    case "one_time": {
+      // Once, on its date. Nothing to walk.
+      if (s.anchor_date && inRange(s.anchor_date, start, end)) dates.push(s.anchor_date);
+      break;
+    }
     case "annual": {
       if (!s.anchor_date) return [];
       const [, am, ad] = d.parts(s.anchor_date);
@@ -85,7 +90,8 @@ export function occurrencesInMonth(streams: IncomeStream[], month: ISOMonth): Oc
 /**
  * Months in `year` where this stream pays more times than a normal month.
  * Only weekly (5 checks) and biweekly (3 checks) can do this; a semimonthly or
- * monthly stream pays the same number of times every single month.
+ * monthly stream pays the same number of times every single month, and a one-off
+ * is surplus by construction rather than an extra check.
  */
 export function extraPaycheckMonths(s: IncomeStream, year: number): ISOMonth[] {
   if (s.frequency !== "weekly" && s.frequency !== "biweekly") return [];

@@ -12,16 +12,21 @@ export const cents = z.number().int();
 export const positiveCents = z.number().int().min(0);
 export const id = z.number().int().positive();
 
-export const frequencySchema = z.enum(["weekly", "biweekly", "semimonthly", "monthly", "annual"]);
+export const frequencySchema = z.enum(["weekly", "biweekly", "semimonthly", "monthly", "annual", "one_time"]);
 export type Frequency = z.infer<typeof frequencySchema>;
 
-/** Paychecks per year, used for the normalized monthly average. */
+/**
+ * Paychecks per year, used for the normalized monthly average. A one-off is 0:
+ * it never repeats, so it must not lift the average you budget against. It lands
+ * in that month's actual income and shows up whole as surplus.
+ */
 export const PER_YEAR: Record<Frequency, number> = {
   weekly: 52,
   biweekly: 26,
   semimonthly: 24,
   monthly: 12,
   annual: 1,
+  one_time: 0,
 };
 
 /** Occurrences in a "normal" month; anything above this is an extra-paycheck month. */
@@ -31,6 +36,7 @@ export const BASELINE_PER_MONTH: Record<Frequency, number> = {
   semimonthly: 2,
   monthly: 1,
   annual: 0,
+  one_time: 0,
 };
 
 /**
@@ -59,7 +65,7 @@ export const incomeStreamInput = z
     name: z.string().min(1).max(120),
     amount_cents: positiveCents,
     frequency: frequencySchema,
-    /** A known pay date. Drives weekly/biweekly/annual; ignored otherwise. */
+    /** A known pay date. Drives weekly/biweekly/annual/one_time; ignored otherwise. */
     anchor_date: isoDate.nullable().default(null),
     /** Semimonthly pay days. 0 in day_2 means "last day of the month". */
     day_1: z.number().int().min(0).max(31).nullable().default(null),
@@ -75,6 +81,8 @@ export const incomeStreamInput = z
     };
     if (v.frequency === "weekly" || v.frequency === "biweekly" || v.frequency === "annual")
       need("anchor_date", `${v.frequency} income needs an anchor_date (a known pay date)`);
+    if (v.frequency === "one_time")
+      need("anchor_date", "one-off income needs an anchor_date (the day it arrives)");
     if (v.frequency === "semimonthly") {
       need("day_1", "semimonthly income needs day_1");
       need("day_2", "semimonthly income needs day_2 (0 = last day of month)");

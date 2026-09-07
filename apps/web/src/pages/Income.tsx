@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Frequency, IncomeStream, IncomeStreamInput } from "@lumpy/contracts";
+import { PER_YEAR, type Frequency, type IncomeStream, type IncomeStreamInput } from "@lumpy/contracts";
 import { PencilIcon, SparklesIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -72,6 +72,8 @@ function scheduleText(s: IncomeStream): string {
       return `On the ${ordinal(s.day_of_month ?? 0)}`;
     case "annual":
       return s.anchor_date ? `Every ${s.anchor_date.slice(5)}` : "No anchor date";
+    case "one_time":
+      return s.anchor_date ? `Once, on ${s.anchor_date}` : "No date";
   }
 }
 
@@ -136,7 +138,7 @@ export default function Income() {
                 <EmptyHeader>
                   <EmptyTitle>No income yet</EmptyTitle>
                   <EmptyDescription>
-                    Add a paycheck, rental income, or anything else that arrives on a schedule.
+                    Add a paycheck, rental income, or a one-off like a gift or a savings withdrawal.
                   </EmptyDescription>
                 </EmptyHeader>
               </Empty>
@@ -153,7 +155,7 @@ export default function Income() {
                 </TableHeader>
                 <TableBody>
                   {rows.map((s) => {
-                    const perYear = { weekly: 52, biweekly: 26, semimonthly: 24, monthly: 12, annual: 1 }[s.frequency];
+                    const perYear = PER_YEAR[s.frequency];
                     return (
                       <TableRow key={s.id} className={s.active ? "" : "opacity-50"}>
                         <TableCell>
@@ -168,7 +170,13 @@ export default function Income() {
                           <Money cents={s.amount_cents} />
                         </TableCell>
                         <TableCell className="text-right">
-                          <Money cents={Math.round((s.amount_cents * perYear) / 12)} />
+                          {/* A one-off has no per-month figure; showing $0 next to
+                              a $2,000 gift reads as a bug rather than as "never repeats". */}
+                          {s.frequency === "one_time" ? (
+                            <span className="text-muted-foreground">once</span>
+                          ) : (
+                            <Money cents={Math.round((s.amount_cents * perYear) / 12)} />
+                          )}
                         </TableCell>
                         <TableCell>
                           <div className="flex justify-end">
@@ -249,12 +257,12 @@ export default function Income() {
               id="income-name"
               value={draft.name}
               onChange={(e) => set({ name: e.target.value })}
-              placeholder="Day job, rental, side gig"
+              placeholder="Day job, rental, birthday gift"
             />
           </Field>
 
           <MoneyField
-            label="Amount per payment"
+            label={draft.frequency === "one_time" ? "Amount" : "Amount per payment"}
             cents={draft.amount_cents}
             onChange={(c) => set({ amount_cents: c })}
             description="Take-home, not gross. This is money that actually lands."
@@ -269,10 +277,13 @@ export default function Income() {
             />
           </Field>
 
-          {draft.frequency === "weekly" || draft.frequency === "biweekly" || draft.frequency === "annual" ? (
+          {draft.frequency === "weekly" ||
+          draft.frequency === "biweekly" ||
+          draft.frequency === "annual" ||
+          draft.frequency === "one_time" ? (
             <Field>
               <FieldLabel htmlFor="anchor">
-                {draft.frequency === "annual" ? "Date it arrives" : "Next pay date"}
+                {draft.frequency === "annual" || draft.frequency === "one_time" ? "Date it arrives" : "Next pay date"}
               </FieldLabel>
               <Input
                 id="anchor"
@@ -281,9 +292,11 @@ export default function Income() {
                 onChange={(e) => set({ anchor_date: e.target.value })}
               />
               <FieldDescription>
-                {draft.frequency === "biweekly"
-                  ? "Every other week counts forward and back from this date, which is what decides the 3-paycheck months."
-                  : "Any known payment date works; the schedule is counted from it."}
+                {draft.frequency === "one_time"
+                  ? "It counts in that month only, and lands whole as surplus rather than lifting the monthly average."
+                  : draft.frequency === "biweekly"
+                    ? "Every other week counts forward and back from this date, which is what decides the 3-paycheck months."
+                    : "Any known payment date works; the schedule is counted from it."}
               </FieldDescription>
             </Field>
           ) : null}

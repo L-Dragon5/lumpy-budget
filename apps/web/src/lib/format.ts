@@ -57,6 +57,7 @@ export const FREQUENCY_LABEL: Record<string, string> = {
   semimonthly: "Twice a month",
   monthly: "Monthly",
   annual: "Once a year",
+  one_time: "One-off",
 };
 
 export const CYCLE_LABEL = (months: number): string =>

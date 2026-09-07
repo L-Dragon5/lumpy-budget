@@ -38,3 +38,17 @@ test("nextPaycheck looks forward, not back", () => {
   expect(nextPaycheck([s], "2026-01-16")!.date).toBe("2026-01-16");
   expect(nextPaycheck([], "2026-01-03")).toBeNull();
 });
+
+test("a one-off lands in its month but never lifts the monthly average", () => {
+  const job = biweekly();
+  const gift = stream({ name: "Gift", frequency: "one_time", anchor_date: "2026-02-10", amount_cents: 50000 });
+  expect(monthlyNormalized([job, gift])).toBe(monthlyNormalized([job]));
+  expect(monthlyActual([job, gift], "2026-02")).toBe(400000 + 50000);
+  expect(monthlyActual([job, gift], "2026-03")).toBe(monthlyActual([job], "2026-03"));
+
+  // The whole gift shows up as surplus in February, and nowhere else.
+  const cal = incomeCalendar([job, gift], 2026);
+  const feb = cal.find((m) => m.month === "2026-02")!;
+  expect(feb.surplus_cents).toBe(400000 + 50000 - 433333);
+  expect(feb.extra_paycheck).toBe(false);
+});
