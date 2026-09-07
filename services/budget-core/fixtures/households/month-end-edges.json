@@ -107,7 +107,8 @@
       "id": 1,
       "name": "Misc",
       "bucket": "discretionary",
-      "color": null
+      "color": null,
+      "icon": "tag"
     }
   ],
   "expenses": [

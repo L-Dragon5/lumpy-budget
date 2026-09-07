@@ -92,13 +92,15 @@
       "id": 1,
       "name": "Groceries",
       "bucket": "discretionary",
-      "color": null
+      "color": null,
+      "icon": "cart"
     },
     {
       "id": 2,
       "name": "Housing",
       "bucket": "fixed",
-      "color": null
+      "color": null,
+      "icon": "building"
     }
   ],
   "expenses": [

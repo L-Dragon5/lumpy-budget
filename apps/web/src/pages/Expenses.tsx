@@ -15,6 +15,7 @@ import { ImportWizard } from "@/components/app/import-wizard";
 import { Money } from "@/components/app/money";
 import { AddButton, DeleteButton, MoneyField, RecordDialog } from "@/components/app/record-dialog";
 import { Loading, LoadError, MonthNav, PageHeader } from "@/components/app/page";
+import { CategoryLabel } from "@/lib/icons";
 import { useApi, useCreate, useDelete, useUpdate } from "@/lib/api";
 import { dateLabelFull, thisMonth } from "@/lib/format";
 
@@ -52,7 +53,7 @@ export default function Expenses() {
   const categoryOptions = [
     { value: ALL, label: "All categories" },
     { value: UNCATEGORIZED, label: "Uncategorized" },
-    ...cats.map((c) => ({ value: String(c.id), label: c.name })),
+    ...cats.map((c) => ({ value: String(c.id), label: <CategoryLabel name={c.name} icon={c.icon} /> })),
   ];
 
   /** Writes are whole-row PUTs, so every inline edit goes through one body. */

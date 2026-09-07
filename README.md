@@ -93,7 +93,8 @@ selected as `DATE_FORMAT(col,'%Y-%m-%d')` and no `Date` object ever crosses the
 DB or HTTP boundary. There is a test for exactly this.
 
 **Only discretionary spending reduces what is available.** Every category
-carries a bucket. Once you import a bank statement the mortgage appears both as
+carries a bucket (and an icon, so a fifty-row dropdown is scannable instead of a
+wall of similar-length words). Once you import a bank statement the mortgage appears both as
 a planned fixed cost and as a real transaction; subtracting both would double
 count it. Fixed, lumpy and savings transactions are reconciliation, never a
 second subtraction.
@@ -161,9 +162,10 @@ Colors come from the `dataviz` reference palette and were validated against this
 app's own surfaces (`#ffffff` light, `#262626` dark): lightness band, chroma
 floor, adjacent CVD separation and normal-vision floor all pass in both modes.
 Three light-mode slots fall under 3:1 contrast, so every chart also ships its
-numbers as text — a legend with values, or the breakdown table beside it. A
-category keeps the same color whatever else is on screen, and past eight the
-tail folds into one grey "Other" rather than repeating hues.
+numbers as text — a legend with values, or the breakdown table beside it — and
+each category's icon sits beside its swatch, so identity never rests on hue
+alone. A category keeps the same color whatever else is on screen, and past
+eight the tail folds into one grey "Other" rather than repeating hues.
 
 ## Known limits
 

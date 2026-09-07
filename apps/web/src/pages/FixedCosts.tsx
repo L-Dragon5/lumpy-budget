@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SelectField } from "@/components/app/controls";
+import { CategoryLabel } from "@/lib/icons";
 import { AddButton, DeleteButton, MoneyField, RecordDialog } from "@/components/app/record-dialog";
 import { Money } from "@/components/app/money";
 import { Loading, LoadError, MonthNav, PageHeader } from "@/components/app/page";
@@ -74,8 +75,8 @@ export default function FixedCosts() {
   const rows = costs.data ?? [];
   const alloc = allocation.data;
   const monthlyTotal = rows.filter((c) => c.active).reduce((a, c) => a + c.amount_cents, 0);
-  const categoryName = (id: number | null) =>
-    id === null ? null : (categories.data ?? []).find((c) => c.id === id)?.name ?? null;
+  const categoryOf = (id: number | null) =>
+    id === null ? null : (categories.data ?? []).find((c) => c.id === id) ?? null;
 
   return (
     <>
@@ -131,8 +132,12 @@ export default function FixedCosts() {
                     <TableRow key={c.id} className={c.active ? "" : "opacity-50"}>
                       <TableCell>
                         <div className="font-medium">{c.name}</div>
-                        {categoryName(c.category_id) ? (
-                          <div className="text-xs text-muted-foreground">{categoryName(c.category_id)}</div>
+                        {categoryOf(c.category_id) ? (
+                          <CategoryLabel
+                            name={categoryOf(c.category_id)!.name}
+                            icon={categoryOf(c.category_id)!.icon}
+                            className="text-xs text-muted-foreground [&>svg]:size-3"
+                          />
                         ) : null}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
@@ -255,7 +260,10 @@ export default function FixedCosts() {
             <SelectField
               value={draft.category_id}
               onChange={(v) => set({ category_id: v })}
-              options={[{ value: "none", label: "None" }, ...(categories.data ?? []).map((c) => ({ value: String(c.id), label: c.name }))]}
+              options={[{ value: "none", label: "None" }, ...(categories.data ?? []).map((c) => ({
+                  value: String(c.id),
+                  label: <CategoryLabel name={c.name} icon={c.icon} />,
+                }))]}
             />
             <FieldDescription>
               Matching imported transactions to a fixed-bucket category keeps them out of your spending total.

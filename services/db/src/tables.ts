@@ -15,7 +15,7 @@ export type TableSpec = {
 
 export const TABLES = {
   categories: {
-    cols: ["id", "name", "bucket", "color"],
+    cols: ["id", "name", "bucket", "icon", "color"],
     order: "name ASC",
   },
   income_streams: {

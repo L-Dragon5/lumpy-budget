@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SelectField } from "@/components/app/controls";
+import { CategoryLabel } from "@/lib/icons";
 import { AddButton, DeleteButton, MoneyField, RecordDialog } from "@/components/app/record-dialog";
 import { Money } from "@/components/app/money";
 import { BalanceTile } from "@/components/app/balance-tile";
@@ -277,7 +278,10 @@ export default function LumpyFund() {
             <SelectField
               value={draft.category_id}
               onChange={(v) => set({ category_id: v })}
-              options={[{ value: "none", label: "None" }, ...(categories.data ?? []).map((c) => ({ value: String(c.id), label: c.name }))]}
+              options={[{ value: "none", label: "None" }, ...(categories.data ?? []).map((c) => ({
+                  value: String(c.id),
+                  label: <CategoryLabel name={c.name} icon={c.icon} />,
+                }))]}
             />
           </Field>
 

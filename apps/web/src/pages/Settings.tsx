@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Category, CategoryRule, ImportProfile } from "@lumpy/contracts";
+import { CATEGORY_ICONS, type Category, type CategoryIconName, type CategoryRule, type ImportProfile } from "@lumpy/contracts";
 import { PencilIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SelectField } from "@/components/app/controls";
+import { CategoryIcon, CategoryLabel } from "@/lib/icons";
+import { cn } from "@/lib/utils";
 import { AddButton, DeleteButton, RecordDialog } from "@/components/app/record-dialog";
 import { Loading, LoadError, PageHeader } from "@/components/app/page";
 import { useApi, useCreate, useDelete, useUpdate } from "@/lib/api";
@@ -33,7 +35,7 @@ export default function Settings() {
   const removeRule = useDelete("category-rules");
   const removeProfile = useDelete("import-profiles");
 
-  const [catDraft, setCatDraft] = useState<{ id: number | null; name: string; bucket: string } | null>(null);
+  const [catDraft, setCatDraft] = useState<{ id: number | null; name: string; bucket: string; icon: CategoryIconName | null } | null>(null);
   const [ruleDraft, setRuleDraft] = useState<{ pattern: string; category_id: string; priority: string } | null>(null);
 
   if (categories.isLoading) return <Loading />;
@@ -64,7 +66,7 @@ export default function Settings() {
             </CardHeader>
             <CardContent>
               <div className="mb-3">
-                <AddButton onClick={() => setCatDraft({ id: null, name: "", bucket: "discretionary" })}>
+                <AddButton onClick={() => setCatDraft({ id: null, name: "", bucket: "discretionary", icon: null })}>
                   Add category
                 </AddButton>
               </div>
@@ -79,7 +81,9 @@ export default function Settings() {
                 <TableBody>
                   {cats.map((c) => (
                     <TableRow key={c.id}>
-                      <TableCell className="font-medium">{c.name}</TableCell>
+                      <TableCell className="font-medium">
+                        <CategoryLabel name={c.name} icon={c.icon} />
+                      </TableCell>
                       <TableCell>
                         <Badge variant={c.bucket === "discretionary" ? "default" : "secondary"}>{c.bucket}</Badge>
                       </TableCell>
@@ -89,7 +93,7 @@ export default function Settings() {
                             variant="ghost"
                             size="icon"
                             aria-label={`Edit ${c.name}`}
-                            onClick={() => setCatDraft({ id: c.id, name: c.name, bucket: c.bucket })}
+                            onClick={() => setCatDraft({ id: c.id, name: c.name, bucket: c.bucket, icon: c.icon })}
                           >
                             <PencilIcon />
                           </Button>
@@ -203,7 +207,7 @@ export default function Settings() {
           onOpenChange={(o) => !o && setCatDraft(null)}
           title={catDraft.id ? "Edit category" : "Add category"}
           onSubmit={() => {
-            const body = { name: catDraft.name, bucket: catDraft.bucket, color: null };
+            const body = { name: catDraft.name, bucket: catDraft.bucket, icon: catDraft.icon, color: null };
             const done = { onSuccess: () => setCatDraft(null) };
             if (catDraft.id) updateCategory.mutate({ id: catDraft.id, body }, done);
             else createCategory.mutate(body, done);
@@ -226,6 +230,31 @@ export default function Settings() {
               onChange={(bucket) => setCatDraft({ ...catDraft, bucket })}
               options={BUCKETS}
             />
+          </Field>
+
+          <Field>
+            <FieldLabel>Icon</FieldLabel>
+            <div className="grid max-h-48 grid-cols-10 gap-1 overflow-y-auto rounded-md border p-2">
+              {CATEGORY_ICONS.map((icon) => (
+                <button
+                  key={icon}
+                  type="button"
+                  aria-label={icon}
+                  aria-pressed={catDraft.icon === icon}
+                  title={icon}
+                  className={cn(
+                    "flex items-center justify-center rounded-md p-2 hover:bg-accent",
+                    catDraft.icon === icon && "bg-accent ring-1 ring-ring",
+                  )}
+                  onClick={() =>
+                    setCatDraft({ ...catDraft, icon: catDraft.icon === icon ? null : icon })
+                  }
+                >
+                  <CategoryIcon name={icon} className={cn(catDraft.icon === icon && "text-foreground")} />
+                </button>
+              ))}
+            </div>
+            <FieldDescription>Click the chosen one again to clear it.</FieldDescription>
           </Field>
         </RecordDialog>
       ) : null}

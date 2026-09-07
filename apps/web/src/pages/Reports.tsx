@@ -17,6 +17,7 @@ import { Loading, LoadError, PageHeader } from "@/components/app/page";
 import { useApi } from "@/lib/api";
 import { dateLabel, money, monthLabel } from "@/lib/format";
 import { MAX_SERIES, OTHER_COLOR, seriesColor } from "@/lib/palette";
+import { CategoryIcon } from "@/lib/icons";
 
 type ReportsResponse = {
   breakdown: { slices: CategorySlice[]; total_cents: number; txn_count: number };
@@ -78,10 +79,17 @@ export default function Reports() {
 
   const shown = slices.filter((s) => hasSlot(s.category_id));
   const rest = slices.filter((s) => !hasSlot(s.category_id));
+  const iconOf = (id: number | null) =>
+    id === null ? null : ((categories.data ?? []).find((c) => c.id === id)?.icon ?? null);
   const pieData = [
-    ...shown.map((s) => ({ name: s.name, value: s.amount_cents / 100, color: colorOf(s.category_id) })),
+    ...shown.map((s) => ({
+      name: s.name,
+      value: s.amount_cents / 100,
+      color: colorOf(s.category_id),
+      icon: iconOf(s.category_id),
+    })),
     ...(rest.length > 0
-      ? [{ name: OTHER, value: rest.reduce((a, s) => a + s.amount_cents, 0) / 100, color: OTHER_COLOR }]
+      ? [{ name: OTHER, value: rest.reduce((a, s) => a + s.amount_cents, 0) / 100, color: OTHER_COLOR, icon: null }]
       : []),
   ];
 
@@ -217,6 +225,7 @@ export default function Reports() {
                         style={{ backgroundColor: d.color }}
                         aria-hidden
                       />
+                      <CategoryIcon name={d.icon} />
                       <span className="truncate">{d.name}</span>
                     </span>
                     <span className="shrink-0 text-muted-foreground">
@@ -284,11 +293,14 @@ export default function Reports() {
                 {slices.map((s) => (
                   <TableRow key={s.category_id ?? "none"}>
                     <TableCell className="font-medium">
-                      <span
-                        className="mr-2 inline-block size-2.5 rounded-full align-middle"
-                        style={{ backgroundColor: colorOf(s.category_id) }}
-                      />
-                      {s.name}
+                      <span className="flex items-center gap-2">
+                        <span
+                          className="size-2.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: colorOf(s.category_id) }}
+                        />
+                        <CategoryIcon name={iconOf(s.category_id)} />
+                        {s.name}
+                      </span>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">{s.bucket}</TableCell>
                     <TableCell className="text-right tabular text-muted-foreground">{s.txn_count}</TableCell>

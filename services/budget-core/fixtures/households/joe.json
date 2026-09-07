@@ -248,31 +248,36 @@
       "id": 1,
       "name": "Groceries",
       "bucket": "discretionary",
-      "color": null
+      "color": null,
+      "icon": "cart"
     },
     {
       "id": 2,
       "name": "Dining",
       "bucket": "discretionary",
-      "color": null
+      "color": null,
+      "icon": "utensils"
     },
     {
       "id": 3,
       "name": "Housing",
       "bucket": "fixed",
-      "color": null
+      "color": null,
+      "icon": "building"
     },
     {
       "id": 4,
       "name": "Insurance",
       "bucket": "lumpy",
-      "color": null
+      "color": null,
+      "icon": "shield"
     },
     {
       "id": 5,
       "name": "Savings Transfer",
       "bucket": "savings",
-      "color": null
+      "color": null,
+      "icon": "piggy-bank"
     }
   ],
   "expenses": [

@@ -7,7 +7,8 @@
  * (#ffffff light, #262626 dark): lightness band, chroma floor, adjacent CVD
  * separation and normal-vision floor all pass in both modes. Three light-mode
  * slots sit under 3:1 contrast, so every chart here also ships the numbers as
- * text -- a legend with values or the breakdown table beside it.
+ * text -- a legend with values or the breakdown table beside it -- and each
+ * category's icon rides alongside its swatch, so identity never rests on hue.
  */
 export const SERIES = [
   "var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)",

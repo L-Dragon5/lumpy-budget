@@ -61,7 +61,7 @@ export function goal(p: Partial<SavingsGoal> = {}): SavingsGoal {
 }
 
 export function category(p: Partial<Category> = {}): Category {
-  return { id: nextId(), name: "Groceries", bucket: "discretionary", color: null, ...p };
+  return { id: nextId(), name: "Groceries", bucket: "discretionary", icon: null, color: null, ...p };
 }
 
 export function expense(p: Partial<Expense> = {}): Expense {

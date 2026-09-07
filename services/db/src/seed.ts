@@ -6,31 +6,32 @@ import { insert, rows, sql } from "./client";
  * Idempotent: re-running only fills in what is missing. Colors stay null so the
  * chart palette owns them until the user picks one.
  */
-const CATEGORIES: [name: string, bucket: "discretionary" | "fixed" | "lumpy" | "savings" | "transfer"][] = [
-  ["Groceries", "discretionary"],
-  ["Dining", "discretionary"],
-  ["Gas & Fuel", "discretionary"],
-  ["Shopping", "discretionary"],
-  ["Entertainment", "discretionary"],
-  ["Health", "discretionary"],
-  ["Travel", "discretionary"],
-  ["Home", "discretionary"],
-  ["Pets", "discretionary"],
-  ["Kids", "discretionary"],
-  ["Personal Care", "discretionary"],
-  ["Gifts & Donations", "discretionary"],
-  ["Misc", "discretionary"],
-  ["Housing", "fixed"],
-  ["Utilities", "fixed"],
-  ["Internet & Phone", "fixed"],
-  ["Auto Loan", "fixed"],
-  ["Childcare", "fixed"],
-  ["Subscriptions", "lumpy"],
-  ["Insurance", "lumpy"],
-  ["Taxes & Fees", "lumpy"],
-  ["Savings Transfer", "savings"],
-  ["Credit Card Payment", "transfer"],
-  ["Income", "transfer"],
+type Bucket = "discretionary" | "fixed" | "lumpy" | "savings" | "transfer";
+const CATEGORIES: [name: string, bucket: Bucket, icon: string][] = [
+  ["Groceries", "discretionary", "cart"],
+  ["Dining", "discretionary", "utensils"],
+  ["Gas & Fuel", "discretionary", "fuel"],
+  ["Shopping", "discretionary", "bag"],
+  ["Entertainment", "discretionary", "film"],
+  ["Health", "discretionary", "health"],
+  ["Travel", "discretionary", "plane"],
+  ["Home", "discretionary", "home"],
+  ["Pets", "discretionary", "dog"],
+  ["Kids", "discretionary", "baby"],
+  ["Personal Care", "discretionary", "scissors"],
+  ["Gifts & Donations", "discretionary", "gift"],
+  ["Misc", "discretionary", "tag"],
+  ["Housing", "fixed", "building"],
+  ["Utilities", "fixed", "zap"],
+  ["Internet & Phone", "fixed", "wifi"],
+  ["Auto Loan", "fixed", "car"],
+  ["Childcare", "fixed", "baby"],
+  ["Subscriptions", "lumpy", "repeat"],
+  ["Insurance", "lumpy", "shield"],
+  ["Taxes & Fees", "lumpy", "landmark"],
+  ["Savings Transfer", "savings", "piggy-bank"],
+  ["Credit Card Payment", "transfer", "credit-card"],
+  ["Income", "transfer", "banknote"],
 ];
 
 const RULES: [pattern: string, category: string, priority?: number][] = [
@@ -73,9 +74,9 @@ export async function seed() {
     (await rows<{ id: number; name: string }>("categories")).map((c) => [c.name.toLowerCase(), c.id]),
   );
   let addedCategories = 0;
-  for (const [name, bucket] of CATEGORIES) {
+  for (const [name, bucket, icon] of CATEGORIES) {
     if (existing.has(name.toLowerCase())) continue;
-    existing.set(name.toLowerCase(), await insert("categories", { name, bucket, color: null }));
+    existing.set(name.toLowerCase(), await insert("categories", { name, bucket, icon, color: null }));
     addedCategories++;
   }
 

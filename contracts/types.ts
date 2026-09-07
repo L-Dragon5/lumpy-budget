@@ -33,6 +33,22 @@ export const BASELINE_PER_MONTH: Record<Frequency, number> = {
   annual: 0,
 };
 
+/**
+ * The icons a category can wear. A shared vocabulary rather than a free string,
+ * so the API rejects a name nothing can draw; the web app maps each to a glyph.
+ */
+export const CATEGORY_ICONS = [
+  "cart", "utensils", "coffee", "pizza", "wine", "fuel", "bag", "shirt", "tag",
+  "film", "music", "gamepad", "ticket", "book", "graduation", "health",
+  "stethoscope", "dumbbell", "plane", "car", "bus", "bike", "home", "building",
+  "tree", "flower", "hammer", "wrench", "droplet", "zap", "wifi", "phone",
+  "laptop", "cloud", "dog", "cat", "baby", "scissors", "gift", "sparkles",
+  "repeat", "shield", "landmark", "piggy-bank", "credit-card", "banknote",
+  "receipt", "briefcase", "package", "trending-up",
+] as const;
+export const categoryIconSchema = z.enum(CATEGORY_ICONS);
+export type CategoryIconName = (typeof CATEGORY_ICONS)[number];
+
 export const bucketSchema = z.enum(["discretionary", "fixed", "lumpy", "savings", "transfer"]);
 export type Bucket = z.infer<typeof bucketSchema>;
 
@@ -134,6 +150,7 @@ export type SavingsGoal = z.infer<typeof savingsGoal>;
 export const categoryInput = z.object({
   name: z.string().min(1).max(80),
   bucket: bucketSchema.default("discretionary"),
+  icon: categoryIconSchema.nullable().default(null),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().default(null),
 });
 export const category = z.object({ id }).and(categoryInput);
