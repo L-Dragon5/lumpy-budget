@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Category, Expense, ImportBatch } from "@lumpy/contracts";
 import { monthEnd, monthStart } from "@lumpy/budget-core";
 import { SearchIcon, UploadIcon } from "lucide-react";
@@ -55,7 +55,8 @@ export default function Expenses() {
     ...cats.map((c) => ({ value: String(c.id), label: c.name })),
   ];
 
-  const recategorize = (e: Expense, value: string) =>
+  /** Writes are whole-row PUTs, so every inline edit goes through one body. */
+  const patch = (e: Expense, changes: Partial<Expense>) =>
     update.mutate({
       id: e.id,
       body: {
@@ -63,8 +64,9 @@ export default function Expenses() {
         amount_cents: e.amount_cents,
         merchant: e.merchant,
         description: e.description,
-        category_id: value === UNCATEGORIZED ? null : Number(value),
+        category_id: e.category_id,
         source: e.source,
+        ...changes,
       },
     });
 
@@ -138,8 +140,9 @@ export default function Expenses() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-32">Date</TableHead>
-                    <TableHead>Merchant</TableHead>
                     <TableHead className="w-56">Category</TableHead>
+                    <TableHead>Merchant</TableHead>
+                    <TableHead>Note</TableHead>
                     <TableHead className="w-28 text-right">Amount</TableHead>
                     <TableHead className="w-12" />
                   </TableRow>
@@ -149,14 +152,19 @@ export default function Expenses() {
                     <TableRow key={e.id}>
                       <TableCell className="text-sm text-muted-foreground">{dateLabelFull(e.txn_date)}</TableCell>
                       <TableCell>
-                        <div className="font-medium">{e.merchant}</div>
-                        {e.description ? <div className="text-xs text-muted-foreground">{e.description}</div> : null}
-                      </TableCell>
-                      <TableCell>
                         <SelectField
                           value={e.category_id === null ? UNCATEGORIZED : String(e.category_id)}
-                          onChange={(v) => recategorize(e, v)}
+                          onChange={(v) => patch(e, { category_id: v === UNCATEGORIZED ? null : Number(v) })}
                           options={categoryOptions.filter((o) => o.value !== ALL)}
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium">{e.merchant}</TableCell>
+                      <TableCell>
+                        <NoteCell
+                          key={`${e.id}-${e.description}`}
+                          note={e.description}
+                          merchant={e.merchant}
+                          onSave={(description) => patch(e, { description })}
                         />
                       </TableCell>
                       <TableCell className="text-right">
@@ -259,5 +267,69 @@ export default function Expenses() {
         </RecordDialog>
       ) : null}
     </>
+  );
+}
+
+/**
+ * The note is edited in place: click it, type, Enter or click away to keep it,
+ * Escape to drop the change. An empty note still needs something to click, so it
+ * shows a muted prompt rather than an invisible cell.
+ */
+function NoteCell({
+  note,
+  merchant,
+  onSave,
+}: {
+  note: string;
+  merchant: string;
+  onSave: (note: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(note);
+  const abandoned = useRef(false);
+
+  const commit = () => {
+    setEditing(false);
+    if (abandoned.current) {
+      abandoned.current = false;
+      setDraft(note);
+      return;
+    }
+    const next = draft.trim();
+    if (next !== note) onSave(next);
+  };
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        className="w-full truncate rounded-sm px-1 py-0.5 text-left text-sm hover:bg-accent"
+        aria-label={`Note for ${merchant}`}
+        onClick={() => {
+          setDraft(note);
+          setEditing(true);
+        }}
+      >
+        {note ? note : <span className="text-muted-foreground">Add note</span>}
+      </button>
+    );
+  }
+
+  return (
+    <Input
+      autoFocus
+      value={draft}
+      aria-label={`Note for ${merchant}`}
+      className="h-7"
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+        if (e.key === "Escape") {
+          abandoned.current = true;
+          e.currentTarget.blur();
+        }
+      }}
+    />
   );
 }

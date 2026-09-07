@@ -151,7 +151,9 @@ are reported by line number instead of being silently dropped.
 Save the column mapping under a name and next month's statement from the same
 bank is one click. Categorization runs on merchant keyword rules, lowest
 priority number first; anything unmatched lands in a review queue on the
-expenses page.
+expenses page. Both the category and the note are edited in place in that table
+— Enter keeps the change, Escape drops it — because fixing a hundred imported
+rows through a dialog is not fixing them at all.
 
 ## Charts
 
