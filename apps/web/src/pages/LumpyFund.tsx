@@ -17,7 +17,7 @@ import { Money } from "@/components/app/money";
 import { StatTile } from "@/components/app/stat-tile";
 import { Loading, LoadError, PageHeader } from "@/components/app/page";
 import { useApi, useCreate, useDelete, useUpdate } from "@/lib/api";
-import { CYCLE_LABEL, dateLabelFull, thisMonth } from "@/lib/format";
+import { CYCLE_LABEL, dateLabelFull, monthLabel, thisMonth } from "@/lib/format";
 
 type TimelineResponse = Timeline & { opening_balance_cents: number; plan: LumpyPlan[] };
 
@@ -85,6 +85,8 @@ export default function LumpyFund() {
   const recommended = timeline.data?.monthly_contribution_cents ?? 0;
   const behind = plans.filter((p) => p.behind);
   const yearlyTotal = rows.filter((r) => r.active).reduce((a, r) => a + Math.round((r.amount_cents * 12) / r.frequency_months), 0);
+  // rows[0] is the current month, so rows[1] is what the fund has to cover next.
+  const nextMonth = timeline.data?.rows[1];
 
   return (
     <>
@@ -115,7 +117,18 @@ export default function LumpyFund() {
           }
         />
         <StatTile label="In the fund now" cents={timeline.data?.opening_balance_cents ?? 0} caption="Set this on the Settings page." tone="muted" />
-        <StatTile label="Leaves in 12 months" cents={timeline.data?.total_outflow_cents ?? 0} caption="Everything coming due within the year." tone="muted" />
+        <StatTile
+          label="Leaves next month"
+          cents={nextMonth?.outflow_cents ?? 0}
+          tone="muted"
+          caption={
+            nextMonth
+              ? nextMonth.due.length > 0
+                ? `${monthLabel(nextMonth.month)}: ${nextMonth.due.map((d) => d.name).join(", ")}`
+                : `Nothing comes due in ${monthLabel(nextMonth.month)}.`
+              : "No timeline yet."
+          }
+        />
         <StatTile label="Cost per year" cents={yearlyTotal} caption="All items, annualized." tone="muted" />
       </div>
 
