@@ -1,9 +1,10 @@
-import { NavLink, Outlet } from "react-router";
+import { NavLink, Outlet, useLocation } from "react-router";
 import { MoonIcon, SunIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import GradientText from "@/components/GradientText";
+import { pageTitle } from "@/lib/pageTitle";
 
 const NAV = [
   { to: "/", label: "Dashboard", end: true },
@@ -30,9 +31,11 @@ function useTheme() {
 
 export default function App() {
   const [dark, setDark] = useTheme();
+  const { pathname } = useLocation();
 
   return (
     <div className="min-h-svh bg-background text-foreground">
+      <title>{pageTitle(pathname)}</title>
       <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
           <NavLink to="/" className="shrink-0 text-lg font-semibold tracking-tight">
