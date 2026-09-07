@@ -14,11 +14,19 @@ export const SERIES = [
   "var(--chart-5)", "var(--chart-6)", "var(--chart-7)", "var(--chart-8)",
 ] as const;
 
+/** Colored slots available before the tail has to fold into "Other". */
 export const MAX_SERIES = SERIES.length;
 
-/** Stable color for a category: same id, same slot, whatever else is on screen. */
+/** Everything past the last slot. Never a generated hue. */
+export const OTHER_COLOR = "var(--muted-foreground)";
+
+/**
+ * Slot `index`, or the "Other" grey past the end. Deliberately not modulo:
+ * cycling would put the same hue on two things at once, which is the whole
+ * failure the fixed order exists to prevent.
+ */
 export function seriesColor(index: number): string {
-  return SERIES[index % SERIES.length]!;
+  return SERIES[index] ?? OTHER_COLOR;
 }
 
 export const STATUS = {

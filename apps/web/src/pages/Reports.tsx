@@ -16,7 +16,7 @@ import { Money } from "@/components/app/money";
 import { Loading, LoadError, PageHeader } from "@/components/app/page";
 import { useApi } from "@/lib/api";
 import { dateLabel, money, monthLabel } from "@/lib/format";
-import { MAX_SERIES, seriesColor } from "@/lib/palette";
+import { MAX_SERIES, OTHER_COLOR, seriesColor } from "@/lib/palette";
 
 type ReportsResponse = {
   breakdown: { slices: CategorySlice[]; total_cents: number; txn_count: number };
@@ -55,11 +55,20 @@ export default function Reports() {
   );
   const categories = useApi<Category[]>("/api/categories");
 
-  /** A category keeps the same color whatever else is on screen: slot by id order. */
-  const colorOf = useMemo(() => {
-    const order = new Map((categories.data ?? []).map((c, i) => [c.id, i]));
-    return (id: number | null) => (id === null ? "var(--muted-foreground)" : seriesColor(order.get(id) ?? 0));
-  }, [categories.data]);
+  // Colors are assigned from the whole ledger for the chosen bucket, not from what
+  // this period happens to contain, so paging between weeks never repaints a
+  // category. There are more categories than slots, so the smallest ones share the
+  // "Other" grey rather than cycling a hue onto two visible slices at once.
+  const ranking = useApi<ReportsResponse>(
+    `/api/reports?granularity=month&start=2020-01-01&end=2035-12-31&bucket=${bucket}`,
+  );
+  const slots = useMemo(() => {
+    const ranked = (ranking.data?.breakdown.slices ?? []).filter((s) => s.category_id !== null);
+    return new Map(ranked.slice(0, MAX_SERIES).map((s, i) => [s.category_id!, i]));
+  }, [ranking.data]);
+  const colorOf = (id: number | null) =>
+    id !== null && slots.has(id) ? seriesColor(slots.get(id)!) : OTHER_COLOR;
+  const hasSlot = (id: number | null) => id !== null && slots.has(id);
 
   if (detail.isLoading || categories.isLoading) return <Loading />;
   if (detail.error) return <LoadError error={detail.error} />;
@@ -67,17 +76,12 @@ export default function Reports() {
   const slices = detail.data?.breakdown.slices ?? [];
   const total = detail.data?.breakdown.total_cents ?? 0;
 
-  // Eight colors, so a long tail folds into one grey slice rather than repeating hues.
-  const shown = slices.slice(0, MAX_SERIES - 1);
-  const rest = slices.slice(MAX_SERIES - 1);
+  const shown = slices.filter((s) => hasSlot(s.category_id));
+  const rest = slices.filter((s) => !hasSlot(s.category_id));
   const pieData = [
     ...shown.map((s) => ({ name: s.name, value: s.amount_cents / 100, color: colorOf(s.category_id) })),
     ...(rest.length > 0
-      ? [{
-          name: OTHER,
-          value: rest.reduce((a, s) => a + s.amount_cents, 0) / 100,
-          color: "var(--muted-foreground)",
-        }]
+      ? [{ name: OTHER, value: rest.reduce((a, s) => a + s.amount_cents, 0) / 100, color: OTHER_COLOR }]
       : []),
   ];
 
