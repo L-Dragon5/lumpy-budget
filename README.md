@@ -69,7 +69,7 @@ somewhere else.
 
 ```bash
 bun run check                 # typecheck + tests + scenarios; what the commit hook runs
-bun test                      # 143 tests, no network, under a second
+bun test                      # 149 tests, no network, under a second
 bun run scenarios             # whole-household fixtures, diffed against expectations
 bun run scenarios:update      # accept a change, after reading the diff
 ```
@@ -183,6 +183,21 @@ month, not $100, because you did not start saving for it a year ago. Money
 already in the account is claimed by whatever comes due first. The timeline runs
 12 months and names the first month the fund would run dry.
 
+**Budgeted, and what it really cost.** A fixed cost is one flat number, which is
+right for rent and wrong for gas and electric. Tell a bill how it posts on a
+statement ("NATIONAL GRID", any part of the name, matched the same way the
+importer matches its own rules) and it gets its own line: budgeted $215, actually
+$253, 18% over. A bill without one is compared alongside everything else in its
+category, which is honest but blunt -- four bills under one Utilities category,
+three of them never imported, reads as a category miles under budget rather than
+as three missing statements. A transaction claimed by a bill is not counted again
+under its category, and the row names the merchants actually seen rather than the
+pattern you typed, so a pattern matching the wrong thing shows up as wrong.
+
+Only complete months count, the current one is half billed. The average divides
+by months that have a transaction, not by the length of the window: an empty month
+is a statement you have not imported, not a month the gas company forgot to bill.
+
 **A hand-kept balance says when it went stale.** The lumpy fund's balance is
 typed in by a person, and the schedule heals itself where the balance cannot: a
 passed due date rolls forward on its own, but the day the insurance is actually
@@ -238,9 +253,7 @@ eight the tail folds into one grey "Other" rather than repeating hues.
 - Single user, no login. It is meant to run on localhost.
 - Fixed costs are assumed monthly and roughly constant. A bill that varies (gas
   and electric) is still budgeted at the amount you enter, but the fixed costs
-  page now shows what it has actually cost over the last three complete months,
-  so the gap is visible instead of silently eating discretionary money. Bills
-  sharing a category are compared as a group, because a category is all the app
-  has to match a transaction to a bill.
+  page shows what it has actually cost, so the gap is visible instead of silently
+  eating discretionary money. See below.
 - Migrations are forward-only, and DDL in MySQL cannot roll back: a migration
   that fails halfway leaves the database partly changed and needs a manual fix.

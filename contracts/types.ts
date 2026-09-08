@@ -105,6 +105,13 @@ export const fixedCostInput = z.object({
   /** Cash must be held this many days before the due date. */
   lead_days: z.number().int().min(0).max(31).default(3),
   category_id: id.nullable().default(null),
+  /**
+   * How this bill shows up on a statement: a case-insensitive substring of
+   * "merchant description", matched the way the importer matches category_rules.
+   * Set it and budgeted-vs-actual answers for this bill alone; leave it null and
+   * the bill is compared with everything else sharing its category.
+   */
+  merchant_pattern: z.string().min(2).max(160).nullable().default(null),
   active: z.boolean().default(true),
 });
 export const fixedCost = z.object({ id }).and(fixedCostInput);

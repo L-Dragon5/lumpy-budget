@@ -235,8 +235,8 @@ describe("computed endpoints", () => {
       name: "Rental", amount_cents: 180000, frequency: "monthly",
       anchor_date: null, day_1: null, day_2: null, day_of_month: 5, active: true,
     });
-    await post("/api/fixed-costs", { name: "Rent", amount_cents: 150000, due_day: 1, lead_days: 3, category_id: null, active: true });
-    await post("/api/fixed-costs", { name: "Internet", amount_cents: 8000, due_day: 20, lead_days: 3, category_id: null, active: true });
+    await post("/api/fixed-costs", { name: "Rent", amount_cents: 150000, due_day: 1, lead_days: 3, category_id: null, merchant_pattern: null, active: true });
+    await post("/api/fixed-costs", { name: "Internet", amount_cents: 8000, due_day: 20, lead_days: 3, category_id: null, merchant_pattern: null, active: true });
     await post("/api/lumpy-items", { name: "Car insurance", amount_cents: 120000, frequency_months: 12, next_due_date: "2027-03-01", category_id: null, active: true });
     await post("/api/savings-goals", { name: "Emergency", mode: "fixed", amount_cents: 50000, percent: null, active: true });
   });
@@ -458,7 +458,7 @@ describe("fixed cost actuals", () => {
     const utilities = cats.find((c) => c.name === "Utilities")!.id;
     await post("/api/fixed-costs", {
       name: "Gas and electric", amount_cents: 9000, due_day: 12, lead_days: 3,
-      category_id: utilities, active: true,
+      category_id: utilities, merchant_pattern: null, active: true,
     });
     for (const [date, cents] of [["2025-12-12", 13000], ["2026-01-12", 15000], ["2026-02-12", 14000]] as const) {
       await post("/api/expenses", {
@@ -475,6 +475,38 @@ describe("fixed cost actuals", () => {
     expect(row.delta_cents).toBe(5000);
     expect(row.months_with_data).toBe(3);
     expect(row.cost_names).toEqual(["Gas and electric"]);
+  });
+
+  test("a merchant pattern round-trips and answers for that bill alone", async () => {
+    const cats = (await api("/api/categories")).body as { id: number; name: string }[];
+    const utilities = cats.find((c) => c.name === "Utilities")!.id;
+    const created = await post("/api/fixed-costs", {
+      name: "Gas and electric", amount_cents: 9000, due_day: 12, lead_days: 3,
+      category_id: utilities, merchant_pattern: "NATIONAL GRID", active: true,
+    });
+    expect(created.body.merchant_pattern).toBe("NATIONAL GRID");
+    await post("/api/fixed-costs", {
+      name: "Water", amount_cents: 7200, due_day: 25, lead_days: 3,
+      category_id: utilities, merchant_pattern: null, active: true,
+    });
+    for (const [date, cents] of [["2025-12-12", 13000], ["2026-01-12", 15000], ["2026-02-12", 14000]] as const) {
+      await post("/api/expenses", {
+        txn_date: date, amount_cents: cents, merchant: "NATIONAL GRID", description: "",
+        category_id: utilities, source: "manual",
+      });
+    }
+
+    const rows = (await api("/api/fixed-cost-actuals?through=2026-03&months=3")).body.rows;
+    const bill = rows.find((r: { key: string }) => r.key === `cost:${created.body.id}`);
+    expect(bill.matched_by).toBe("merchant");
+    expect(bill.actual_avg_cents).toBe(14000);
+    expect(bill.delta_cents).toBe(5000);
+    expect(bill.merchants).toEqual(["NATIONAL GRID"]);
+
+    // Water is still a category row, and National Grid's money is not inside it.
+    const lump = rows.find((r: { matched_by: string }) => r.matched_by === "category");
+    expect(lump.cost_names).toEqual(["Water"]);
+    expect(lump.months_with_data).toBe(0);
   });
 
   test("months defaults to 3 and clamps rather than 422s", async () => {

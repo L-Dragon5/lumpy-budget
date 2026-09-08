@@ -24,10 +24,13 @@ type Draft = {
   due_day: string;
   lead_days: string;
   category_id: string;
+  merchant_pattern: string;
   active: boolean;
 };
 
-const emptyDraft = (): Draft => ({ name: "", amount_cents: null, due_day: "1", lead_days: "3", category_id: "none", active: true });
+const emptyDraft = (): Draft => ({
+  name: "", amount_cents: null, due_day: "1", lead_days: "3", category_id: "none", merchant_pattern: "", active: true,
+});
 
 const toDraft = (c: FixedCost): Draft => ({
   name: c.name,
@@ -35,6 +38,7 @@ const toDraft = (c: FixedCost): Draft => ({
   due_day: String(c.due_day),
   lead_days: String(c.lead_days),
   category_id: c.category_id === null ? "none" : String(c.category_id),
+  merchant_pattern: c.merchant_pattern ?? "",
   active: c.active,
 });
 
@@ -44,6 +48,8 @@ const toBody = (d: Draft) => ({
   due_day: Number(d.due_day),
   lead_days: Number(d.lead_days),
   category_id: d.category_id === "none" ? null : Number(d.category_id),
+  // Below the schema's 2-character minimum it is not a pattern, it is a typo.
+  merchant_pattern: d.merchant_pattern.trim().length >= 2 ? d.merchant_pattern.trim() : null,
   active: d.active,
 });
 
@@ -235,8 +241,9 @@ export default function FixedCosts() {
             <CardDescription>
               What these bills have really cost over the last three complete months. A bill entered flat that
               runs higher every month is eating discretionary money without ever showing up as a surprise.
-              Bills sharing a category are compared together, and coming in under budget usually means a
-              statement has not been imported rather than a bill getting cheaper.
+              Give a bill the name it posts under and it gets its own line. Bills without one are
+              compared together by category, where coming in under budget usually means a statement has
+              not been imported rather than a bill getting cheaper.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -251,11 +258,20 @@ export default function FixedCosts() {
               </TableHeader>
               <TableBody>
                 {variance.map((v) => (
-                  <TableRow key={v.category_id}>
+                  <TableRow key={v.key}>
                     <TableCell>
                       <div className="font-medium">{v.cost_names.join(", ")}</div>
                       <div className="text-xs text-muted-foreground">
-                        {v.category_name}
+                        {v.matched_by === "merchant" ? (
+                          // The merchants actually seen, not the pattern typed in, so a
+                          // pattern matching the wrong thing is visible instead of trusted.
+                          <>matches {v.merchants.length > 0 ? v.merchants.join(", ") : v.merchant_pattern}</>
+                        ) : (
+                          <>
+                            {v.category_name}
+                            {v.cost_names.length > 1 ? ` · ${v.cost_names.length} bills together` : null}
+                          </>
+                        )}
                         {v.months_with_data > 0 && v.months_with_data < 3
                           ? ` · ${v.months_with_data} month${v.months_with_data === 1 ? "" : "s"} of statements`
                           : null}
@@ -334,6 +350,21 @@ export default function FixedCosts() {
             />
             <FieldDescription>
               Matching imported transactions to a fixed-bucket category keeps them out of your spending total.
+            </FieldDescription>
+          </Field>
+
+          <Field>
+            <FieldLabel htmlFor="fc-merchant">Shows up on the statement as</FieldLabel>
+            <Input
+              id="fc-merchant"
+              value={draft.merchant_pattern}
+              onChange={(e) => set({ merchant_pattern: e.target.value })}
+              placeholder="NATIONAL GRID"
+            />
+            <FieldDescription>
+              Optional, and any part of the name will do. Fill it in and this bill gets its own
+              budgeted-vs-actual line; leave it empty and it is compared alongside everything else in
+              its category.
             </FieldDescription>
           </Field>
 

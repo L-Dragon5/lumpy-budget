@@ -67,23 +67,26 @@ await upsert("income-streams", {
 const categories: { id: number; name: string }[] = await call("GET", "/api/categories");
 const cat = (name: string) => categories.find((c) => c.name === name)?.id ?? null;
 
-const fixed: [string, number, number, number, string | null][] = [
-  ["Mortgage", 241800, 1, 3, "Housing"],
-  ["Childcare", 92000, 1, 3, "Childcare"],
-  ["Car loan", 48900, 16, 2, "Auto Loan"],
-  ["Health insurance", 38000, 15, 2, "Utilities"],
-  ["Student loan", 32700, 28, 2, null],
-  ["Gas & electric", 21500, 12, 2, "Utilities"],
-  ["Rental property mgmt", 14800, 10, 2, "Housing"],
-  ["Cell phone", 11000, 8, 2, "Internet & Phone"],
-  ["Internet", 8999, 20, 2, "Internet & Phone"],
-  ["Water & sewer", 7200, 25, 2, "Utilities"],
-  ["Gym", 4900, 22, 0, null],
-  ["Trash pickup", 3500, 5, 2, "Utilities"],
+// The last column is how the bill posts on a statement, where one of the FIXED_PAYMENTS
+// below is it. Those bills get their own budgeted-vs-actual line; the rest are
+// compared by category, which is what the app does when you have not said.
+const fixed: [string, number, number, number, string | null, string | null][] = [
+  ["Mortgage", 241800, 1, 3, "Housing", "MORTGAGE CO ACH"],
+  ["Childcare", 92000, 1, 3, "Childcare", "BRIGHT HORIZONS"],
+  ["Car loan", 48900, 16, 2, "Auto Loan", null],
+  ["Health insurance", 38000, 15, 2, "Utilities", null],
+  ["Student loan", 32700, 28, 2, null, null],
+  ["Gas & electric", 21500, 12, 2, "Utilities", "NATIONAL GRID"],
+  ["Rental property mgmt", 14800, 10, 2, "Housing", null],
+  ["Cell phone", 11000, 8, 2, "Internet & Phone", "VERIZON WIRELESS"],
+  ["Internet", 8999, 20, 2, "Internet & Phone", "COMCAST XFINITY"],
+  ["Water & sewer", 7200, 25, 2, "Utilities", null],
+  ["Gym", 4900, 22, 0, null, null],
+  ["Trash pickup", 3500, 5, 2, "Utilities", null],
 ];
-for (const [name, amount_cents, due_day, lead_days, category] of fixed) {
+for (const [name, amount_cents, due_day, lead_days, category, merchant_pattern] of fixed) {
   await upsert("fixed-costs", {
-    name, amount_cents, due_day, lead_days,
+    name, amount_cents, due_day, lead_days, merchant_pattern,
     category_id: category ? cat(category) : null, active: true,
   });
 }
@@ -139,13 +142,16 @@ const MERCHANTS: [merchant: string, low: number, high: number, perMonth: number]
   ["PETCO 1188", 2400, 8900, 1],
   ["AMC THEATRES", 1900, 5400, 1],
 ];
-const FIXED_PAYMENTS: [merchant: string, cents: number, day: number][] = [
-  ["MORTGAGE CO ACH", 241800, 2],
-  ["BRIGHT HORIZONS", 92000, 2],
-  ["NATIONAL GRID", 21500, 12],
-  ["COMCAST XFINITY", 8999, 20],
-  ["VERIZON WIRELESS", 11000, 8],
-  ["ONLINE TRANSFER TO SAV", 40000, 16],
+// The last column is how far the bill swings month to month. A mortgage is the same
+// number forever; gas and electric is the reason budgeted-vs-actual exists at all, so
+// it swings, and the demo can actually show a bill running over what it was entered at.
+const FIXED_PAYMENTS: [merchant: string, cents: number, day: number, swing: number][] = [
+  ["MORTGAGE CO ACH", 241800, 2, 0],
+  ["BRIGHT HORIZONS", 92000, 2, 0],
+  ["NATIONAL GRID", 21500, 12, 9500],
+  ["COMCAST XFINITY", 8999, 20, 0],
+  ["VERIZON WIRELESS", 11000, 8, 1200],
+  ["ONLINE TRANSFER TO SAV", 40000, 16, 0],
 ];
 
 // A tiny deterministic PRNG: the same demo data every time it runs.
@@ -168,10 +174,11 @@ for (const offset of [-2, -1, 0]) {
       });
     }
   }
-  for (const [merchant, cents, day] of FIXED_PAYMENTS) {
+  for (const [merchant, cents, day, swing] of FIXED_PAYMENTS) {
     rows.push({
       txn_date: `${m}-${String(day).padStart(2, "0")}`,
-      amount_cents: cents,
+      // Skewed upward: a utility bill that varies mostly varies by costing more.
+      amount_cents: swing === 0 ? cents : pick(cents - Math.round(swing / 3), cents + swing),
       merchant,
       description: "",
       category_id: null,
