@@ -1,6 +1,10 @@
 import { useMemo, useState } from "react";
 import type { ImportMapping } from "@lumpy/contracts";
-import { applyRules, guessMapping, normalize, parseCsv, type ParsedCsv } from "@lumpy/csv-import";
+import { addDays } from "@lumpy/budget-core";
+import {
+  applyRules, guessMapping, matchManual, normalize, parseCsv, MATCH_WINDOW_DAYS,
+  type ParsedCsv,
+} from "@lumpy/csv-import";
 import { CheckCircle2Icon, FileTextIcon, TriangleAlertIcon } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -36,11 +40,14 @@ export function ImportWizard({ open, onOpenChange }: { open: boolean; onOpenChan
   const [cashAccount, setCashAccount] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
-  const [done, setDone] = useState<{ inserted: number; skipped: number } | null>(null);
+  const [done, setDone] = useState<{ inserted: number; absorbed: number; skipped: number } | null>(null);
+  /** Merges the person unchecked, by the id of the row they typed. */
+  const [declined, setDeclined] = useState<Set<number>>(new Set());
 
   const reset = () => {
     setCsv(null); setMapping(null); setFilename(""); setRawText("");
     setProfileId(NONE); setProfileName(""); setCashAccount(true); setError(null); setDone(null);
+    setDeclined(new Set());
   };
 
   const loadFile = async (file: File) => {
@@ -53,6 +60,7 @@ export function ImportWizard({ open, onOpenChange }: { open: boolean; onOpenChan
     setProfileName(file.name.replace(/\.csv$/i, ""));
     setDone(null);
     setError(null);
+    setDeclined(new Set());
   };
 
   // Re-parse whenever skip_rows changes: the header row moves with it.
@@ -70,6 +78,49 @@ export function ImportWizard({ open, onOpenChange }: { open: boolean; onOpenChan
 
   const categoryName = (id: number | null) =>
     id === null ? null : (categories.data ?? []).find((c) => c.id === id)?.name ?? null;
+
+  /**
+   * The days this file covers, widened by the match window on both ends, so a
+   * charge typed on the 30th can still meet a statement that posts it on the 2nd.
+   */
+  const span = useMemo(() => {
+    const dates = (result?.rows ?? []).map((r) => r.txn_date).sort();
+    const first = dates[0];
+    const last = dates[dates.length - 1];
+    if (!first || !last) return null;
+    return { start: addDays(first, -MATCH_WINDOW_DAYS), end: addDays(last, MATCH_WINDOW_DAYS) };
+  }, [result]);
+
+  const nearby = useApi(
+    ["expenses", "merge-window", span?.start, span?.end],
+    () => eden.api.expenses.get({ query: { start: span!.start, end: span!.end, limit: 5000 } }),
+    span !== null,
+  );
+
+  /**
+   * Transactions in this file that look like ones already typed in by hand.
+   * Matched on the amount alone, because the merchant a person types and the
+   * merchant a bank writes are never the same string and the date is a day or
+   * two apart. That is a good guess, not a fact, so every pair is shown and
+   * nothing merges without the checkbox beside it.
+   */
+  const byId = useMemo(
+    () => new Map((nearby.data ?? []).map((e) => [e.id, e] as const)),
+    [nearby.data],
+  );
+  const proposals = useMemo(() => {
+    if (!result || !nearby.data) return [];
+    return matchManual(nearby.data.filter((e) => e.source === "manual"), result.rows);
+  }, [result, nearby.data]);
+  const merges = proposals.filter((p) => !declined.has(p.manual_id));
+
+  const toggleMerge = (manualId: number) =>
+    setDeclined((prev) => {
+      const next = new Set(prev);
+      if (next.has(manualId)) next.delete(manualId);
+      else next.add(manualId);
+      return next;
+    });
 
   const commit = async () => {
     if (!result || result.rows.length === 0) return;
@@ -92,6 +143,7 @@ export function ImportWizard({ open, onOpenChange }: { open: boolean; onOpenChan
         filename: filename || "import.csv",
         profile_id: savedProfileId,
         rows: result.rows,
+        absorb: merges.map(({ manual_id, row_index }) => ({ manual_id, row_index })),
       });
       if (res.error) throw ApiError.from(res.error);
       setDone(res.data);
@@ -129,9 +181,14 @@ export function ImportWizard({ open, onOpenChange }: { open: boolean; onOpenChan
               <CheckCircle2Icon />
               <AlertTitle>Imported {done.inserted} transactions</AlertTitle>
               <AlertDescription>
-                {done.skipped > 0
-                  ? `${done.skipped} were already in the ledger and were skipped.`
-                  : "Nothing was a duplicate."}
+                {[
+                  done.absorbed > 0
+                    ? `${done.absorbed} matched expenses you had already entered and were merged rather than duplicated.`
+                    : null,
+                  done.skipped > 0 ? `${done.skipped} were already in the ledger and were skipped.` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" ") || "Nothing was a duplicate."}
               </AlertDescription>
             </Alert>
             <DialogFooter>
@@ -314,6 +371,64 @@ export function ImportWizard({ open, onOpenChange }: { open: boolean; onOpenChan
                 </Table>
               </div>
             </div>
+
+            {proposals.length > 0 ? (
+              <div>
+                <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
+                  <Badge variant="secondary">{merges.length} to merge</Badge>
+                  <span className="text-muted-foreground">
+                    These look like transactions you already entered by hand. A merged row keeps the category you
+                    chose and takes the statement's date and merchant. Uncheck any that are really two charges.
+                  </span>
+                </div>
+                <div className="overflow-x-auto rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-12">Merge</TableHead>
+                        <TableHead>You entered</TableHead>
+                        <TableHead>On the statement</TableHead>
+                        <TableHead className="text-right">Amount</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {proposals.map((p) => {
+                        const mine = byId.get(p.manual_id);
+                        const theirs = result?.rows[p.row_index];
+                        if (!mine || !theirs) return null;
+                        return (
+                          <TableRow key={p.manual_id}>
+                            <TableCell>
+                              <input
+                                type="checkbox"
+                                aria-label={`Merge ${mine.merchant} with ${theirs.merchant}`}
+                                className="size-4 accent-[var(--primary)]"
+                                checked={!declined.has(p.manual_id)}
+                                onChange={() => toggleMerge(p.manual_id)}
+                              />
+                            </TableCell>
+                            <TableCell className="max-w-64 truncate">
+                              {mine.merchant}
+                              <span className="ml-2 text-muted-foreground">{mine.txn_date}</span>
+                            </TableCell>
+                            <TableCell className="max-w-64 truncate">
+                              {theirs.merchant}
+                              <span className="ml-2 text-muted-foreground">
+                                {theirs.txn_date}
+                                {p.day_gap > 0 ? ` (${p.day_gap}d later)` : ""}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Money cents={theirs.amount_cents} />
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            ) : null}
 
             {profileId === NONE ? (
               <Field>

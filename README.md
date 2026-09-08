@@ -243,6 +243,25 @@ assigned per statement in file order, so re-importing that same file produces th
 same hashes and is still the no-op it always was, and a row typed by hand takes
 the next index nobody is using rather than colliding.
 
+**A charge you typed in before the statement arrived is merged, not duplicated.**
+The hash cannot catch this one: you type "Corner Coffee" on the day you spend
+it, the bank writes "SQ *CORNER COFFEE 4821" and posts it a day later, so the
+date and the merchant both disagree and only the amount survives. The importer
+pairs statement rows against hand-entered ones on the amount to the cent within
+four days, nearest day first and strictly one-to-one, and shows every pair
+before it writes anything. Confirm one and the row you typed keeps its id, its
+note and the category you chose, takes the statement's date and merchant, and
+takes the hash a plain import would have written for it -- so next month's
+overlapping statement is a no-op again, with nothing to re-confirm.
+
+Four days because a card authorises on the day and posts one to three business
+days later, and a weekend stretches that to four. It is a good guess, never a
+fact: two $12 lunches four days apart at different places pair too, which is why
+the review step exists and why nothing merges without the checkbox beside it.
+The pair is checked again on the server before it is written, because what
+arrives is a request and a merge of two unrelated rows would overwrite one of
+them with nothing left to say so.
+
 ## How the pieces work
 
 **Pay schedules.** Weekly, every two weeks, twice a month, monthly and annual

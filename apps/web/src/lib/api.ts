@@ -61,11 +61,16 @@ async function unwrap<R extends EdenResponse>(call: Promise<R>): Promise<Payload
  * a spinner and rebuilds it. Holding the last key's data keeps `isLoading` true
  * only on a genuine first load; the numbers swap in place when the fetch lands.
  */
-export function useApi<R extends EdenResponse>(key: readonly unknown[], call: () => Promise<R>) {
+export function useApi<R extends EdenResponse>(
+  key: readonly unknown[],
+  call: () => Promise<R>,
+  enabled = true,
+) {
   return useQuery<Payload<R>, ApiError>({
     queryKey: key,
     queryFn: () => unwrap(call()),
     placeholderData: keepPreviousData,
+    enabled,
   });
 }
 

@@ -226,11 +226,26 @@ export const expense = z
 export type ExpenseInput = z.infer<typeof expenseInput>;
 export type Expense = z.infer<typeof expense>;
 
+/**
+ * One statement row the wizard has been told is a transaction already in the
+ * ledger, typed in by hand before the statement arrived. `row_index` indexes
+ * `rows`, so the pair only means anything against the array it was posted with.
+ *
+ * Confirmed by a person, never inferred by the server: `matchManual` proposes,
+ * the review step disposes, and this carries only what survived that.
+ */
+export const absorption = z.object({
+  manual_id: id,
+  row_index: z.number().int().min(0),
+});
+export type Absorption = z.infer<typeof absorption>;
+
 /** What the import wizard posts: expenses plus the batch metadata. */
 export const bulkExpenseInput = z.object({
   filename: z.string().max(255).default("import.csv"),
   profile_id: id.nullable().default(null),
   rows: z.array(expenseInput).min(1).max(20000),
+  absorb: z.array(absorption).max(20000).default([]),
 });
 export type BulkExpenseInput = z.infer<typeof bulkExpenseInput>;
 

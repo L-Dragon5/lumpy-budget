@@ -242,6 +242,149 @@ describe("expenses and import", () => {
     expect(a.body.dedupe_hash).not.toBe(moved.body.dedupe_hash);
   });
 
+  test("a charge typed in before the statement arrived merges instead of doubling", async () => {
+    // The whole reason this exists: a person types "Corner Coffee" on the day
+    // they spent it, the bank writes "SQ *CORNER COFFEE 4821" and posts it a day
+    // later. Three legs of the dedupe key disagree, so without this the import
+    // inserts a second row and the month is counted twice.
+    const cats = (await api("/api/categories")).body as { id: number; name: string }[];
+    const groceries = cats.find((c) => c.name === "Groceries")!.id;
+    const typed = await post("/api/expenses", {
+      txn_date: "2026-03-17", amount_cents: 650, merchant: "Corner Coffee",
+      description: "flat white", category_id: groceries, source: "manual",
+    });
+
+    const file = {
+      filename: "chase.csv", profile_id: null,
+      rows: [{
+        txn_date: "2026-03-18", amount_cents: 650, merchant: "SQ *CORNER COFFEE 4821",
+        description: "", category_id: null, source: "import",
+      }],
+    };
+    const merged = await post("/api/import", { ...file, absorb: [{ manual_id: typed.body.id, row_index: 0 }] });
+    expect(merged.status).toBe(201);
+    // `inserted` counts the rows this batch owns; the merged one is one of them.
+    expect(merged.body).toMatchObject({ row_count: 1, inserted: 1, absorbed: 1, skipped: 0 });
+
+    const stored = (await api("/api/expenses")).body;
+    expect(stored).toHaveLength(1);
+    expect(stored[0]).toMatchObject({
+      id: typed.body.id,          // the row you typed, still the same row
+      txn_date: "2026-03-18",     // on the day the bank says it happened
+      merchant: "SQ *CORNER COFFEE 4821",
+      source: "import",
+      category_id: groceries,     // the category you chose by hand survives
+      description: "flat white",  // and so does the note; the statement had none
+    });
+    expect(stored[0].import_batch_id).toBe(merged.body.batch_id);
+
+    // The point of rewriting the hash: next month's overlapping statement is a
+    // no-op again, with nothing to re-confirm and no second copy.
+    const again = await post("/api/import", file);
+    expect(again.body).toMatchObject({ inserted: 0, absorbed: 0, skipped: 1 });
+    expect((await api("/api/expenses")).body).toHaveLength(1);
+  });
+
+  test("a merge takes the rule's category only when you did not pick one", async () => {
+    const typed = await post("/api/expenses", {
+      txn_date: "2026-03-14", amount_cents: 8421, merchant: "Groceries run",
+      description: "", category_id: null, source: "manual",
+    });
+    const res = await post("/api/import", {
+      filename: "chase.csv", profile_id: null, rows: [rows[0]!],
+      absorb: [{ manual_id: typed.body.id, row_index: 0 }],
+    });
+    expect(res.body.absorbed).toBe(1);
+    const cats = (await api("/api/categories")).body as { id: number; name: string }[];
+    const stored = (await api("/api/expenses")).body;
+    expect(stored).toHaveLength(1);
+    expect(stored[0].category_id).toBe(cats.find((c) => c.name === "Groceries")!.id);
+  });
+
+  test("only the pairs you confirmed merge; a lookalike lands as its own row", async () => {
+    const typed = await post("/api/expenses", {
+      txn_date: "2026-03-18", amount_cents: 650, merchant: "Corner Coffee",
+      description: "", category_id: null, source: "manual",
+    });
+    // Two $6.50 charges that week. One is the coffee already typed in; the other
+    // is a different shop the person unchecked in the review step.
+    const res = await post("/api/import", {
+      filename: "chase.csv", profile_id: null,
+      rows: [
+        { txn_date: "2026-03-18", amount_cents: 650, merchant: "SQ *CORNER COFFEE", description: "", category_id: null, source: "import" },
+        { txn_date: "2026-03-20", amount_cents: 650, merchant: "BLUE BOTTLE 77", description: "", category_id: null, source: "import" },
+      ],
+      absorb: [{ manual_id: typed.body.id, row_index: 0 }],
+    });
+    expect(res.body).toMatchObject({ row_count: 2, inserted: 2, absorbed: 1, skipped: 0 });
+    expect((await api("/api/expenses")).body).toHaveLength(2);
+  });
+
+  test("a merge the ledger cannot honour is dropped, and never the row with it", async () => {
+    // A wizard left open while the row was deleted, or a hand-written request.
+    // Losing the statement row over it would be the one unrecoverable outcome:
+    // silently short a transaction the bank actually charged.
+    const gone = await post("/api/import", {
+      filename: "chase.csv", profile_id: null, rows: [rows[0]!],
+      absorb: [{ manual_id: 999999, row_index: 0 }],
+    });
+    expect(gone.status).toBe(201);
+    expect(gone.body).toMatchObject({ inserted: 1, absorbed: 0, skipped: 0 });
+    expect((await api("/api/expenses")).body).toHaveLength(1);
+
+    // Same for a target that is not a hand-entered row: an imported row is
+    // already the statement's, and absorbing one into another would delete it.
+    const already = (await api("/api/expenses")).body[0].id;
+    const twice = await post("/api/import", {
+      filename: "chase-2.csv", profile_id: null, rows: [rows[1]!],
+      absorb: [{ manual_id: already, row_index: 0 }],
+    });
+    expect(twice.body).toMatchObject({ inserted: 1, absorbed: 0 });
+    expect((await api("/api/expenses")).body).toHaveLength(2);
+  });
+
+  test("the statement's own memo wins when it has one", async () => {
+    const typed = await post("/api/expenses", {
+      txn_date: "2026-03-14", amount_cents: 8421, merchant: "Shop", description: "my note",
+      category_id: null, source: "manual",
+    });
+    await post("/api/import", {
+      filename: "chase.csv", profile_id: null, rows: [rows[0]!],
+      absorb: [{ manual_id: typed.body.id, row_index: 0 }],
+    });
+    expect((await api("/api/expenses")).body[0].description).toBe("Groceries");
+  });
+
+  test("a merge the amounts and dates do not allow is refused, not taken on trust", async () => {
+    // The wizard only ever proposes pairs `matchable` accepts, so this is a
+    // request that came from somewhere else. Honouring it would overwrite one
+    // real transaction with an unrelated one and leave nothing behind saying so.
+    const base = { description: "", category_id: null, source: "manual" };
+    const wrongAmount = await post("/api/expenses", { ...base, txn_date: "2026-03-14", amount_cents: 500, merchant: "Cash" });
+    const wrongDay = await post("/api/expenses", { ...base, txn_date: "2026-02-14", amount_cents: 8421, merchant: "Cash" });
+
+    // A statement row each, so the second run is refused on its own merits and
+    // not on the dedupe hash the first one already took.
+    for (const [target, day] of [[wrongAmount, "2026-03-14"], [wrongDay, "2026-03-15"]] as const) {
+      const res = await post("/api/import", {
+        filename: `chase-${target.body.id}.csv`, profile_id: null,
+        rows: [{ ...rows[0]!, txn_date: day }],
+        absorb: [{ manual_id: target.body.id, row_index: 0 }],
+      });
+      expect(res.body).toMatchObject({ inserted: 1, absorbed: 0 });
+      expect((await api(`/api/expenses/${target.body.id}`)).body).toMatchObject({
+        merchant: "Cash", source: "manual",
+      });
+    }
+    // Both typed rows untouched, and both statement rows landed as their own.
+    expect((await api("/api/expenses")).body).toHaveLength(4);
+  });
+
+  test("an import with no merges reports absorbed zero and behaves as it always did", async () => {
+    const res = await post("/api/import", { filename: "chase.csv", profile_id: null, rows });
+    expect(res.body).toMatchObject({ row_count: 3, inserted: 3, absorbed: 0, skipped: 0 });
+  });
+
   test("a statement listing one charge twice imports it twice, and re-imports as a no-op", async () => {
     const coffee = {
       txn_date: "2026-03-18", amount_cents: 650, merchant: "CORNER COFFEE #4",

@@ -148,6 +148,24 @@ Four places, in this order, or reads silently drop it:
   on. Its window is capped at half a cycle so a monthly item cannot be reconciled
   by next month's charge, and recording a payment is two ordinary PUTs from the
   web app (the item, then the balance setting), not a route.
+- **A merge rewrites a hand-entered row; it does not insert and delete.**
+  `absorbManual` in `api/src/store.ts` gives the typed row the hash `dedupeKeys`
+  produced for its statement row, which is the only reason a re-import stays a
+  no-op. It runs inside the import's own transaction and before the INSERT, and
+  the merged indices are filtered out of the chunks -- both halves would
+  otherwise race for the same unique hash. `matchable` in
+  `csv-import/src/match.ts` is asked twice on purpose: the wizard proposes with
+  it and the API re-checks the pair that comes back, because a request that
+  merged two unrelated rows would overwrite one with nothing left to say so. The
+  batch owns the row afterwards, so deleting the import deletes it -- deliberate,
+  because `nonCashBatchIds` reads the batch to tell a card charge from money out
+  of checking and a batchless merged card charge would be counted against the
+  checking balance forever.
+- **A raw `tx.unsafe` SELECT does not go through `coerce()`.** `rows()` is what
+  turns a DATE into a `YYYY-MM-DD` string; a hand-written statement gets a `Date`
+  object and the next thing that slices it reads `undefined`. The one in
+  `absorbManual` selects `DATE_FORMAT(txn_date,'%Y-%m-%d')` for that reason, and
+  five tests caught it when it did not.
 - **`import_profiles.cash_account` is read by `/cash-position` and nothing
   else.** A card charge is spending on the day it happened everywhere in the
   budget; it is not money out of checking until the card is paid. Filter it into

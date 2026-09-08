@@ -1,10 +1,10 @@
 import type {
-  BackupTables, Category, CategoryRule, Expense, ExpenseInput, FixedCost, IncomeStream,
+  Absorption, BackupTables, Category, CategoryRule, Expense, ExpenseInput, FixedCost, IncomeStream,
   CategoryRuleInput, CategoryRuleMergeInput, ImportProfile, ImportProfileInput, LumpyItem,
   MergeResult, RestoreResult, RuleMergeResult, SavingsGoal,
 } from "@lumpy/contracts";
 import { bulkInsert, insert, rows, sql, update, type Executor } from "@lumpy/db";
-import { applyRules, dedupeKey, dedupeKeys } from "@lumpy/csv-import";
+import { applyRules, dedupeKey, dedupeKeys, matchable } from "@lumpy/csv-import";
 import * as core from "@lumpy/budget-core";
 
 export const streams = () => rows<IncomeStream>("income_streams");
@@ -82,7 +82,106 @@ export async function budgetInputs(month: string, lumpyMode: "steady" | "recomme
 
 export const hash = (key: string): string => new Bun.CryptoHasher("sha256").update(key).digest("hex");
 
-export type ImportResult = { batch_id: number; row_count: number; inserted: number; skipped: number };
+export type ImportResult = {
+  batch_id: number;
+  row_count: number;
+  /** Rows this batch now owns, merges included. */
+  inserted: number;
+  /** How many of `inserted` were rows somebody had already typed in. */
+  absorbed: number;
+  skipped: number;
+};
+
+/**
+ * Rewrites hand-entered rows to be the statement rows they turned out to be.
+ *
+ * A person types "Corner Coffee" on the day they spend it; the bank writes
+ * "SQ *CORNER COFFEE 4821" and posts it a day later. Date, merchant and
+ * therefore `dedupeKey` all disagree, so the import inserts a second row and
+ * the month is counted twice. `matchManual` proposes these pairs on the amount
+ * alone and a person confirms them; nothing here infers anything.
+ *
+ * The row keeps its id and the category somebody chose by hand, and takes the
+ * statement's date, merchant, description and batch. The hash it takes is the
+ * one a plain import would have written for that row, which is the whole point:
+ * next month's overlapping statement is a no-op again, with nothing to
+ * re-confirm.
+ *
+ * The batch owns the row afterwards, so deleting the import deletes it. That is
+ * deliberate. `nonCashBatchIds` reads the batch to tell a card charge from money
+ * out of checking, and a merged card charge left batchless would be counted
+ * against the checking balance every month from then on -- silently, and in the
+ * one report that exists to be trusted.
+ *
+ * A pair naming a row that is gone, one that is not hand-entered, or one the two
+ * dates and amounts do not actually allow is dropped, and its statement row
+ * inserts normally. Dropping the row instead would short a transaction the bank
+ * really charged, which is the only outcome here that cannot be noticed later.
+ *
+ * `matchable` is re-asked here rather than taken on trust. The wizard proposes
+ * with it and a person confirms, but what arrives is a request, and a request
+ * that merged two unrelated rows would delete one of them with nothing left to
+ * say it happened.
+ *
+ * ponytail: one UPDATE per pair. A month of statements produces a handful, and
+ * batching them into a CASE expression would trade a readable statement for
+ * round trips nobody is waiting on.
+ */
+async function absorbManual(
+  pairs: Absorption[],
+  rows: (ExpenseInput & { description: string })[],
+  keys: string[],
+  batchId: number,
+  tx: Executor,
+): Promise<Set<number>> {
+  const merged = new Set<number>();
+  if (pairs.length === 0) return merged;
+
+  // One typed row absorbs one statement row and the reverse; a request saying
+  // otherwise keeps the first of each and drops the rest.
+  const takenManual = new Set<number>();
+  const wanted: Absorption[] = [];
+  for (const p of pairs) {
+    if (p.row_index >= rows.length || takenManual.has(p.manual_id) || merged.has(p.row_index)) continue;
+    takenManual.add(p.manual_id);
+    merged.add(p.row_index);
+    wanted.push(p);
+  }
+  if (wanted.length === 0) return merged;
+
+  const ids = wanted.map((p) => p.manual_id);
+  const found = (await tx.unsafe(
+    // DATE_FORMAT because this is a raw statement: `rows()` coerces a DATE to a
+    // string and nothing here goes through it, so the column would arrive as a
+    // Date and `matchable` would slice a string off an object.
+    `SELECT id, DATE_FORMAT(txn_date, '%Y-%m-%d') AS txn_date, amount_cents, description
+       FROM expenses
+      WHERE source = 'manual' AND id IN (${ids.map(() => "?").join(", ")})`,
+    ids,
+  )) as { id: number; txn_date: string; amount_cents: number; description: string }[];
+  const mine = new Map(found.map((r) => [r.id, r]));
+
+  for (const p of wanted) {
+    const typed = mine.get(p.manual_id);
+    const r = rows[p.row_index]!;
+    if (!typed || !matchable(typed, r)) {
+      merged.delete(p.row_index);
+      continue;
+    }
+    await tx.unsafe(
+      `UPDATE expenses
+          SET txn_date = ?, amount_cents = ?, merchant = ?, description = ?, source = ?,
+              import_batch_id = ?, dedupe_hash = ?, category_id = COALESCE(category_id, ?)
+        WHERE id = ? AND source = 'manual'`,
+      // Everything the person put there wins over a blank on the statement, the
+      // same way COALESCE keeps the category they chose. A statement's memo
+      // column is usually empty, and "flat white, met Sam" is not recoverable.
+      [r.txn_date, r.amount_cents, r.merchant, r.description || typed.description, r.source ?? "import",
+       batchId, hash(keys[p.row_index]!), r.category_id, p.manual_id],
+    );
+  }
+  return merged;
+}
 
 /**
  * Imports in one transaction: rules applied first, then INSERT IGNORE against the
@@ -92,6 +191,7 @@ export async function importExpenses(args: {
   filename: string;
   profile_id: number | null;
   rows: ExpenseInput[];
+  absorb?: Absorption[];
 }): Promise<ImportResult> {
   const rules = await categoryRules();
   const categorized = applyRules(
@@ -112,16 +212,24 @@ export async function importExpenses(args: {
     // hashes and is still a no-op.
     const keys = dedupeKeys(categorized);
 
+    // Confirmed merges first: they rewrite existing rows to hold the very hashes
+    // the INSERT below would have used, so those rows must be out of it. Both
+    // halves run in one transaction, or a failed insert would leave a typed row
+    // already rewritten to a statement it is no longer part of.
+    const merged = await absorbManual(args.absorb ?? [], categorized, keys, batchId, tx);
+    const fresh = categorized
+      .map((r, i) => ({ r, key: keys[i]! }))
+      .filter((_, i) => !merged.has(i));
+
     let inserted = 0;
-    for (let i = 0; i < categorized.length; i += 200) {
-      const chunk = categorized.slice(i, i + 200);
-      const chunkKeys = keys.slice(i, i + 200);
+    for (let i = 0; i < fresh.length; i += 200) {
+      const chunk = fresh.slice(i, i + 200);
       const values = chunk
         .map(() => "(?, ?, ?, ?, ?, ?, ?, ?)")
         .join(", ");
-      const params = chunk.flatMap((r, j) => [
+      const params = chunk.flatMap(({ r, key }) => [
         r.txn_date, r.amount_cents, r.merchant, r.description ?? "",
-        r.category_id, r.source ?? "import", batchId, hash(chunkKeys[j]!),
+        r.category_id, r.source ?? "import", batchId, hash(key),
       ]);
       const res = (await tx.unsafe(
         `INSERT IGNORE INTO expenses
@@ -132,9 +240,11 @@ export async function importExpenses(args: {
       inserted += Number(res.affectedRows ?? 0);
     }
 
-    const skipped = categorized.length - inserted;
-    await tx.unsafe("UPDATE import_batches SET inserted = ?, skipped = ? WHERE id = ?", [inserted, skipped, batchId]);
-    return { batch_id: batchId, row_count: categorized.length, inserted, skipped };
+    const absorbed = merged.size;
+    const owned = inserted + absorbed;
+    const skipped = categorized.length - owned;
+    await tx.unsafe("UPDATE import_batches SET inserted = ?, skipped = ? WHERE id = ?", [owned, skipped, batchId]);
+    return { batch_id: batchId, row_count: categorized.length, inserted: owned, absorbed, skipped };
   });
 }
 
