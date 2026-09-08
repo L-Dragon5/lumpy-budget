@@ -34,6 +34,13 @@ const CATEGORIES: [name: string, bucket: Bucket, icon: string][] = [
   ["Income", "transfer", "banknote"],
 ];
 
+/**
+ * Rules that must not match a longer name that starts with them: BP #4021 yes,
+ * BPOST no. These two used to carry a trailing space reaching for the same
+ * thing, which the matcher trimmed off before it ever looked.
+ */
+const WHOLE_WORD = new Set(["bp", "amc"]);
+
 const RULES: [pattern: string, category: string, priority?: number][] = [
   ["wegmans", "Groceries"], ["trader joe", "Groceries"], ["whole foods", "Groceries"],
   ["safeway", "Groceries"], ["kroger", "Groceries"], ["aldi", "Groceries"],
@@ -87,7 +94,9 @@ export async function seed() {
   for (const [pattern, category, priority] of RULES) {
     const categoryId = existing.get(category.toLowerCase());
     if (!categoryId || haveRules.has(pattern.toLowerCase())) continue;
-    await insert("category_rules", { pattern, category_id: categoryId, priority: priority ?? 100 });
+    await insert("category_rules", {
+      pattern, category_id: categoryId, priority: priority ?? 100, whole_word: WHOLE_WORD.has(pattern),
+    });
     addedRules++;
   }
   return { addedCategories, addedRules };

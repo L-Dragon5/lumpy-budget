@@ -63,7 +63,11 @@ test("the dedupe key ignores the noise banks add and nothing else", () => {
 });
 
 const rule = (p: Partial<CategoryRule>): CategoryRule =>
-  ({ id: 1, pattern: "x", category_id: 1, priority: 100, ...p });
+  ({ id: 1, pattern: "x", whole_word: false, category_id: 1, priority: 100, ...p });
+
+/** A row on its way through the importer, before any rule has looked at it. */
+type Row = { merchant: string; description: string; category_id: number | null };
+const row = (merchant: string): Row => ({ merchant, description: "", category_id: null });
 
 test("rules categorize on import, lowest priority number first", () => {
   const rows = [
@@ -86,4 +90,43 @@ test("a rule can match on the description, not just the merchant", () => {
     [rule({ pattern: "coffee", category_id: 5 })],
   );
   expect(out[0]!.category_id).toBe(5);
+});
+
+test("a whole-word rule finds the name and not a longer name starting with it", () => {
+  const rows = [
+    row("BP #4021 FUEL"),
+    row("BPOST BRUSSELS"),
+    // A store number glued straight onto the name is what a descriptor does, so
+    // the boundary is a letter boundary and a digit still counts as one.
+    row("BP1234"),
+    row("SHELL AND BP"),
+    // The first occurrence is inside a longer word; the second is not.
+    row("BPOST THEN BP"),
+  ];
+  const out = applyRules(rows, [rule({ id: 1, pattern: "bp", whole_word: true, category_id: 3 })]);
+  expect(out.map((r) => r.category_id)).toEqual([3, null, 3, 3, 3]);
+});
+
+test("without the switch a rule is the substring it has always been", () => {
+  const rows = [row("BPOST BRUSSELS")];
+  expect(applyRules(rows, [rule({ pattern: "bp", category_id: 3 })])[0]!.category_id).toBe(3);
+});
+
+test("whole word does not cost a rule the suffixes it wants", () => {
+  // "trader joe" has to keep finding TRADER JOES, which is why this is opt-in
+  // rather than how every rule now behaves.
+  const rows = [row("TRADER JOES #44"), row("TRADER JOE'S #44")];
+  const plain = applyRules(rows, [rule({ pattern: "trader joe", category_id: 5 })]);
+  expect(plain.map((r) => r.category_id)).toEqual([5, 5]);
+
+  const strict = applyRules(rows, [rule({ pattern: "trader joe", whole_word: true, category_id: 5 })]);
+  // An apostrophe is a boundary; a plain "s" is not. This is the trade the
+  // switch makes, and the reason it is off unless you ask for it.
+  expect(strict.map((r) => r.category_id)).toEqual([null, 5]);
+});
+
+test("a pattern full of regex metacharacters is matched as text", () => {
+  const rows = [row("SQ *COFFEE"), row("SQXCOFFEE")];
+  const out = applyRules(rows, [rule({ pattern: "sq *coffee", whole_word: true, category_id: 9 })]);
+  expect(out.map((r) => r.category_id)).toEqual([9, null]);
 });

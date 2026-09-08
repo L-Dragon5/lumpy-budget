@@ -176,7 +176,7 @@ export const categoryRuleInput = z.object({
   /**
    * Case-insensitive substring, matched against "merchant description".
    *
-   * Trimmed on the way in, because `applyRules` matches on
+   * Trimmed on the way in, because the matcher works on
    * `pattern.toLowerCase().trim()`: the padding never did anything except show up
    * in the rules table and in the sentence a merge writes back at you. Trimming
    * before the length check is deliberate -- a pattern that is only padding is
@@ -184,6 +184,8 @@ export const categoryRuleInput = z.object({
    * merchant you have.
    */
   pattern: z.string().trim().min(2).max(160),
+  /** See `matchesPattern`: "bp" stops matching BPOST without giving up BP #4021. */
+  whole_word: z.boolean().default(false),
   category_id: id,
   priority: z.number().int().default(100),
 });
@@ -350,3 +352,44 @@ export const restoreResult = z.object({
   total: z.number().int(),
 });
 export type RestoreResult = z.infer<typeof restoreResult>;
+
+// ------------------------------------------------------- pattern matching
+
+/**
+ * What a pattern actually looks for. Lowercased and trimmed, so the column can
+ * hold whatever a person typed and two spellings of one rule are one rule.
+ */
+export const needleOf = (pattern: string): string => pattern.toLowerCase().trim();
+
+const isLetter = (c: string | undefined): boolean => c !== undefined && /\p{L}/u.test(c);
+
+/**
+ * Does a lowercased "merchant description" contain this needle?
+ *
+ * Lives here rather than in either consumer because the CSV importer and the
+ * budgeted-versus-actual report both have to agree on what a pattern means; a
+ * bill that reconciles has to be a transaction the importer would have
+ * categorised the same way.
+ *
+ * `wholeWord` requires a non-letter on each side of the hit, which is what a
+ * trailing space in a pattern used to be reaching for and never achieved.
+ * Letters, not word characters: a merchant descriptor glues its store number
+ * straight onto the name, so `bp` should still find BP1234 while passing over
+ * BPOST. Every occurrence is tried, so "BPOST BP #1" matches on the second.
+ *
+ * Scanned with indexOf rather than built into a RegExp: a pattern is user text
+ * and may hold regex metacharacters, and escaping them correctly is a bug
+ * waiting to happen for no gain.
+ */
+export function matchesPattern(haystack: string, needle: string, wholeWord = false): boolean {
+  if (needle.length === 0) return false;
+  if (!wholeWord) return haystack.includes(needle);
+  for (let from = 0; ; from = from + 1) {
+    const at = haystack.indexOf(needle, from);
+    if (at === -1) return false;
+    // Off either end reads as undefined, which is not a letter, which is a
+    // boundary -- exactly right for a match at the start or end of the string.
+    if (!isLetter(haystack[at - 1]) && !isLetter(haystack[at + needle.length])) return true;
+    from = at;
+  }
+}

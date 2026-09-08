@@ -1,3 +1,4 @@
+import { matchesPattern, needleOf } from "@lumpy/contracts";
 import type { Category, Expense, FixedCost } from "@lumpy/contracts";
 import { divRound, sum, type Cents } from "./money";
 import * as d from "./dates";
@@ -73,7 +74,7 @@ export function fixedCostVariance(
   // ("national grid" over "grid"), with the id breaking ties so the result is stable.
   const matchers = active
     .filter((c) => (c.merchant_pattern ?? "").trim().length > 0)
-    .map((c) => ({ cost: c, needle: c.merchant_pattern!.toLowerCase().trim() }))
+    .map((c) => ({ cost: c, needle: needleOf(c.merchant_pattern!) }))
     .sort((a, b) => b.needle.length - a.needle.length || a.cost.id - b.cost.id);
 
   // An expense a pattern claimed is spoken for. Letting it also count toward its
@@ -82,7 +83,9 @@ export function fixedCostVariance(
   const spare: Expense[] = [];
   for (const e of rows) {
     const h = hay(e);
-    const hit = matchers.find((m) => h.includes(m.needle));
+    // Plain substring: a bill has no whole-word switch of its own yet, and this
+    // has to keep agreeing with what the importer would have done.
+    const hit = matchers.find((m) => matchesPattern(h, m.needle));
     if (hit) (claimed.get(hit.cost.id) ?? claimed.set(hit.cost.id, []).get(hit.cost.id)!).push(e);
     else spare.push(e);
   }

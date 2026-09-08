@@ -1,3 +1,4 @@
+import { matchesPattern, needleOf } from "@lumpy/contracts";
 import type { CategoryRule, ExpenseInput, ImportMapping } from "@lumpy/contracts";
 import type { ParsedCsv } from "./parse";
 import { detectDateFormat, parseAmountCents, parseDate } from "./parse";
@@ -113,17 +114,24 @@ export const normalizeMerchant = (m: string): string =>
 export const dedupeKey = (e: Pick<ExpenseInput, "txn_date" | "amount_cents" | "merchant">): string =>
   `${e.txn_date}|${e.amount_cents}|${normalizeMerchant(e.merchant)}`;
 
-/** First matching rule by priority wins. Rows that already have a category are left alone. */
+/**
+ * First matching rule by priority wins. Rows that already have a category are
+ * left alone.
+ *
+ * A rule with `whole_word` needs a non-letter on each side of the hit, so "bp"
+ * finds BP #4021 and BP1234 and passes over BPOST. Without it a rule is the
+ * plain substring it has always been.
+ */
 export function applyRules<T extends { merchant: string; description: string; category_id: number | null }>(
   rows: T[],
   rules: CategoryRule[],
 ): T[] {
   const ordered = [...rules].sort((a, b) => a.priority - b.priority || a.id - b.id);
-  const needles = ordered.map((r) => ({ rule: r, needle: r.pattern.toLowerCase().trim() }));
+  const needles = ordered.map((r) => ({ rule: r, needle: needleOf(r.pattern) }));
   return rows.map((row) => {
     if (row.category_id !== null) return row;
     const hay = `${row.merchant} ${row.description}`.toLowerCase();
-    const hit = needles.find(({ needle }) => needle.length > 0 && hay.includes(needle));
+    const hit = needles.find(({ rule, needle }) => matchesPattern(hay, needle, rule.whole_word));
     return hit ? { ...row, category_id: hit.rule.category_id } : row;
   });
 }

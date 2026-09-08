@@ -714,6 +714,70 @@ describe("merging import profiles", () => {
   });
 });
 
+describe("whole-word rules, end to end", () => {
+  let fuel: number;
+
+  beforeEach(async () => {
+    await resetDb({ withSeed: true });
+    await sql.unsafe("DELETE FROM category_rules");
+    fuel = ((await api("/api/categories")).body as { id: number; name: string }[])
+      .find((c) => c.name === "Gas & Fuel")!.id;
+  });
+
+  const importRows = (merchants: string[]) =>
+    post("/api/import", {
+      filename: "march.csv", profile_id: null,
+      rows: merchants.map((merchant, i) => ({
+        txn_date: `2026-03-${String(i + 1).padStart(2, "0")}`,
+        amount_cents: 1000 + i, merchant, description: "", category_id: null, source: "import",
+      })),
+    });
+
+  test("the switch survives the round trip and reaches the importer", async () => {
+    const made = await post("/api/category-rules", { pattern: "bp", whole_word: true, category_id: fuel, priority: 10 });
+    expect(made.status).toBe(201);
+    expect(made.body.whole_word).toBe(true);
+    // A boolean column read back as 0/1 would still be truthy; this is the coercion.
+    expect((await api(`/api/category-rules/${made.body.id}`)).body.whole_word).toBe(true);
+
+    await importRows(["BP #4021 FUEL", "BPOST BRUSSELS", "BP1234"]);
+    const spent = (await api("/api/expenses")).body as { merchant: string; category_id: number | null }[];
+    const of = (m: string) => spent.find((e) => e.merchant === m)!.category_id;
+    expect(of("BP #4021 FUEL")).toBe(fuel);
+    expect(of("BP1234")).toBe(fuel);
+    expect(of("BPOST BRUSSELS")).toBeNull();
+  });
+
+  test("off, the same rule is the substring it has always been", async () => {
+    await post("/api/category-rules", { pattern: "bp", whole_word: false, category_id: fuel, priority: 10 });
+    await importRows(["BPOST BRUSSELS"]);
+    expect(((await api("/api/expenses")).body as { category_id: number | null }[])[0]!.category_id).toBe(fuel);
+  });
+
+  test("a rule written before the column existed defaults to off", async () => {
+    // What an older client, or a backup file from before this build, sends.
+    const made = await post("/api/category-rules", { pattern: "bp", category_id: fuel, priority: 10 });
+    expect(made.body.whole_word).toBe(false);
+  });
+
+  test("a backup carries it, and a merge does too", async () => {
+    await post("/api/category-rules", { pattern: "bp", whole_word: true, category_id: fuel, priority: 10 });
+    const dumped = await (await raw("/api/export")).json();
+    expect(dumped.tables.category_rules[0].whole_word).toBe(true);
+
+    await sql.unsafe("DELETE FROM category_rules");
+    const merged = await post("/api/category-rules/merge", dumped);
+    expect(merged.body.added).toEqual(["bp"]);
+    expect(((await api("/api/category-rules")).body as { whole_word: boolean }[])[0]!.whole_word).toBe(true);
+  });
+
+  test("the seed ships bp and amc strict, which is what their trailing space meant", async () => {
+    await resetDb({ withSeed: true });
+    const rules = (await api("/api/category-rules")).body as { pattern: string; whole_word: boolean }[];
+    expect(rules.filter((r) => r.whole_word).map((r) => r.pattern).sort()).toEqual(["amc", "bp"]);
+  });
+});
+
 describe("rule patterns carry no padding", () => {
   beforeEach(() => resetDb({ withSeed: true }));
 

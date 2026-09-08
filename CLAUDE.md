@@ -80,6 +80,18 @@ Four places, in this order, or reads silently drop it:
 - **`categoryRuleInput.pattern` trims before it checks length.** Padding never
   reached the matcher, so it does not reach the column either; `"  a  "` is a
   one-character needle and a 422, not a three-character pattern.
+- **`matchesPattern` in `contracts/types.ts` is the one matcher.** Both the CSV
+  importer (`csv-import/src/normalize.ts`) and the budgeted-versus-actual report
+  (`budget-core/src/variance.ts`) call it, because a bill that reconciles has to
+  be a transaction the importer would have categorised the same way. It lives in
+  `contracts` because those two packages are siblings whose only shared ancestor
+  is that one. It scans with `indexOf`, never a built RegExp: a pattern is user
+  text and may hold metacharacters.
+- **`whole_word` is a letter boundary, not a word boundary.** A digit counts as
+  the end of a word, so `bp` still finds `BP1234` while passing over `BPOST`.
+  Default FALSE, so no rule that already existed changed behaviour; migration
+  009 turns it on for `bp` and `amc` alone, which is what their trailing space
+  in the seed was reaching for.
 - **MySQL ignores trailing spaces when it compares strings.** `col <> TRIM(col)`
   is false for `'bp '`, so any query looking for padding compares
   `CHAR_LENGTH(col) <> CHAR_LENGTH(TRIM(col))` instead. Migration 008 is written

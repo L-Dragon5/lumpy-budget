@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SelectField } from "@/components/app/controls";
@@ -39,11 +40,15 @@ export default function Settings() {
     eden.api.categories({ id: v.id }).put(v.body));
   const removeCategory = useMutate((id: number) => eden.api.categories({ id }).delete());
   const createRule = useMutate((body: CategoryRuleInput) => eden.api["category-rules"].post(body));
+  const updateRule = useMutate((v: { id: number; body: CategoryRuleInput }) =>
+    eden.api["category-rules"]({ id: v.id }).put(v.body));
   const removeRule = useMutate((id: number) => eden.api["category-rules"]({ id }).delete());
   const removeProfile = useMutate((id: number) => eden.api["import-profiles"]({ id }).delete());
 
   const [catDraft, setCatDraft] = useState<{ id: number | null; name: string; bucket: Bucket; icon: CategoryIconName | null } | null>(null);
-  const [ruleDraft, setRuleDraft] = useState<{ pattern: string; category_id: string; priority: string } | null>(null);
+  const [ruleDraft, setRuleDraft] = useState<
+    { id: number | null; pattern: string; whole_word: boolean; category_id: string; priority: string } | null
+  >(null);
 
   if (categories.isLoading) return <Loading />;
   if (categories.error) return <LoadError error={categories.error} />;
@@ -142,7 +147,12 @@ export default function Settings() {
             <CardContent>
               <div className="mb-3 flex gap-2">
                 <AddButton
-                  onClick={() => setRuleDraft({ pattern: "", category_id: String(cats[0]?.id ?? ""), priority: "100" })}
+                  onClick={() =>
+                    setRuleDraft({
+                      id: null, pattern: "", whole_word: false,
+                      category_id: String(cats[0]?.id ?? ""), priority: "100",
+                    })
+                  }
                 >
                   Add rule
                 </AddButton>
@@ -155,17 +165,37 @@ export default function Settings() {
                       <TableHead>If the text contains</TableHead>
                       <TableHead>Category</TableHead>
                       <TableHead className="text-right">Priority</TableHead>
-                      <TableHead className="w-12" />
+                      <TableHead className="w-20" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {(rules.data ?? []).map((r) => (
                       <TableRow key={r.id}>
-                        <TableCell className="font-mono text-sm">{r.pattern}</TableCell>
+                        <TableCell className="font-mono text-sm">
+                          {r.pattern}
+                          {r.whole_word ? (
+                            <Badge variant="secondary" className="ml-2 font-sans">whole word</Badge>
+                          ) : null}
+                        </TableCell>
                         <TableCell>{catName(r.category_id)}</TableCell>
                         <TableCell className="text-right tabular text-muted-foreground">{r.priority}</TableCell>
                         <TableCell>
-                          <DeleteButton label={r.pattern} onConfirm={() => removeRule.mutate(r.id)} />
+                          <div className="flex justify-end">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Edit ${r.pattern}`}
+                              onClick={() =>
+                                setRuleDraft({
+                                  id: r.id, pattern: r.pattern, whole_word: r.whole_word,
+                                  category_id: String(r.category_id), priority: String(r.priority),
+                                })
+                              }
+                            >
+                              <PencilIcon />
+                            </Button>
+                            <DeleteButton label={r.pattern} onConfirm={() => removeRule.mutate(r.id)} />
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -292,20 +322,21 @@ export default function Settings() {
         <RecordDialog
           open
           onOpenChange={(o) => !o && setRuleDraft(null)}
-          title="Add rule"
+          title={ruleDraft.id ? "Edit rule" : "Add rule"}
           description="The rule matches the merchant and description together. Capital letters do not matter."
-          onSubmit={() =>
-            createRule.mutate(
-              {
-                pattern: ruleDraft.pattern,
-                category_id: Number(ruleDraft.category_id),
-                priority: Number(ruleDraft.priority),
-              },
-              { onSuccess: () => setRuleDraft(null) },
-            )
-          }
-          pending={createRule.isPending}
-          error={createRule.error}
+          onSubmit={() => {
+            const body = {
+              pattern: ruleDraft.pattern,
+              whole_word: ruleDraft.whole_word,
+              category_id: Number(ruleDraft.category_id),
+              priority: Number(ruleDraft.priority),
+            };
+            const done = { onSuccess: () => setRuleDraft(null) };
+            if (ruleDraft.id) updateRule.mutate({ id: ruleDraft.id, body }, done);
+            else createRule.mutate(body, done);
+          }}
+          pending={createRule.isPending || updateRule.isPending}
+          error={createRule.error ?? updateRule.error}
         >
           <Field>
             <FieldLabel htmlFor="rule-pattern">Text to look for</FieldLabel>
@@ -315,6 +346,21 @@ export default function Settings() {
               onChange={(e) => setRuleDraft({ ...ruleDraft, pattern: e.target.value })}
               placeholder="wegmans"
             />
+          </Field>
+          <Field orientation="horizontal">
+            <Switch
+              id="rule-whole-word"
+              checked={ruleDraft.whole_word}
+              onCheckedChange={(whole_word) => setRuleDraft({ ...ruleDraft, whole_word })}
+            />
+            <div>
+              <FieldLabel htmlFor="rule-whole-word">Match as a whole word</FieldLabel>
+              <FieldDescription>
+                On, <span className="font-mono">bp</span> finds BP #4021 and BP1234 but not BPOST. Off, it finds
+                all three. Leave it off for a name a statement adds letters to, like{" "}
+                <span className="font-mono">trader joe</span> in TRADER JOES.
+              </FieldDescription>
+            </div>
           </Field>
           <Field>
             <FieldLabel>Category</FieldLabel>

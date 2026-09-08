@@ -137,7 +137,7 @@ a flag somebody gets wrong.
 
 ```bash
 bun run check                 # typecheck + tests + scenarios; what the commit hook runs
-bun test                      # 180 tests, no network, under a second
+bun test                      # 189 tests, no network, under a second
 bun run scenarios             # whole-household fixtures, diffed against expectations
 bun run scenarios:update      # accept a change, after reading the diff
 ```
@@ -301,7 +301,15 @@ are reported by line number instead of being silently dropped.
 Save the column mapping under a name and next month's statement from the same
 bank is one click. Categorization runs on merchant keyword rules, lowest
 priority number first; anything unmatched lands in a review queue on the
-expenses page. Both the category and the note are edited in place in that table
+expenses page.
+
+A rule is a case-insensitive substring by default. Turn on **match as a whole
+word** and it needs a non-letter on each side, so `bp` finds `BP #4021` and
+`BP1234` and passes over `BPOST`. A letter boundary rather than a word boundary
+on purpose: a merchant descriptor glues the store number straight onto the name,
+so a digit has to count as the end of the word. It is off unless you ask for it,
+because most rules want the opposite — `trader joe` has to keep finding
+`TRADER JOES`, which a whole-word match would not. Both the category and the note are edited in place in that table
 — Enter keeps the change, Escape drops it — because fixing a hundred imported
 rows through a dialog is not fixing them at all.
 

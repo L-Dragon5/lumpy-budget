@@ -44,7 +44,8 @@ export const TABLES = {
     order: "active DESC, name ASC",
   },
   category_rules: {
-    cols: ["id", "pattern", "category_id", "priority"],
+    cols: ["id", "pattern", "whole_word", "category_id", "priority"],
+    bool: ["whole_word"],
     order: "priority ASC, id ASC",
   },
   import_profiles: {
