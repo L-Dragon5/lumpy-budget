@@ -6,3 +6,9 @@ dist/
 .DS_Store
 bun.lock
 .playwright-mcp/
+
+# The global ignore file excludes *.sql, which silently swallowed every migration
+# in this repo: a fresh clone had no schema to migrate. The migrations ARE the
+# schema, so they are re-included here. Dumps from `bun run backup` land in
+# ~/lumpy-backups and stay ignored.
+!services/db/migrations/*.sql
