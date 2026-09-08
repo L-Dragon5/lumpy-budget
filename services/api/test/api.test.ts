@@ -71,6 +71,16 @@ describe("crud", () => {
     expect(tooShort.body.errors[0]!.path).toEqual(["pattern"]);
   });
 
+  test("a rule can be written with nothing but a pattern and a category", async () => {
+    // What the Expenses page sends when you categorize a row by hand and take
+    // the offer: it knows the merchant and the bucket and nothing else, so the
+    // schema's defaults have to be the ones a hand-written rule gets.
+    const cat = await post("/api/categories", { name: "Housing", bucket: "discretionary", icon: null, color: null });
+    const made = await post("/api/category-rules", { pattern: "greentree property", category_id: cat.body.id });
+    expect(made.status).toBe(201);
+    expect(made.body).toMatchObject({ pattern: "greentree property", whole_word: false, priority: 100 });
+  });
+
   test("a bad body is a 422 that names the field", async () => {
     const res = await post("/api/income-streams", { ...semiMonthly, frequency: "biweekly", anchor_date: null });
     expect(res.status).toBe(422);

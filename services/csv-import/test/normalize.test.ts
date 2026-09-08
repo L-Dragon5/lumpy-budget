@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import type { CategoryRule } from "@lumpy/contracts";
 import { parseCsv } from "../src/parse";
-import { applyRules, dedupeKey, dedupeKeys, guessMapping, normalize, normalizeMerchant } from "../src/normalize";
+import { applyRules, dedupeKey, dedupeKeys, guessMapping, normalize, normalizeMerchant, suggestRule } from "../src/normalize";
 
 const chase = parseCsv(
   "Transaction Date,Post Date,Description,Category,Type,Amount\n" +
@@ -156,4 +156,45 @@ test("a pattern full of regex metacharacters is matched as text", () => {
   const rows = [row("SQ *COFFEE"), row("SQXCOFFEE")];
   const out = applyRules(rows, [rule({ pattern: "sq *coffee", whole_word: true, category_id: 9 })]);
   expect(out.map((r) => r.category_id)).toEqual([9, null]);
+});
+
+test("the offered pattern is the merchant's head, without the per-charge noise", () => {
+  const offer = (merchant: string) => suggestRule({ merchant, description: "" }, []);
+  expect(offer("WEGMANS #123")).toBe("wegmans");
+  expect(offer("GREENTREE PROPERTY MGMT 8829")).toBe("greentree property");
+  // The joining word sits between the two real words, so it stays in the needle:
+  // dropping it the way merchantKey does would leave "town perinton", which does
+  // not occur in the row and would match nothing.
+  expect(offer("TOWN OF PERINTON TAX")).toBe("town of perinton");
+});
+
+test("whatever is offered is a rule that categorizes the row it came from", () => {
+  const merchants = ["WEGMANS #123", "TOWN OF PERINTON TAX", "SQ *COFFEE 4021", "BP1234", "AAA MEMBERSHIP"];
+  for (const merchant of merchants) {
+    const r = { merchant, description: "", category_id: null as number | null };
+    const pattern = suggestRule(r, [])!;
+    expect(pattern).not.toBeNull();
+    expect(applyRules([r], [rule({ pattern, category_id: 4 })])[0]!.category_id).toBe(4);
+  }
+});
+
+test("nothing is offered when a rule already catches the row", () => {
+  const r = { merchant: "WEGMANS #123", description: "" };
+  expect(suggestRule(r, [rule({ pattern: "wegmans", category_id: 7 })])).toBeNull();
+  // Including one that matches on the description, which is a rule that would
+  // have categorized this row on import too.
+  expect(suggestRule({ merchant: "SQ *UNKNOWN", description: "COFFEE SHOP" }, [rule({ pattern: "coffee" })])).toBeNull();
+  // A rule that does not reach this row is not a reason to stay quiet.
+  expect(suggestRule(r, [rule({ pattern: "kroger", category_id: 7 })])).toBe("wegmans");
+});
+
+test("a head that does not occur in the row falls back to the whole merchant", () => {
+  // Two spaces: the head is rebuilt from tokens with one space between them, so
+  // it is not a substring of the row it was built from.
+  expect(suggestRule({ merchant: "SQ  *COFFEE", description: "" }, [])).toBe("sq  *coffee");
+});
+
+test("a merchant too short to be a pattern is no offer at all", () => {
+  expect(suggestRule({ merchant: "A", description: "" }, [])).toBeNull();
+  expect(suggestRule({ merchant: "7", description: "" }, [])).toBeNull();
 });

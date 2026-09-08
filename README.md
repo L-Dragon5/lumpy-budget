@@ -469,6 +469,15 @@ company whose name starts the same way reads as $366.67 a month. Both the catego
 — Enter keeps the change, Escape drops it — because fixing a hundred imported
 rows through a dialog is not fixing them at all.
 
+Categorizing an uncategorized row by hand offers to write the rule for it: the
+merchant up to its second real word, without the store number, printed on the
+button so you can see what you are agreeing to. Taking the offer also runs the
+new rule over everything already imported that is still uncategorized, because a
+rule that only fixes next month leaves the rows that prompted it sitting there.
+Nothing is offered when a rule already catches the row, and nothing is written
+until the button is pressed. It is the whole answer to "should this guess the
+category for me": four or five of these and the tail is gone.
+
 ## Charts
 
 Colors come from the `dataviz` reference palette and were validated against this

@@ -1,4 +1,4 @@
-import { matchesPattern, needleOf, normalizeMerchant } from "@lumpy/contracts";
+import { matchesPattern, merchantKey, needleOf, normalizeMerchant } from "@lumpy/contracts";
 import type { CategoryRule, ExpenseInput, ImportMapping } from "@lumpy/contracts";
 import type { ParsedCsv } from "./parse";
 import { detectDateFormat, parseAmountCents, parseDate } from "./parse";
@@ -173,4 +173,51 @@ export function applyRules<T extends { merchant: string; description: string; ca
     const hit = needles.find(({ rule, needle }) => matchesPattern(hay, needle, rule.whole_word));
     return hit ? { ...row, category_id: hit.rule.category_id } : row;
   });
+}
+
+/**
+ * The pattern that would catch this merchant next time, or null if a rule
+ * already catches it. Setting a category by hand is the one moment both halves
+ * of a rule are known, so the Expenses page offers to write it down; this is the
+ * half that decides whether there is anything to offer.
+ *
+ * The needle runs to the merchant's second real word. Which tokens are real is
+ * `merchantKey`'s question and it answers this one too, rather than a second
+ * list of store numbers and joining words drifting away from the first: a token
+ * it drops is noise, so WEGMANS #123 offers "wegmans" and TOWN OF PERINTON TAX
+ * offers "town of perinton" rather than standing for every town in the county.
+ *
+ * Built from the raw merchant and not the normalized one, because a rule is
+ * matched with `indexOf` against the string the statement actually wrote:
+ * `merchantKey` folds SQ *COFFEE to SQ COFFEE, which does not occur in the row
+ * it came from. So the head is checked against this very row before it is
+ * offered, and the whole merchant is the fallback when it does not survive. A
+ * pattern that matches nothing is worse than a long one.
+ *
+ * ponytail: two words, the same guess `merchantKey` makes, so CAPITAL ONE AUTO
+ * offers "capital one" -- the car loan and the credit card both. Affordable for
+ * the same reason: nothing is written until a person presses the button, with
+ * the pattern printed on it, and Settings edits rules afterwards.
+ */
+export function suggestRule(
+  row: { merchant: string; description: string },
+  rules: CategoryRule[],
+): string | null {
+  const hay = `${row.merchant} ${row.description}`.toLowerCase();
+  if (rules.some((r) => matchesPattern(hay, needleOf(r.pattern), r.whole_word))) return null;
+
+  const tokens = needleOf(row.merchant).split(/\s+/);
+  let words = 0;
+  let end = 0;
+  for (let i = 0; i < tokens.length && words < 2; i++) {
+    if (merchantKey(tokens[i]!, 1) !== "") {
+      words = words + 1;
+      end = i + 1;
+    }
+  }
+  const head = tokens.slice(0, end).join(" ");
+  // Two characters is `categoryRuleInput`'s floor, and a one-character needle
+  // matches nearly every merchant there is.
+  const pattern = head.length >= 2 && matchesPattern(hay, head) ? head : needleOf(row.merchant);
+  return pattern.length >= 2 ? pattern : null;
 }

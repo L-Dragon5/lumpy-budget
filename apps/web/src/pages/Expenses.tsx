@@ -1,7 +1,9 @@
 import { useRef, useState } from "react";
 import type { Expense, ExpenseInput } from "@lumpy/contracts";
 import { monthEnd, monthStart } from "@lumpy/budget-core";
+import { applyRules, suggestRule } from "@lumpy/csv-import";
 import { SearchIcon, UploadIcon } from "lucide-react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,7 +18,7 @@ import { Money } from "@/components/app/money";
 import { AddButton, DeleteButton, MoneyField, RecordDialog } from "@/components/app/record-dialog";
 import { Loading, LoadError, MonthNav, PageHeader } from "@/components/app/page";
 import { CategoryLabel } from "@/lib/icons";
-import { eden, useApi, useMutate } from "@/lib/api";
+import { ApiError, eden, errorText, useApi, useMutate } from "@/lib/api";
 import { dateLabelFull, thisMonth } from "@/lib/format";
 
 const ALL = "__all__";
@@ -41,6 +43,7 @@ export default function Expenses() {
   const expenses = useApi(["expenses", query], () => eden.api.expenses.get({ query }));
   const categories = useApi(["categories"], () => eden.api.categories.get());
   const batches = useApi(["import-batches"], () => eden.api["import-batches"].get());
+  const rules = useApi(["category-rules"], () => eden.api["category-rules"].get());
   const create = useMutate((body: ExpenseInput) => eden.api.expenses.post(body));
   const update = useMutate((v: { id: number; body: ExpenseInput }) =>
     eden.api.expenses({ id: v.id }).put(v.body));
@@ -75,6 +78,66 @@ export default function Expenses() {
         ...changes,
       },
     });
+
+  /**
+   * Writes the rule, then lets it loose on everything already imported that is
+   * still uncategorized. A rule only ran at import time, so without this second
+   * half the rule you just wrote fixes next month and leaves the six rows that
+   * prompted it sitting there. Resolves to how many of those moved.
+   */
+  const makeRule = useMutate(async (v: { pattern: string; category_id: number }) => {
+    const created = await eden.api["category-rules"].post({ pattern: v.pattern, category_id: v.category_id });
+    if (created.error) throw ApiError.from(created.error);
+    const stale = await eden.api.expenses.get({ query: { category_id: "none" as const, limit: 5000 } });
+    if (stale.error) throw ApiError.from(stale.error);
+    // The importer's own categorizer, so a row moves here exactly when the same
+    // row would have arrived categorized.
+    const hits = applyRules(stale.data, [created.data]).filter((e) => e.category_id !== null);
+    for (const e of hits) {
+      const moved = await eden.api.expenses({ id: e.id }).put({
+        txn_date: e.txn_date,
+        amount_cents: e.amount_cents,
+        merchant: e.merchant,
+        description: e.description,
+        category_id: e.category_id,
+        source: e.source,
+      });
+      if (moved.error) throw ApiError.from(moved.error);
+    }
+    return { data: hits.length, error: null, status: 200 };
+  });
+
+  /**
+   * Categorizing a row by hand is the one moment both halves of a rule are
+   * known, and the only moment you are looking at the merchant. Offered, never
+   * written: the pattern is on the button and nothing happens until it is
+   * pressed. Nothing is offered when a rule already covers the row.
+   */
+  const offerRule = (e: Expense, categoryId: number) => {
+    const pattern = suggestRule(e, rules.data ?? []);
+    if (pattern === null) return;
+    const name = cats.find((c) => c.id === categoryId)?.name ?? "that category";
+    toast(`Always ${name} for "${pattern}"?`, {
+      description: "Categorizes it on every future import, and fixes the ones already imported.",
+      duration: 12000,
+      action: {
+        label: "Make rule",
+        onClick: () =>
+          makeRule.mutate(
+            { pattern, category_id: categoryId },
+            {
+              onSuccess: (moved) =>
+                toast.success(
+                  moved === 0
+                    ? `"${pattern}" is ${name} from now on.`
+                    : `"${pattern}" is ${name}, and ${moved} older ${moved === 1 ? "transaction" : "transactions"} moved with it.`,
+                ),
+              onError: (error) => toast.error(errorText(error, "Could not add that rule.")),
+            },
+          ),
+      },
+    });
+  };
 
   if (categories.isLoading) return <Loading />;
   if (expenses.error) return <LoadError error={expenses.error} />;
@@ -160,7 +223,14 @@ export default function Expenses() {
                       <TableCell>
                         <SelectField
                           value={e.category_id === null ? UNCATEGORIZED : String(e.category_id)}
-                          onChange={(v) => patch(e, { category_id: v === UNCATEGORIZED ? null : Number(v) })}
+                          onChange={(v) => {
+                            const next = v === UNCATEGORIZED ? null : Number(v);
+                            patch(e, { category_id: next });
+                            // Only on the way out of uncategorized: fixing a
+                            // miscategorized row is not a new rule, it is a
+                            // correction, and offering there would nag.
+                            if (next !== null && e.category_id === null) offerRule(e, next);
+                          }}
                           options={categoryOptions.filter((o) => o.value !== ALL)}
                         />
                       </TableCell>
