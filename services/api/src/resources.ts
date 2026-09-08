@@ -1,9 +1,9 @@
 import { Elysia, status } from "elysia";
 import {
-  category, categoryInput, categoryRule, categoryRuleInput, expenseInput, fixedCost,
-  fixedCostInput, importProfile, importProfileInput, importProfileMergeInput, incomeStream,
-  incomeStreamInput, expense, importBatch, isoDate, lumpyItem, lumpyItemInput, mergeResult,
-  savingsGoal, savingsGoalInput,
+  category, categoryInput, categoryRule, categoryRuleInput, categoryRuleMergeInput, expenseInput,
+  fixedCost, fixedCostInput, importProfile, importProfileInput, importProfileMergeInput,
+  incomeStream, incomeStreamInput, expense, importBatch, isoDate, lumpyItem, lumpyItemInput,
+  mergeResult, ruleMergeResult, savingsGoal, savingsGoalInput,
 } from "@lumpy/contracts";
 import type { Expense, ImportBatch } from "@lumpy/contracts";
 import { byId, remove, rows } from "@lumpy/db";
@@ -97,12 +97,29 @@ const importProfileMerge = new Elysia({ name: "import-profile-merge" })
     { body: importProfileMergeInput, response: mergeResult },
   );
 
+/**
+ * The same trade for categorization rules, with one difference the shape has to
+ * carry: a rule points at a category, so the file's categories ride along as an
+ * id -> name lookup and each rule is re-pointed at the local category of that
+ * name. A rule whose category is not here comes back in `skipped` rather than
+ * taking the other forty down with it.
+ */
+const categoryRuleMerge = new Elysia({ name: "category-rule-merge" })
+  .post(
+    "/category-rules/merge",
+    ({ body }) => store.mergeCategoryRules(body.tables),
+    { body: categoryRuleMergeInput, response: ruleMergeResult },
+  );
+
 export const resources = new Elysia({ prefix: "/api" })
   .use(crud("income-streams", "income_streams", incomeStreamInput, incomeStream))
   .use(crud("fixed-costs", "fixed_costs", fixedCostInput, fixedCost))
   .use(crud("lumpy-items", "lumpy_items", lumpyItemInput, lumpyItem))
   .use(crud("savings-goals", "savings_goals", savingsGoalInput, savingsGoal))
   .use(crud("categories", "categories", categoryInput, category))
+  // Before its crud block, like the merge below: `/category-rules/:id` would
+  // otherwise try to read "merge" as an id.
+  .use(categoryRuleMerge)
   .use(crud("category-rules", "category_rules", categoryRuleInput, categoryRule))
   // Before the crud block: `/import-profiles/:id` would otherwise try to read
   // "merge" as an id on any verb they share.

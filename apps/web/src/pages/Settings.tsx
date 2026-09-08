@@ -135,16 +135,18 @@ export default function Settings() {
               <CardTitle>Categorization rules</CardTitle>
               <CardDescription>
                 On import, a rule applies when its text appears in the merchant or description. If several match,
-                the lowest priority number wins.
+                the lowest priority number wins. A backup file from another machine can hand over its rules; each
+                one lands on the local category of the same name, and any whose category you do not have is skipped.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="mb-3">
+              <div className="mb-3 flex gap-2">
                 <AddButton
                   onClick={() => setRuleDraft({ pattern: "", category_id: String(cats[0]?.id ?? ""), priority: "100" })}
                 >
                   Add rule
                 </AddButton>
+                <MergeRulesButton />
               </div>
               <div className="max-h-[32rem] overflow-y-auto">
                 <Table>
@@ -343,6 +345,17 @@ const rowCount = (b: Backup): number =>
   Object.values(b.tables ?? {}).reduce((n, t) => n + (Array.isArray(t) ? t.length : 0), 0);
 
 /**
+ * "Added Big Bank, updated Card." Named rather than counted, because which ones
+ * it touched is the question you are actually asking. Empty when it touched none.
+ */
+function touched(added: string[], updated: string[]): string {
+  const parts: string[] = [];
+  if (added.length) parts.push(`Added ${added.join(", ")}`);
+  if (updated.length) parts.push(`${parts.length ? "updated" : "Updated"} ${updated.join(", ")}`);
+  return parts.length ? `${parts.join(", ")}.` : "";
+}
+
+/**
  * Read a picked file as a backup. Parsed here rather than posted raw so "that is
  * not a backup" is a local answer and the server only ever sees JSON.
  */
@@ -402,15 +415,45 @@ function MergeProfilesButton() {
     if (!body) return void toast.error(`${file.name} is not a file this can read.`);
     merge.mutate(body, {
       onSuccess: ({ added, updated }) => {
-        if (added.length + updated.length === 0) return toast.info("That file has no import formats in it.");
-        // Named, not counted: "updated Big Bank" is the sentence that tells you
-        // your corrected column mapping is the one that won.
-        const parts: string[] = [];
-        if (added.length) parts.push(`Added ${added.join(", ")}`);
-        if (updated.length) parts.push(`${parts.length ? "updated" : "Updated"} ${updated.join(", ")}`);
-        toast.success(`${parts.join(", ")}.`);
+        const done = touched(added, updated);
+        if (done) toast.success(done);
+        else toast.info("That file has no import formats in it.");
       },
       onError: (error) => toast.error(errorText(error, "Could not read those formats.")),
+    });
+  };
+
+  return <PickBackupButton label="Add from a backup" icon={UploadIcon} onPick={(f) => void pick(f)} />;
+}
+
+/**
+ * The same trade for categorization rules. A rule points at a category, so the
+ * file's categories go with it as a lookup and each rule is re-pointed at the
+ * local category of the same name; one whose category is not here is reported
+ * rather than silently dropped.
+ */
+function MergeRulesButton() {
+  const merge = useMutate((body: Backup) => eden.api["category-rules"].merge.post(body));
+
+  const pick = async (file: File) => {
+    const body = await readBackup(file);
+    if (!body) return void toast.error(`${file.name} is not a file this can read.`);
+    merge.mutate(body, {
+      onSuccess: ({ added, updated, skipped }) => {
+        if (added.length + updated.length === 0 && skipped.length === 0)
+          return toast.info("That file has no rules in it.");
+        const done = touched(added, updated);
+        // Skipped is the half you have to act on, so it gets its own toast with
+        // the category names to create rather than a clause at the end of a line.
+        if (done) toast.success(done);
+        if (skipped.length > 0)
+          toast.warning(
+            `Skipped ${skipped.length} rule${skipped.length === 1 ? "" : "s"}: no category named ${
+              [...new Set(skipped.map((r) => r.category))].join(", ")
+            }.`,
+          );
+      },
+      onError: (error) => toast.error(errorText(error, "Could not read those rules.")),
     });
   };
 

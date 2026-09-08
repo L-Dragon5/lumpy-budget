@@ -1,6 +1,7 @@
 import type {
   BackupTables, Category, CategoryRule, Expense, ExpenseInput, FixedCost, IncomeStream,
-  ImportProfile, ImportProfileInput, LumpyItem, MergeResult, RestoreResult, SavingsGoal,
+  CategoryRuleInput, CategoryRuleMergeInput, ImportProfile, ImportProfileInput, LumpyItem,
+  MergeResult, RestoreResult, RuleMergeResult, SavingsGoal,
 } from "@lumpy/contracts";
 import { bulkInsert, insert, rows, sql, update, type Executor } from "@lumpy/db";
 import { applyRules, dedupeKey } from "@lumpy/csv-import";
@@ -206,4 +207,69 @@ export async function mergeImportProfiles(incoming: ImportProfileInput[]): Promi
     }
   });
   return { added, updated };
+}
+
+/**
+ * The same normalisation `applyRules` matches on. Two rules that reduce to the
+ * same needle can never both fire -- the lower priority one always wins and the
+ * other is dead weight -- so this is the engine's own notion of one rule, not a
+ * convenience for the merge.
+ */
+const needle = (pattern: string): string => pattern.toLowerCase().trim();
+
+/**
+ * Categorization rules from a backup file, added to whatever is already here.
+ *
+ * Unlike an import format, a rule is not self-contained: it points at a category,
+ * and the file's category ids mean nothing in this database. So the file's
+ * categories come along purely as a lookup, id -> name, and each rule is
+ * re-pointed at the local category wearing that name. A rule whose category is
+ * not here is skipped and named in the result rather than failing the other
+ * forty -- two households are allowed to keep different categories.
+ *
+ * Rules are matched on their needle, so re-merging a file after fixing a
+ * priority updates the rule instead of laying a second, unreachable one beside
+ * it. A file listing one needle twice collapses to its last entry, which is the
+ * only one that could ever have fired anyway.
+ */
+export async function mergeCategoryRules(tables: CategoryRuleMergeInput["tables"]): Promise<RuleMergeResult> {
+  const [localCats, localRules] = await Promise.all([categories(), categoryRules()]);
+  const localCategoryByName = new Map(localCats.map((c) => [c.name.toLowerCase(), c.id]));
+  const fileCategoryById = new Map(tables.categories.map((c) => [c.id, c.name]));
+  const localRuleByNeedle = new Map(localRules.map((r) => [needle(r.pattern), r.id]));
+
+  const added: string[] = [];
+  const updated: string[] = [];
+  const skipped: { pattern: string; category: string }[] = [];
+
+  // Collapsed before anything is written, so a file naming one needle twice is
+  // one rule here rather than a row plus an unreachable twin.
+  const wanted = new Map<string, CategoryRuleInput>();
+  for (const rule of tables.category_rules) wanted.set(needle(rule.pattern), rule);
+
+  await sql.begin(async (tx: Executor) => {
+    for (const [key, incoming] of wanted) {
+      const categoryName = fileCategoryById.get(incoming.category_id);
+      const category_id =
+        categoryName === undefined ? undefined : localCategoryByName.get(categoryName.toLowerCase());
+      if (category_id === undefined) {
+        // `#12` when the file did not carry the category either: there is no name
+        // to report, and the number is the only thing left to say.
+        skipped.push({ pattern: incoming.pattern, category: categoryName ?? `#${incoming.category_id}` });
+        continue;
+      }
+
+      const rule: CategoryRuleInput = { ...incoming, category_id };
+      const existing = localRuleByNeedle.get(key);
+      if (existing === undefined) {
+        await insert("category_rules", rule, tx);
+        added.push(rule.pattern);
+      } else {
+        await update("category_rules", existing, rule, tx);
+        updated.push(rule.pattern);
+      }
+    }
+  });
+
+  return { added, updated, skipped };
 }

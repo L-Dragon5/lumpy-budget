@@ -89,7 +89,7 @@ curl -X POST localhost:3001/api/restore -H 'Content-Type: application/json' \
 and is how you get *this* database back; the JSON carries the data the app knows
 about and is how you get it into *another* one.
 
-### Taking only the import formats
+### Taking only the formats or the rules
 
 Replacing everything is the wrong move when the destination already has a year of
 spending on it and you only want the column mapping you worked out for a bank.
@@ -109,15 +109,34 @@ file whose expenses are malformed still merges its formats. A merge is one
 transaction too: a bad mapping is a 422 naming the field, and a file that lists
 the same profile twice is a 409, and neither leaves half a merge behind.
 
-Its own route rather than a flag on `/restore`, because one replaces everything
-and the other replaces nothing, and a flag that flips between those is a flag
-somebody gets wrong.
+**Settings -> Rules -> Add from a backup** does the same for categorization
+rules, with the one complication a rule brings: it points at a category, and the
+file's category ids mean nothing here. The file's categories ride along as an
+`id -> name` lookup, each rule is re-pointed at the local category wearing that
+name, and a rule whose category you do not have comes back in `skipped` rather
+than taking the other forty down with it.
+
+```bash
+curl -X POST localhost:3001/api/category-rules/merge \
+  -H 'Content-Type: application/json' --data-binary @backup.json
+# -> {"added":["farm stand"],"updated":["wegmans"],
+#     "skipped":[{"pattern":"alpaca feed","category":"Livestock"}]}
+```
+
+Rules are matched on `pattern.toLowerCase().trim()`, which is what `applyRules`
+matches on: two rules that reduce to the same needle can never both fire, so that
+is the engine's own notion of one rule. Merging the same file twice is the same
+database.
+
+Both are their own route rather than a flag on `/restore`, because one replaces
+everything and the other replaces nothing, and a flag that flips between those is
+a flag somebody gets wrong.
 
 ## Checks
 
 ```bash
 bun run check                 # typecheck + tests + scenarios; what the commit hook runs
-bun test                      # 165 tests, no network, under a second
+bun test                      # 175 tests, no network, under a second
 bun run scenarios             # whole-household fixtures, diffed against expectations
 bun run scenarios:update      # accept a change, after reading the diff
 ```

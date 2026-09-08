@@ -71,9 +71,12 @@ Four places, in this order, or reads silently drop it:
 - **`/api/import` is the CSV statement importer; `/api/restore` is the backup
   loader.** One adds rows, the other replaces every table. The names collide in
   conversation, not in the router; do not rename either into the other.
-- **`/api/import-profiles/merge` is registered before the `crud()` block** in
-  `resources.ts`. After it, `/import-profiles/:id` would try to read "merge" as
-  an id on any verb the two share.
+- **The `/merge` routes are registered before their `crud()` blocks** in
+  `resources.ts`. After them, `/import-profiles/:id` and `/category-rules/:id`
+  would try to read "merge" as an id on any verb the two share.
+- **A merged rule is keyed on `pattern.toLowerCase().trim()`**, the same needle
+  `applyRules` matches on (`csv-import/src/normalize.ts:122`). Change one and
+  change the other, or a merge starts writing rules that can never fire.
 - **A backup restores rows with the ids they were exported with** (`bulkInsert`
   in `db/src/client.ts`), which is the only reason the file's foreign keys still
   resolve. It writes the spec's columns, not the row's keys, so a column added to

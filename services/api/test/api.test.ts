@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { allowedOrigin, api, corsHeaders, del, post, put, raw, resetDb } from "./setup";
+import { allowedOrigin, api, corsHeaders, del, post, put, raw, resetDb, sql } from "./setup";
 
 const semiMonthly = {
   name: "Day job", amount_cents: 300000, frequency: "semimonthly",
@@ -689,6 +689,150 @@ describe("merging import profiles", () => {
     // "merge" is a word, not an id, and the id route must still say so.
     expect((await api("/api/import-profiles/merge")).status).toBe(422);
     expect((await del(`/api/import-profiles/${made.body.id}`)).status).toBe(200);
+  });
+});
+
+describe("merging category rules", () => {
+  let groceries: number;
+  let dining: number;
+
+  beforeEach(async () => {
+    await resetDb({ withSeed: true });
+    // The seed ships 94 rules; a merge has to work against a populated set, but
+    // starting from empty is what makes each assertion readable.
+    await sql.unsafe("DELETE FROM category_rules");
+    const cats = (await api("/api/categories")).body as { id: number; name: string }[];
+    groceries = cats.find((c) => c.name === "Groceries")!.id;
+    dining = cats.find((c) => c.name === "Dining")!.id;
+  });
+
+  /**
+   * A file from another machine. Its category ids are deliberately nothing like
+   * this database's, because that is the whole problem the route solves.
+   */
+  const file = (rules: unknown[], cats: unknown[] = [{ id: 801, name: "Groceries" }, { id: 802, name: "Dining" }]) =>
+    ({ version: 1, tables: { categories: cats, category_rules: rules } });
+
+  const merge = (body: unknown) => post("/api/category-rules/merge", body);
+  const rules = async () => (await api("/api/category-rules")).body as
+    { id: number; pattern: string; category_id: number; priority: number }[];
+
+  test("rules are re-pointed at the local category of the same name", async () => {
+    const res = await merge(file([
+      { id: 5, pattern: "wegmans", category_id: 801, priority: 10 },
+      { id: 6, pattern: "chipotle", category_id: 802, priority: 20 },
+    ]));
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ added: ["wegmans", "chipotle"], updated: [], skipped: [] });
+
+    const after = await rules();
+    // 801 and 802 do not exist here; the names are what carried across.
+    expect(after.find((r) => r.pattern === "wegmans")!.category_id).toBe(groceries);
+    expect(after.find((r) => r.pattern === "chipotle")!.category_id).toBe(dining);
+  });
+
+  test("a rule you already have is updated in place, however it was capitalised", async () => {
+    const mine = await post("/api/category-rules", { pattern: "Wegmans", category_id: dining, priority: 100 });
+
+    const res = await merge(file([{ pattern: "  WEGMANS  ", category_id: 801, priority: 5 }]));
+    expect(res.body).toEqual({ added: [], updated: ["  WEGMANS  "], skipped: [] });
+
+    const after = await rules();
+    // One rule, not two: the matcher lowercases and trims, so these are the same
+    // rule and a second one could never have fired.
+    expect(after).toHaveLength(1);
+    expect(after[0]!.id).toBe(mine.body.id);
+    expect(after[0]!.category_id).toBe(groceries);
+    expect(after[0]!.priority).toBe(5);
+  });
+
+  test("a rule whose category is not here is skipped, and says which", async () => {
+    const res = await merge(file(
+      [
+        { pattern: "wegmans", category_id: 801, priority: 10 },
+        { pattern: "petco", category_id: 803, priority: 10 },
+      ],
+      [{ id: 801, name: "Groceries" }, { id: 803, name: "Livestock" }],
+    ));
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      added: ["wegmans"],
+      updated: [],
+      skipped: [{ pattern: "petco", category: "Livestock" }],
+    });
+    // The other rule landed: one missing category does not cost you the file.
+    expect((await rules()).map((r) => r.pattern)).toEqual(["wegmans"]);
+  });
+
+  test("a rule whose category the file did not carry names the id it wanted", async () => {
+    const res = await merge(file([{ pattern: "petco", category_id: 999, priority: 10 }], []));
+    expect(res.body.skipped).toEqual([{ pattern: "petco", category: "#999" }]);
+    expect(await rules()).toEqual([]);
+  });
+
+  test("one needle twice in a file is one rule here, the last one", async () => {
+    const res = await merge(file([
+      { pattern: "wegmans", category_id: 801, priority: 50 },
+      { pattern: "WEGMANS", category_id: 802, priority: 5 },
+    ]));
+    expect(res.body).toEqual({ added: ["WEGMANS"], updated: [], skipped: [] });
+
+    const after = await rules();
+    expect(after).toHaveLength(1);
+    expect(after[0]!.priority).toBe(5);
+    expect(after[0]!.category_id).toBe(dining);
+  });
+
+  test("merging the same file twice is the same database", async () => {
+    const body = file([
+      { pattern: "wegmans", category_id: 801, priority: 10 },
+      { pattern: "chipotle", category_id: 802, priority: 20 },
+    ]);
+    await merge(body);
+    const once = await rules();
+
+    const twice = await merge(body);
+    expect(twice.body).toEqual({ added: [], updated: ["wegmans", "chipotle"], skipped: [] });
+    expect(await rules()).toEqual(once);
+  });
+
+  test("a whole backup file merges only its rules, however bad the rest is", async () => {
+    const res = await merge({
+      version: 1,
+      tables: {
+        // Enough of a category to be a lookup; the colour it gets wrong is never read.
+        categories: [{ id: 801, name: "Groceries", bucket: "invented", color: "not a colour" }],
+        category_rules: [{ pattern: "wegmans", category_id: 801, priority: 10 }],
+        expenses: [{ txn_date: "garbage", amount_cents: "lots" }],
+      },
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.added).toEqual(["wegmans"]);
+    expect((await api("/api/expenses")).body).toEqual([]);
+  });
+
+  test("a rule the schema rejects is a 422 that names the field, and nothing lands", async () => {
+    const res = await merge(file([
+      { pattern: "wegmans", category_id: 801, priority: 10 },
+      { pattern: "x", category_id: 802, priority: 20 },
+    ]));
+    expect(res.status).toBe(422);
+    expect(res.body.errors[0]!.path).toEqual(["tables", "category_rules", 1, "pattern"]);
+    expect(await rules()).toEqual([]);
+  });
+
+  test("a file with no rules in it changes nothing", async () => {
+    await post("/api/category-rules", { pattern: "wegmans", category_id: groceries, priority: 100 });
+    const res = await merge({ version: 1, tables: {} });
+    expect(res.body).toEqual({ added: [], updated: [], skipped: [] });
+    expect((await rules()).map((r) => r.pattern)).toEqual(["wegmans"]);
+  });
+
+  test("merge does not shadow the crud routes it sits next to", async () => {
+    const made = await post("/api/category-rules", { pattern: "wegmans", category_id: groceries, priority: 100 });
+    expect((await api(`/api/category-rules/${made.body.id}`)).status).toBe(200);
+    expect((await api("/api/category-rules/merge")).status).toBe(422);
+    expect((await del(`/api/category-rules/${made.body.id}`)).status).toBe(200);
   });
 });
 

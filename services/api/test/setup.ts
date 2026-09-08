@@ -11,6 +11,8 @@ const { migrate } = await import("@lumpy/db/migrate");
 await migrate(TEST_URL);
 
 const { sql } = await import("@lumpy/db");
+/** For the handful of tests that need a starting state no route can produce. */
+export { sql };
 const { seed } = await import("@lumpy/db/seed");
 
 const TABLES = [

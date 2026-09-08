@@ -255,6 +255,38 @@ export const mergeResult = z.object({
 });
 export type MergeResult = z.infer<typeof mergeResult>;
 
+/**
+ * What `POST /api/category-rules/merge` accepts. Rules are not self-contained the
+ * way import formats are: every rule points at a category, and the file's
+ * `category_id` numbers mean nothing here. `tables.categories` comes along as the
+ * lookup, so a rule can be re-pointed at the local category of the same name.
+ *
+ * Only `id` and `name` are read off a category, and zod strips the rest, so a
+ * bucket or colour the file gets wrong cannot block a merge that never writes
+ * either.
+ */
+const categoryRef = z.object({ id, name: z.string() });
+
+export const categoryRuleMergeInput = z.object({
+  version: z.literal(1),
+  tables: z.object({
+    categories: z.array(categoryRef).default([]),
+    category_rules: z.array(categoryRuleInput).default([]),
+  }),
+});
+export type CategoryRuleMergeInput = z.infer<typeof categoryRuleMergeInput>;
+
+/** A rule whose category does not exist here, and the name it went looking for. */
+export const skippedRule = z.object({ pattern: z.string(), category: z.string() });
+
+/**
+ * Rules can be skipped where formats cannot: a destination is allowed to have a
+ * different set of categories, and dropping the rules that reference a missing
+ * one beats refusing the other forty.
+ */
+export const ruleMergeResult = mergeResult.extend({ skipped: z.array(skippedRule) });
+export type RuleMergeResult = z.infer<typeof ruleMergeResult>;
+
 export const importBatch = z.object({
   id,
   filename: z.string(),
