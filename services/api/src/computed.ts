@@ -1,5 +1,5 @@
 import { Elysia } from "elysia";
-import { bulkExpenseInput, isoDate, isoMonth } from "@lumpy/contracts";
+import { backup, bulkExpenseInput, isoDate, isoMonth, restoreResult } from "@lumpy/contracts";
 import * as core from "@lumpy/budget-core";
 import { rows, sql, TABLES, type TableName } from "@lumpy/db";
 import { z } from "zod";
@@ -190,8 +190,9 @@ export const computed = new Elysia({ prefix: "/api" })
 
   /**
    * Every table as JSON, in one file, with a filename the browser will save under.
-   * Not a restore path -- that is scripts/backup.ts and mysqldump -- but it is the
-   * difference between months of hand-entered setup being recoverable and being gone.
+   * POST it back to /import to restore it, here or in another environment. Not a
+   * substitute for scripts/backup.ts and mysqldump, which capture the schema too;
+   * this captures the data the app knows about, which is the part you typed in.
    */
   .get("/export", async () => {
     const tables: Record<string, unknown[]> = {};
@@ -204,4 +205,22 @@ export const computed = new Elysia({ prefix: "/api" })
         "Content-Disposition": `attachment; filename="lumpy-backup-${core.todayISO()}.json"`,
       },
     });
+  })
+
+  /**
+   * The other half of /export: take that file back, into a different database or
+   * over the top of this one. A replace, not a merge -- the file becomes the new
+   * contents of every table -- in one transaction, so a file that fails half way
+   * leaves the database exactly as it was.
+   *
+   * Named /restore rather than /import because /import is already the CSV
+   * statement importer, which adds rows; this one replaces them.
+   *
+   * Validated against the same row schemas /export is checked against, so a real
+   * export always loads and a hand-edited one fails at the boundary with the
+   * offending field named.
+   */
+  .post("/restore", async ({ body }) => store.restore(body.tables), {
+    body: backup,
+    response: restoreResult,
   });

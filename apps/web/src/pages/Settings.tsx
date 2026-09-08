@@ -1,6 +1,14 @@
-import { useState } from "react";
-import { CATEGORY_ICONS, type Bucket, type CategoryIconName, type CategoryInput, type CategoryRuleInput } from "@lumpy/contracts";
-import { DownloadIcon, PencilIcon } from "lucide-react";
+import { useRef, useState } from "react";
+import {
+  CATEGORY_ICONS,
+  type Backup, type Bucket, type CategoryIconName, type CategoryInput, type CategoryRuleInput,
+} from "@lumpy/contracts";
+import { DownloadIcon, PencilIcon, UploadIcon } from "lucide-react";
+import { toast } from "sonner";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SelectField } from "@/components/app/controls";
 import { CategoryIcon, CategoryLabel } from "@/lib/icons";
 import { cn } from "@/lib/utils";
-import { AddButton, DeleteButton, RecordDialog } from "@/components/app/record-dialog";
+import { AddButton, DeleteButton, FormError, RecordDialog } from "@/components/app/record-dialog";
 import { Loading, LoadError, PageHeader } from "@/components/app/page";
 import { eden, useApi, useMutate } from "@/lib/api";
 import { BUCKET_HINT, BUCKET_LABEL, BUCKET_ORDER } from "@/lib/format";
@@ -49,12 +57,15 @@ export default function Settings() {
         title="Settings"
         description="Categories, the rules that apply them, and saved import formats."
         actions={
-          // A plain link: the server names the file and marks it an attachment, so
-          // there is nothing for JavaScript to do here.
-          <Button variant="outline" render={<a href="/api/export" />} nativeButton={false}>
-            <DownloadIcon data-icon="inline-start" />
-            Download a backup
-          </Button>
+          <div className="flex gap-2">
+            {/* A plain link: the server names the file and marks it an attachment,
+                so there is nothing for JavaScript to do here. */}
+            <Button variant="outline" render={<a href="/api/export" />} nativeButton={false}>
+              <DownloadIcon data-icon="inline-start" />
+              Download a backup
+            </Button>
+            <RestoreButton />
+          </div>
         }
       />
 
@@ -317,6 +328,94 @@ export default function Settings() {
           </Field>
         </RecordDialog>
       ) : null}
+    </>
+  );
+}
+
+/** How many rows a picked file is about to write, for the confirmation. */
+const rowCount = (b: Backup): number =>
+  Object.values(b.tables ?? {}).reduce((n, t) => n + (Array.isArray(t) ? t.length : 0), 0);
+
+/**
+ * Load a downloaded backup, here or in another environment. It replaces every
+ * table, so it asks first and says how many rows are in the file; the server
+ * does the whole thing in one transaction, so a "no" from the validator or the
+ * database leaves what is already here untouched.
+ */
+function RestoreButton() {
+  const input = useRef<HTMLInputElement>(null);
+  const [picked, setPicked] = useState<{ name: string; body: Backup } | null>(null);
+  const [unreadable, setUnreadable] = useState<string | null>(null);
+  const restore = useMutate((body: Backup) => eden.api.restore.post(body));
+
+  const pick = async (file: File) => {
+    setUnreadable(null);
+    restore.reset();
+    try {
+      // Parsed here rather than posted raw so "that is not a backup" is a local
+      // answer, and the server only ever sees JSON.
+      setPicked({ name: file.name, body: JSON.parse(await file.text()) as Backup });
+    } catch {
+      setUnreadable(`${file.name} is not a file this can read.`);
+    }
+  };
+
+  return (
+    <>
+      <input
+        ref={input}
+        type="file"
+        accept="application/json,.json"
+        // Hidden rather than sr-only: a file input is its own button, and two
+        // buttons for one action is one too many. click() still reaches it.
+        hidden
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          // Cleared so picking the same file twice still fires a change event.
+          e.target.value = "";
+          if (file) void pick(file);
+        }}
+      />
+      <Button variant="outline" onClick={() => input.current?.click()}>
+        <UploadIcon data-icon="inline-start" />
+        Restore a backup
+      </Button>
+
+      <AlertDialog open={picked !== null || unreadable !== null} onOpenChange={(o) => {
+        if (!o) { setPicked(null); setUnreadable(null); }
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{unreadable ? "Could not read that file" : `Restore ${picked?.name}?`}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {unreadable ?? (picked
+                ? `This replaces everything in this environment with the ${rowCount(picked.body).toLocaleString()} rows in the file. Download a backup first if you want the current data back.`
+                : null)}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {restore.error ? <FormError error={restore.error} /> : null}
+          <AlertDialogFooter>
+            <AlertDialogCancel>{unreadable ? "Close" : "Cancel"}</AlertDialogCancel>
+            {unreadable ? null : (
+              // Not a Close: only a success clears `picked`, so a rejected file
+              // keeps the dialog up with the reason on it.
+              <AlertDialogAction
+                disabled={restore.isPending || !picked}
+                onClick={() =>
+                  picked && restore.mutate(picked.body, {
+                    onSuccess: (res) => {
+                      setPicked(null);
+                      toast.success(`Restored ${res.total.toLocaleString()} rows.`);
+                    },
+                  })
+                }
+              >
+                {restore.isPending ? "Restoring..." : "Replace everything"}
+              </AlertDialogAction>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

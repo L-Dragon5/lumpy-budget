@@ -59,17 +59,41 @@ command when it finishes. It refuses to call a dump a success unless mysqldump
 signed it off, because an exit code of 0 and a plausible file size are not proof
 the thing restores.
 
-**Settings -> Download a backup** is the other half: every table as one JSON
-file, named and marked as an attachment by the server, so it is a plain link with
-no JavaScript behind it. That one is readable and portable, not a restore path.
-Use the `.sql` for getting a database back, the JSON for reading the data
-somewhere else.
+## Moving data between environments
+
+**Settings -> Download a backup** writes every table as one JSON file, named and
+marked as an attachment by the server, so it is a plain link with no JavaScript
+behind it. **Settings -> Restore a backup** loads that file back, here or into a
+different database: build a household on your laptop, export, restore it on the
+machine that actually runs it.
+
+A restore replaces, it does not merge. The file becomes the new contents of every
+table it covers, and a table it omits comes back empty, so a partial file
+(categories and rules, no expenses) is a legitimate thing to hand someone. The
+whole thing runs in one transaction: a file the validator rejects, or one the
+database rejects, leaves what is already there untouched. Rows keep the ids they
+were exported with, which is what makes every foreign key in the file still point
+at the right record on the other side.
+
+The API is the same pair: `GET /api/export` and `POST /api/restore`. Called
+`/restore` rather than `/import` because `/api/import` is the CSV statement
+importer, which adds rows; this one replaces them.
+
+```bash
+curl -s localhost:3001/api/export -o backup.json
+curl -X POST localhost:3001/api/restore -H 'Content-Type: application/json' \
+  --data-binary @backup.json
+```
+
+`mysqldump` and the JSON are for different jobs. The `.sql` carries the schema
+and is how you get *this* database back; the JSON carries the data the app knows
+about and is how you get it into *another* one.
 
 ## Checks
 
 ```bash
 bun run check                 # typecheck + tests + scenarios; what the commit hook runs
-bun test                      # 149 tests, no network, under a second
+bun test                      # 158 tests, no network, under a second
 bun run scenarios             # whole-household fixtures, diffed against expectations
 bun run scenarios:update      # accept a change, after reading the diff
 ```

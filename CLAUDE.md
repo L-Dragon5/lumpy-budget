@@ -68,6 +68,14 @@ Four places, in this order, or reads silently drop it:
   SQL `DATE()` rather than sliced off an ISO string: a TIMESTAMP written at 8pm
   local is already tomorrow in UTC, and comparing that to a DATE column drops a
   day of rows.
+- **`/api/import` is the CSV statement importer; `/api/restore` is the backup
+  loader.** One adds rows, the other replaces every table. The names collide in
+  conversation, not in the router; do not rename either into the other.
+- **A backup restores rows with the ids they were exported with** (`bulkInsert`
+  in `db/src/client.ts`), which is the only reason the file's foreign keys still
+  resolve. It writes the spec's columns, not the row's keys, so a column added to
+  `tables.ts` without a `contracts/types.ts` entry restores as NULL and fails the
+  constraint -- the same four-place checklist, one more reason.
 - **Only discretionary spending subtracts from available.** Fixed / lumpy /
   savings transactions are reconciliation; counting them twice is the bug this
   app exists to avoid.

@@ -1,7 +1,8 @@
 import type {
-  Category, CategoryRule, Expense, ExpenseInput, FixedCost, IncomeStream, LumpyItem, SavingsGoal,
+  BackupTables, Category, CategoryRule, Expense, ExpenseInput, FixedCost, IncomeStream,
+  LumpyItem, RestoreResult, SavingsGoal,
 } from "@lumpy/contracts";
-import { insert, rows, sql, update, type Executor } from "@lumpy/db";
+import { bulkInsert, insert, rows, sql, update, type Executor } from "@lumpy/db";
 import { applyRules, dedupeKey } from "@lumpy/csv-import";
 import * as core from "@lumpy/budget-core";
 
@@ -124,4 +125,51 @@ export async function insertExpense(e: ExpenseInput): Promise<number> {
  */
 export async function updateExpense(id: number, e: ExpenseInput): Promise<number> {
   return update("expenses", id, { ...e, dedupe_hash: hash(dedupeKey(e)) });
+}
+
+/**
+ * Parents first. Every foreign key in the schema points backwards along this
+ * list, so inserting in this order never outruns the row it references and
+ * deleting in the reverse order never orphans one. Neither direction has to
+ * touch FOREIGN_KEY_CHECKS, which is a session variable and would be a lie to
+ * set on a pooled connection.
+ */
+const RESTORE_ORDER = [
+  "categories", "income_streams", "savings_goals", "import_profiles",
+  "fixed_costs", "lumpy_items", "category_rules", "import_batches", "expenses",
+] as const;
+
+/**
+ * Replace everything with the contents of a backup file, or replace nothing.
+ *
+ * DELETE rather than TRUNCATE on purpose: TRUNCATE is DDL, and MySQL commits the
+ * open transaction the moment it sees one -- a failure half way through the
+ * restore would then leave an empty database instead of the one you started
+ * with. Rows keep their exported ids (see bulkInsert), so the file's foreign
+ * keys stay valid without a remapping pass, and InnoDB lifts each AUTO_INCREMENT
+ * counter past the ids it was handed, so the next manual entry still gets a free
+ * one.
+ *
+ * `settings` is upserted rather than replaced: it is a key/value table shared
+ * with future migrations, and its `updated_at` only moves when a value really
+ * changes -- which is what the lumpy-drift window reads.
+ */
+export async function restore(tables: BackupTables): Promise<RestoreResult> {
+  const restored: Record<string, number> = {};
+  await sql.begin(async (tx: Executor) => {
+    for (let i = RESTORE_ORDER.length - 1; i >= 0; i--) {
+      await tx.unsafe(`DELETE FROM \`${RESTORE_ORDER[i]}\``);
+    }
+    for (const table of RESTORE_ORDER) {
+      restored[table] = await bulkInsert(table, tables[table] as unknown as Record<string, unknown>[], tx);
+    }
+    for (const s of tables.settings) {
+      await tx.unsafe(
+        "INSERT INTO settings (name, value) VALUES (?, ?) ON DUPLICATE KEY UPDATE value = VALUES(value)",
+        [s.name, s.value],
+      );
+    }
+    restored.settings = tables.settings.length;
+  });
+  return { restored, total: Object.values(restored).reduce((a, b) => a + b, 0) };
 }

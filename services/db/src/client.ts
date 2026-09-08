@@ -66,6 +66,49 @@ export async function insert(table: TableName, data: Record<string, unknown>, db
   return Number(res.lastInsertRowid);
 }
 
+/**
+ * Many rows at once, written with the `id` they came with. That is the whole
+ * trick behind restoring a backup: keep the primary keys and every foreign key
+ * in the file still points at the record it pointed at when it was exported, so
+ * there is no id-remapping pass to get wrong.
+ *
+ * Columns come from the table spec, not from the row, so an unknown key in the
+ * file cannot reach the database. A missing one is written as NULL, which is a
+ * constraint error on a NOT NULL column -- loud, inside the caller's
+ * transaction, rather than a row that quietly restores wrong.
+ */
+export async function bulkInsert(table: TableName, data: Record<string, unknown>[], db: Executor = sql): Promise<number> {
+  if (data.length === 0) return 0;
+  const spec = TABLES[table] as TableSpecLoose & { cols: string[] };
+  const datetimes = new Set(spec.datetime ?? []);
+  const cols = spec.cols;
+  const placeholders = `(${cols.map(() => "?").join(", ")})`;
+  for (let i = 0; i < data.length; i += 200) {
+    const chunk = data.slice(i, i + 200);
+    const q = `INSERT INTO ${ident(table)} (${cols.map(ident).join(", ")}) VALUES ${chunk.map(() => placeholders).join(", ")}`;
+    await db.unsafe(
+      q,
+      chunk.flatMap((r) => cols.map((c) => (datetimes.has(c) ? mysqlDatetime(r[c]) : serialize(r[c] ?? null)))),
+    );
+  }
+  return data.length;
+}
+
+/**
+ * The inverse of how `coerce` reads a TIMESTAMP. The driver hands a TIMESTAMP
+ * back as a Date built on the session clock and coerce() calls toISOString() on
+ * it, so writing that instant back means formatting it on the same clock again.
+ * Send the 'Z' string straight to MySQL and it is either rejected or read as
+ * local, moving the row by the UTC offset.
+ */
+const pad = (n: number): string => String(n).padStart(2, "0");
+export function mysqlDatetime(v: unknown): unknown {
+  if (typeof v !== "string") return v;
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return v;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
 export async function update(table: TableName, id: number, data: Record<string, unknown>, db: Executor = sql): Promise<number> {
   const cols = TABLES[table].cols.filter((c) => c !== "id" && c in data);
   if (cols.length === 0) return 0;

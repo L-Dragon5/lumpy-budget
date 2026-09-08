@@ -242,3 +242,47 @@ export const importBatch = z.object({
   created_at: z.string(),
 });
 export type ImportBatch = z.infer<typeof importBatch>;
+
+// ------------------------------------------------------------------ backup
+
+export const settingRow = z.object({ name: z.string().min(1).max(60), value: z.string().max(500) });
+export type SettingRow = z.infer<typeof settingRow>;
+
+/**
+ * A whole database in one file: `GET /api/export` writes it, `POST /api/import`
+ * reads it back into an empty environment.
+ *
+ * Every table is validated by the same row schema the API already returns, so an
+ * export is a valid import by construction and a hand-edited file fails at the
+ * boundary rather than half way through the restore. Rows keep their `id`,
+ * which is what makes every foreign key in the file still point at the right
+ * record on the other side. Each table defaults to empty: a partial file
+ * (categories and rules, no expenses) is a legitimate thing to hand over.
+ */
+export const backupTables = z.object({
+  categories: z.array(category).default([]),
+  income_streams: z.array(incomeStream).default([]),
+  savings_goals: z.array(savingsGoal).default([]),
+  import_profiles: z.array(importProfile).default([]),
+  fixed_costs: z.array(fixedCost).default([]),
+  lumpy_items: z.array(lumpyItem).default([]),
+  category_rules: z.array(categoryRule).default([]),
+  import_batches: z.array(importBatch).default([]),
+  expenses: z.array(expense).default([]),
+  settings: z.array(settingRow).default([]),
+});
+export type BackupTables = z.infer<typeof backupTables>;
+
+export const backup = z.object({
+  version: z.literal(1),
+  exported_at: z.string().optional(),
+  tables: backupTables,
+});
+export type Backup = z.infer<typeof backup>;
+
+/** How many rows of each table the restore actually wrote. */
+export const restoreResult = z.object({
+  restored: z.record(z.string(), z.number().int()),
+  total: z.number().int(),
+});
+export type RestoreResult = z.infer<typeof restoreResult>;

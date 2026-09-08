@@ -398,6 +398,188 @@ describe("backup export", () => {
   });
 });
 
+describe("backup restore", () => {
+  /** A household with one row in every table, including the linked ones. */
+  async function household() {
+    await resetDb({ withSeed: true });
+    const cats = (await api("/api/categories")).body as { id: number; name: string; bucket: string }[];
+    const groceries = cats.find((c) => c.bucket === "discretionary")!.id;
+    const utilities = cats.find((c) => c.bucket === "fixed")!.id;
+
+    await post("/api/income-streams", {
+      name: "Day job", amount_cents: 300000, frequency: "semimonthly",
+      anchor_date: null, day_1: 15, day_2: 0, day_of_month: null, active: true,
+    });
+    await post("/api/fixed-costs", {
+      name: "Power", amount_cents: 14000, due_day: 12, lead_days: 3,
+      category_id: utilities, merchant_pattern: "national grid", active: true,
+    });
+    await post("/api/lumpy-items", {
+      name: "Car insurance", amount_cents: 120000, frequency_months: 6,
+      next_due_date: "2027-03-01", category_id: utilities, active: true,
+    });
+    await post("/api/savings-goals", {
+      name: "Emergency", mode: "percent", amount_cents: null, percent: 10,
+      target_cents: 1000000, balance_cents: 250000, active: true,
+    });
+    await post("/api/import-profiles", {
+      name: "Big Bank", mapping: {
+        date_column: "Date", amount_column: "Amount", debit_column: null, credit_column: null,
+        merchant_column: "Description", description_column: null,
+        date_format: "MM/DD/YYYY", flip_sign: true, skip_rows: 0,
+      },
+    });
+    await post("/api/category-rules", { pattern: "wegmans", category_id: groceries, priority: 10 });
+    // Goes through the CSV importer, so there is a batch with expenses hanging off it.
+    await post("/api/import", {
+      filename: "march.csv", profile_id: null,
+      rows: [
+        { txn_date: "2026-03-02", amount_cents: 8412, merchant: "Wegmans", description: "", category_id: null, source: "import" },
+        { txn_date: "2026-03-09", amount_cents: 13990, merchant: "National Grid", description: "", category_id: utilities, source: "import" },
+      ],
+    });
+    await post("/api/expenses", {
+      txn_date: "2026-03-11", amount_cents: 2200, merchant: "Corner cafe",
+      description: "", category_id: groceries, source: "manual",
+    });
+    await put("/api/settings", { name: "lumpy_opening_balance_cents", value: "480000" });
+  }
+
+  const dump = async () => (await raw("/api/export")).json();
+
+  test("an export restores byte for byte into an empty database", async () => {
+    await household();
+    const before = await dump();
+
+    // The destination is a different shape entirely: seeded, but nothing else.
+    await resetDb({ withSeed: true });
+    const res = await post("/api/restore", before);
+    expect(res.status).toBe(200);
+    expect(res.body.restored.expenses).toBe(3);
+    expect(res.body.restored.categories).toBe(24);
+    expect(res.body.total).toBe(
+      Object.values(before.tables as Record<string, unknown[]>).reduce((n, t) => n + t.length, 0),
+    );
+
+    const after = await dump();
+    // Ids included: a restore that renumbered rows would still pass a row count.
+    expect(after.tables).toEqual(before.tables);
+  });
+
+  test("restoring replaces, it does not merge", async () => {
+    await household();
+    const before = await dump();
+
+    // Same database, plus a row that is not in the file. It must be gone after.
+    await post("/api/expenses", {
+      txn_date: "2026-03-20", amount_cents: 999, merchant: "Should not survive",
+      description: "", category_id: null, source: "manual",
+    });
+    await post("/api/restore", before);
+
+    const after = await dump();
+    expect(after.tables).toEqual(before.tables);
+    expect((after.tables.expenses as { merchant: string }[]).some((e) => e.merchant === "Should not survive")).toBe(false);
+  });
+
+  test("the engine reads the restored rows the same way it read the originals", async () => {
+    await household();
+    const summaryBefore = (await api("/api/summary?month=2026-03")).body;
+    const before = await dump();
+
+    await resetDb();
+    await post("/api/restore", before);
+
+    expect((await api("/api/summary?month=2026-03")).body).toEqual(summaryBefore);
+  });
+
+  test("a foreign key still points at the row it pointed at", async () => {
+    await household();
+    const before = await dump();
+    await resetDb();
+    await post("/api/restore", before);
+
+    const after = await dump();
+    const batch = (after.tables.import_batches as { id: number }[])[0]!;
+    const imported = (after.tables.expenses as { import_batch_id: number | null }[])
+      .filter((e) => e.import_batch_id !== null);
+    expect(imported).toHaveLength(2);
+    expect(imported.every((e) => e.import_batch_id === batch.id)).toBe(true);
+    // The CSV batch's timestamp survives the round trip on the same clock it was written on.
+    expect((after.tables.import_batches as { created_at: string }[])[0]!.created_at)
+      .toBe((before.tables.import_batches as { created_at: string }[])[0]!.created_at);
+  });
+
+  test("the next manual row gets a free id, not a collision", async () => {
+    await household();
+    const before = await dump();
+    await resetDb();
+    await post("/api/restore", before);
+
+    // AUTO_INCREMENT has to have been lifted past the ids the restore wrote.
+    const created = await post("/api/expenses", {
+      txn_date: "2026-04-01", amount_cents: 500, merchant: "After the restore",
+      description: "", category_id: null, source: "manual",
+    });
+    expect(created.status).toBe(201);
+    const maxBefore = Math.max(...(before.tables.expenses as { id: number }[]).map((e) => e.id));
+    expect(created.body.id).toBeGreaterThan(maxBefore);
+  });
+
+  test("a partial file is legitimate: what it omits comes back empty", async () => {
+    await household();
+    const before = await dump();
+
+    const res = await post("/api/restore", {
+      version: 1,
+      tables: { categories: before.tables.categories, settings: before.tables.settings },
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.restored.expenses).toBe(0);
+
+    const after = await dump();
+    expect(after.tables.categories).toEqual(before.tables.categories);
+    expect(after.tables.expenses).toEqual([]);
+    expect(after.tables.fixed_costs).toEqual([]);
+  });
+
+  test("a bad file is a 422 that names the field, and changes nothing", async () => {
+    await household();
+    const before = await dump();
+
+    const bad = structuredClone(before);
+    bad.tables.lumpy_items[0].next_due_date = "March 1st";
+    const res = await post("/api/restore", bad);
+    expect(res.status).toBe(422);
+    expect(res.body.errors[0]!.path).toEqual(["tables", "lumpy_items", 0, "next_due_date"]);
+
+    expect((await dump()).tables).toEqual(before.tables);
+  });
+
+  test("a file the database rejects rolls back whole", async () => {
+    await household();
+    const before = await dump();
+
+    // Schema-valid, database-invalid: a rule pointing at a category that is not
+    // in the file. If the restore were not one transaction this would land with
+    // the tables ahead of it already emptied.
+    const bad = structuredClone(before);
+    bad.tables.category_rules[0].category_id = 999999;
+    const res = await post("/api/restore", bad);
+    expect(res.status).toBe(409);
+
+    expect((await dump()).tables).toEqual(before.tables);
+  });
+
+  test("a version this build does not understand is refused", async () => {
+    await household();
+    const before = await dump();
+    const res = await post("/api/restore", { ...before, version: 2 });
+    expect(res.status).toBe(422);
+    expect((await dump()).tables).toEqual(before.tables);
+  });
+});
+
 describe("lumpy fund drift", () => {
   let lumpyCategory: number;
 
