@@ -153,7 +153,7 @@ export function timeline(
 export function nextDueOnOrAfter(item: LumpyItem, from: ISODate): ISODate {
   let cur = item.next_due_date;
   let guard = 0;
-  while (d.compare(cur, from) < 0 && guard++ < 2000) cur = addCycle(cur, item.frequency_months);
+  while (d.compare(cur, from) < 0 && guard++ < 2000) cur = d.addMonthsToDate(cur, item.frequency_months);
   return cur;
 }
 
@@ -163,14 +163,7 @@ export function dueDates(item: LumpyItem, start: ISODate, end: ISODate): ISODate
   let guard = 0;
   while (d.compare(cur, end) <= 0 && guard++ < 2000) {
     out.push(cur);
-    cur = addCycle(cur, item.frequency_months);
+    cur = d.addMonthsToDate(cur, item.frequency_months);
   }
   return out;
-}
-
-/** Add N months to a date, keeping the day of month and clamping at month end. */
-function addCycle(date: ISODate, months: number): ISODate {
-  const [, , day] = d.parts(date);
-  const [y, m] = d.monthParts(d.addMonths(d.monthOf(date), months));
-  return d.clampDay(y, m, day);
 }

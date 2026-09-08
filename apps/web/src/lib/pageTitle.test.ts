@@ -5,6 +5,7 @@ test("names each route", () => {
   expect(pageTitle("/")).toBe("Dashboard · Lumpy");
   expect(pageTitle("/lumpy")).toBe("Lumpy fund · Lumpy");
   expect(pageTitle("/lumpy/timeline")).toBe("Lumpy timeline · Lumpy");
+  expect(pageTitle("/forecast")).toBe("Forecast · Lumpy");
 });
 
 test("ignores a trailing slash", () => {

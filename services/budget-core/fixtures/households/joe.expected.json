@@ -360,5 +360,127 @@
       "extra_paycheck": false
     }
   ],
+  "forecast": {
+    "total_free_cents": 150972,
+    "average_free_cents": 12581,
+    "tightest_month": "2026-03",
+    "first_tight_month": null,
+    "first_short_month": null,
+    "rows": [
+      {
+        "month": "2026-03",
+        "income_cents": 810000,
+        "free": 12581,
+        "lumpy_due_cents": 0,
+        "tight": false
+      },
+      {
+        "month": "2026-04",
+        "income_cents": 810000,
+        "free": 12581,
+        "lumpy_due_cents": 45000,
+        "tight": false
+      },
+      {
+        "month": "2026-05",
+        "income_cents": 810000,
+        "free": 12581,
+        "lumpy_due_cents": 142800,
+        "tight": false
+      },
+      {
+        "month": "2026-06",
+        "income_cents": 810000,
+        "free": 12581,
+        "lumpy_due_cents": 8600,
+        "tight": false
+      },
+      {
+        "month": "2026-07",
+        "income_cents": 810000,
+        "free": 12581,
+        "lumpy_due_cents": 465000,
+        "tight": false
+      },
+      {
+        "month": "2026-08",
+        "income_cents": 810000,
+        "free": 12581,
+        "lumpy_due_cents": 9500,
+        "tight": false
+      },
+      {
+        "month": "2026-09",
+        "income_cents": 810000,
+        "free": 12581,
+        "lumpy_due_cents": 168000,
+        "tight": false
+      },
+      {
+        "month": "2026-10",
+        "income_cents": 810000,
+        "free": 12581,
+        "lumpy_due_cents": 69000,
+        "tight": false
+      },
+      {
+        "month": "2026-11",
+        "income_cents": 810000,
+        "free": 12581,
+        "lumpy_due_cents": 156700,
+        "tight": false
+      },
+      {
+        "month": "2026-12",
+        "income_cents": 810000,
+        "free": 12581,
+        "lumpy_due_cents": 0,
+        "tight": false
+      },
+      {
+        "month": "2027-01",
+        "income_cents": 810000,
+        "free": 12581,
+        "lumpy_due_cents": 465000,
+        "tight": false
+      },
+      {
+        "month": "2027-02",
+        "income_cents": 810000,
+        "free": 12581,
+        "lumpy_due_cents": 12500,
+        "tight": false
+      }
+    ]
+  },
+  "pace": [
+    {
+      "window": "2026-03-05..2026-03-14",
+      "day": "6/10",
+      "on_track_cents": 22529,
+      "delta_cents": -6864,
+      "daily_left_cents": 4377,
+      "status": "under"
+    },
+    {
+      "window": "2026-03-15..2026-03-30",
+      "pace": null
+    },
+    {
+      "window": "2026-03-31..2026-04-04",
+      "pace": null
+    }
+  ],
+  "cash": {
+    "next_paycheck_date": "2026-03-15",
+    "due": [
+      "Rental property mgmt 14800 due 2026-03-10",
+      "Gas & electric 21500 due 2026-03-12"
+    ],
+    "due_before_next_paycheck_cents": 36300,
+    "projected_cents": 213700,
+    "short": false
+  },
+  "recurring": [],
   "invariants": []
 }

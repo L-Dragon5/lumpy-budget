@@ -10,11 +10,13 @@ import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SingleToggle } from "@/components/app/controls";
 import { Money } from "@/components/app/money";
+import { BalanceTile } from "@/components/app/balance-tile";
 import { StatTile } from "@/components/app/stat-tile";
 import { Loading, LoadError, MonthNav, PageHeader } from "@/components/app/page";
 import AnimatedContent from "@/components/AnimatedContent";
 import { eden, useApi } from "@/lib/api";
 import { dateLabel, dateLabelFull, money, monthLabel, thisMonth } from "@/lib/format";
+import { periodPace, todayISO } from "@lumpy/budget-core";
 
 
 export default function Dashboard() {
@@ -23,6 +25,7 @@ export default function Dashboard() {
   const summary = useApi(["summary", month], () => eden.api.summary.get({ query: { month } }));
   const timeline = useApi(["lumpy-timeline", month], () =>
     eden.api["lumpy-timeline"].get({ query: { start: month, months: 12 } }));
+  const cash = useApi(["cash-position"], () => eden.api["cash-position"].get());
 
   if (summary.isLoading) return <Loading rows={4} />;
   if (summary.error) return <LoadError error={summary.error} />;
@@ -34,6 +37,10 @@ export default function Dashboard() {
     ? Math.min(100, (s.spent.discretionary / s.planned_free_cents) * 100)
     : 100;
   const upcoming = (timeline.data?.rows ?? []).flatMap((r) => r.due).slice(0, 4);
+  // The clock is read here, once: budget-core never reads one, which is what
+  // makes the pace arithmetic testable and the scenarios reproducible.
+  const today = todayISO();
+  const c = cash.data;
 
   return (
     <>
@@ -189,8 +196,10 @@ export default function Dashboard() {
               </Empty>
             ) : (
               <div className="flex flex-col gap-3">
-                {s.periods.map((p) => (
-                  <div key={p.start} className="rounded-lg border p-3">
+                {s.periods.map((p) => {
+                  const pace = periodPace(p, today);
+                  return (
+                  <div key={p.start} className={`rounded-lg border p-3 ${pace ? "border-primary/40 bg-accent/30" : ""}`}>
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
                       <span className="font-medium">
                         {dateLabel(p.start)} – {dateLabel(p.end)}
@@ -219,12 +228,84 @@ export default function Dashboard() {
                         This paycheck cannot cover what is assigned to it
                       </Badge>
                     ) : null}
+                    {/* Only the period today falls in. Every other row is a plan or
+                        a post-mortem; this is the one there is still time to act on. */}
+                    {pace ? (
+                      <div className="mt-3 border-t pt-2">
+                        <Progress
+                          value={Math.min(100, Math.max(0, pace.spent_share * 100))}
+                          style={{
+                            ["--progress-color" as string]:
+                              pace.status === "over" ? "var(--critical)" : "var(--good)",
+                          }}
+                        />
+                        <div className="mt-1 flex flex-wrap justify-between gap-x-4 text-xs text-muted-foreground">
+                          <span>
+                            Day {pace.day} of {pace.days} · {money(pace.on_track_cents)} would be an even burn
+                          </span>
+                          <span
+                            className={
+                              pace.status === "over" ? "font-medium text-destructive" : "font-medium text-foreground"
+                            }
+                          >
+                            {pace.status === "over"
+                              ? `${money(pace.delta_cents)} ahead of pace`
+                              : pace.status === "under"
+                                ? `${money(-pace.delta_cents)} behind pace, in your favour`
+                                : "On pace"}
+                            {/* A negative allowance is not an allowance: past the plan,
+                                the useful number is the hole, not a daily budget. */}
+                            {p.available_cents < 0
+                              ? ` · ${money(-p.available_cents)} past this period's plan`
+                              : ` · ${money(pace.daily_left_cents)} a day for the ${pace.days_left} ${
+                                  pace.days_left === 1 ? "day" : "days"
+                                } left`}
+                          </span>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </CardContent>
         </Card>
+
+        <div className="flex flex-col gap-4">
+        <BalanceTile
+          settingKey="checking_balance_cents"
+          label="In checking"
+          caption={
+            c === undefined ? (
+              "What the account holds right now."
+            ) : (
+              <>
+                {c.due.length > 0 ? (
+                  <span className={c.short ? "text-destructive" : undefined}>
+                    <Money cents={c.due_before_next_paycheck_cents} /> of bills due before{" "}
+                    {c.next_paycheck_date ? dateLabel(c.next_paycheck_date) : "the next paycheck"} (
+                    {c.due.map((x) => x.name).join(", ")}), leaving <Money cents={c.projected_cents} />.
+                  </span>
+                ) : (
+                  <>
+                    No bills due before{" "}
+                    {c.next_paycheck_date ? dateLabel(c.next_paycheck_date) : "the next paycheck"}.
+                  </>
+                )}
+                {/* A hand-kept number goes stale, and a stale balance says you are
+                    fine on the strength of a week-old fact. */}
+                {c.days_stale > 0 && c.spent_since_cents > 0 ? (
+                  <span className="mt-1 block text-amber-600 dark:text-amber-500">
+                    Set {c.days_stale} day{c.days_stale === 1 ? "" : "s"} ago;{" "}
+                    <Money cents={c.spent_since_cents} /> has been recorded since.
+                  </span>
+                ) : null}
+              </>
+            )
+          }
+          editCaption="Whatever the account says right now. The bills due before your next paycheck come off it."
+        />
 
         <Card>
           <CardHeader>
@@ -273,6 +354,7 @@ export default function Dashboard() {
             </Button>
           </CardContent>
         </Card>
+        </div>
       </div>
     </>
   );

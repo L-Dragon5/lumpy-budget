@@ -15,8 +15,9 @@ import { CategoryLabel } from "@/lib/icons";
 import { AddButton, DeleteButton, MoneyField, RecordDialog } from "@/components/app/record-dialog";
 import { Money } from "@/components/app/money";
 import { Loading, LoadError, MonthNav, PageHeader } from "@/components/app/page";
-import { eden, useApi, useMutate } from "@/lib/api";
-import { dateLabel, monthLabel, ordinal, thisMonth } from "@/lib/format";
+import { toast } from "sonner";
+import { eden, errorText, useApi, useMutate } from "@/lib/api";
+import { dateLabel, monthLabel, money, ordinal, thisMonth } from "@/lib/format";
 
 type Draft = {
   name: string;
@@ -73,6 +74,28 @@ export default function FixedCosts() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const set = (patch: Partial<Draft>) => setDraft((d) => (d ? { ...d, ...patch } : d));
 
+  /**
+   * The report already knows the bill costs $215 and is budgeted at $90. Making
+   * you read that, open the dialog and retype 215 is the gap between a report
+   * and a decision, so the row writes it back -- the same PUT the dialog does,
+   * every other field untouched.
+   */
+  const budgetTheActual = (fixedCostId: number, amountCents: number) => {
+    const cost = rows.find((c) => c.id === fixedCostId);
+    if (!cost) return;
+    const { id: _id, ...body } = cost;
+    update.mutate(
+      { id: cost.id, body: { ...body, amount_cents: amountCents } },
+      {
+        // This write has no dialog to report into, so it says so itself. A
+        // silent failure here would leave the row still showing the old budget
+        // with no way to tell that from a write that worked.
+        onSuccess: () => toast.success(`${cost.name} is now budgeted at ${money(amountCents)}.`),
+        onError: (error) => toast.error(errorText(error, `Could not update ${cost.name}.`)),
+      },
+    );
+  };
+
   const save = () => {
     if (!draft) return;
     const done = { onSuccess: () => setDraft(null) };
@@ -88,6 +111,7 @@ export default function FixedCosts() {
   const alloc = allocation.data;
   const monthlyTotal = rows.filter((c) => c.active).reduce((a, c) => a + c.amount_cents, 0);
   const variance = actuals.data?.rows ?? [];
+  const noStatements = actuals.data?.months_without_statements ?? [];
   const categoryOf = (id: number | null) =>
     id === null ? null : (categories.data ?? []).find((c) => c.id === id) ?? null;
 
@@ -251,6 +275,21 @@ export default function FixedCosts() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {noStatements.length > 0 ? (
+              <Alert className="mb-4">
+                <AlertTriangleIcon />
+                <AlertTitle>
+                  No statements imported for {noStatements.map((m) => monthLabel(m)).join(", ")}
+                </AlertTitle>
+                <AlertDescription>
+                  {(() => {
+                    const withData = actuals.data!.months - noStatements.length;
+                    return `Every average below is over the ${withData} ${withData === 1 ? "month" : "months"} that do have data.`;
+                  })()}{" "}
+                  Import those statements and these numbers get sharper.
+                </AlertDescription>
+              </Alert>
+            ) : null}
             <Table>
               <TableHeader>
                 <TableRow>
@@ -280,6 +319,16 @@ export default function FixedCosts() {
                           ? ` · ${v.months_with_data} month${v.months_with_data === 1 ? "" : "s"} of statements`
                           : null}
                       </div>
+                      {/* A bill that posts every month and then does not is either a
+                          statement you have not imported or a payment that did not
+                          happen. Both are worth saying out loud; neither is a cheaper bill. */}
+                      {v.missing_months.length > 0 ? (
+                        <div className="mt-1 flex flex-wrap items-center gap-1">
+                          <Badge variant="outline" className="text-amber-600 dark:text-amber-500">
+                            nothing in {v.missing_months.map((m) => monthLabel(m, true)).join(", ")}
+                          </Badge>
+                        </div>
+                      ) : null}
                     </TableCell>
                     <TableCell className="text-right">
                       <Money cents={v.budgeted_cents} />
@@ -303,6 +352,21 @@ export default function FixedCosts() {
                           <span className="ml-1 text-xs">({Math.round(v.pct_off)}%)</span>
                         </span>
                       )}
+                      {/* Only a row that answers for exactly one bill: a category row
+                          covers several, and there is no single amount to write. */}
+                      {v.fixed_cost_id !== null && v.months_with_data > 0 && Math.abs(v.pct_off) >= 5 ? (
+                        <div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="-mr-2 h-auto py-1 text-xs"
+                            disabled={update.isPending}
+                            onClick={() => budgetTheActual(v.fixed_cost_id!, v.actual_avg_cents)}
+                          >
+                            Budget {money(v.actual_avg_cents, { cents: false })} instead
+                          </Button>
+                        </div>
+                      ) : null}
                     </TableCell>
                   </TableRow>
                 ))}

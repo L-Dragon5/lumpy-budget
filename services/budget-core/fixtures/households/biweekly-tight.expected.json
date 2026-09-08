@@ -298,5 +298,124 @@
       "extra_paycheck": false
     }
   ],
+  "forecast": {
+    "total_free_cents": 1015000,
+    "average_free_cents": 84583,
+    "tightest_month": "2026-02",
+    "first_tight_month": null,
+    "first_short_month": null,
+    "rows": [
+      {
+        "month": "2026-01",
+        "income_cents": 534000,
+        "free": 225500,
+        "lumpy_due_cents": 0,
+        "tight": false
+      },
+      {
+        "month": "2026-02",
+        "income_cents": 356000,
+        "free": 56400,
+        "lumpy_due_cents": 24000,
+        "tight": false
+      },
+      {
+        "month": "2026-03",
+        "income_cents": 356000,
+        "free": 56400,
+        "lumpy_due_cents": 96000,
+        "tight": false
+      },
+      {
+        "month": "2026-04",
+        "income_cents": 356000,
+        "free": 56400,
+        "lumpy_due_cents": 0,
+        "tight": false
+      },
+      {
+        "month": "2026-05",
+        "income_cents": 356000,
+        "free": 56400,
+        "lumpy_due_cents": 0,
+        "tight": false
+      },
+      {
+        "month": "2026-06",
+        "income_cents": 356000,
+        "free": 56400,
+        "lumpy_due_cents": 0,
+        "tight": false
+      },
+      {
+        "month": "2026-07",
+        "income_cents": 534000,
+        "free": 225500,
+        "lumpy_due_cents": 0,
+        "tight": false
+      },
+      {
+        "month": "2026-08",
+        "income_cents": 356000,
+        "free": 56400,
+        "lumpy_due_cents": 0,
+        "tight": false
+      },
+      {
+        "month": "2026-09",
+        "income_cents": 356000,
+        "free": 56400,
+        "lumpy_due_cents": 96000,
+        "tight": false
+      },
+      {
+        "month": "2026-10",
+        "income_cents": 356000,
+        "free": 56400,
+        "lumpy_due_cents": 0,
+        "tight": false
+      },
+      {
+        "month": "2026-11",
+        "income_cents": 356000,
+        "free": 56400,
+        "lumpy_due_cents": 0,
+        "tight": false
+      },
+      {
+        "month": "2026-12",
+        "income_cents": 356000,
+        "free": 56400,
+        "lumpy_due_cents": 0,
+        "tight": false
+      }
+    ]
+  },
+  "pace": [
+    {
+      "window": "2026-01-02..2026-01-15",
+      "day": "9/14",
+      "on_track_cents": 67886,
+      "delta_cents": -59686,
+      "daily_left_cents": 16233,
+      "status": "under"
+    },
+    {
+      "window": "2026-01-16..2026-01-29",
+      "pace": null
+    },
+    {
+      "window": "2026-01-30..2026-02-12",
+      "pace": null
+    }
+  ],
+  "cash": {
+    "next_paycheck_date": "2026-01-16",
+    "due": [],
+    "due_before_next_paycheck_cents": 0,
+    "projected_cents": 250000,
+    "short": false
+  },
+  "recurring": [],
   "invariants": []
 }

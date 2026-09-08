@@ -387,6 +387,42 @@ const isLetter = (c: string | undefined): boolean => c !== undefined && /\p{L}/u
  * and may hold regex metacharacters, and escaping them correctly is a bug
  * waiting to happen for no gain.
  */
+/**
+ * Collapse the noise a bank glues onto a merchant, so the same purchase always
+ * reads the same. `Café  Nero*  1234` is `CAFE NERO 1234`.
+ *
+ * Lives here, beside `matchesPattern`, for the same reason: the CSV importer
+ * hashes it to decide whether it has seen a transaction before, and the
+ * recurring-charge detector in budget-core groups by it to decide whether it has
+ * seen a *bill* before. Two spellings of "the same merchant" would be two
+ * answers to one question.
+ */
+export const normalizeMerchant = (m: string): string =>
+  (m ?? "").normalize("NFKD").toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
+
+/**
+ * The brand without the per-charge noise: the first `words` tokens of the
+ * normalized merchant, ignoring pure numbers. A statement writes one year's
+ * insurance as `GEICO *AUTO 8829` and the next as `GEICO AUTO PAY 9134`, and
+ * only the head of the string survives both.
+ *
+ * Joining words are skipped, or every municipality in the county collapses into
+ * "TOWN OF" and one water bill starts standing for four.
+ *
+ * ponytail: two words is a heuristic, not a parser. It keeps STATE FARM apart
+ * from STATE TAX and folds AMAZON MKTPL 7A into AMAZON MKTPL. That trade is
+ * affordable here and nowhere else: nothing is written from this key without a
+ * person pressing Add. Widen it to three words if real statements need it.
+ */
+const SKIP_IN_KEY = new Set(["OF", "THE", "AND"]);
+
+export function merchantKey(merchant: string, words = 2): string {
+  const tokens = normalizeMerchant(merchant)
+    .split(" ")
+    .filter((t) => t.length > 0 && !/^\d+$/.test(t) && !SKIP_IN_KEY.has(t));
+  return tokens.slice(0, words).join(" ");
+}
+
 export function matchesPattern(haystack: string, needle: string, wholeWord = false): boolean {
   if (needle.length === 0) return false;
   if (!wholeWord) return haystack.includes(needle);

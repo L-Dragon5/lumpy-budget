@@ -1,5 +1,5 @@
 import type { Category, Expense, FixedCost, IncomeStream, LumpyItem, SavingsGoal } from "@lumpy/contracts";
-import { sum, type Cents } from "./money";
+import { divRound, sum, type Cents } from "./money";
 import * as d from "./dates";
 import type { ISODate, ISOMonth } from "./dates";
 import { allOccurrences } from "./schedule";
@@ -154,3 +154,68 @@ export function periodSummaries(input: BudgetInputs, paychecks: PaycheckPlan[]):
     };
   });
 }
+
+export type PeriodPace = {
+  /** 1-based day of the period. Day 1 is payday itself. */
+  day: number;
+  days: number;
+  days_left: number;
+  /** How far through the period you are, 0..1. */
+  day_share: number;
+  /** How much of the plan is already spent. Past 1 when the plan is blown. */
+  spent_share: number;
+  /** What would have been spent by now at an even burn. */
+  on_track_cents: Cents;
+  /** Spent minus on-track. Positive is spending faster than the days are passing. */
+  delta_cents: Cents;
+  /** What is left, spread over the days left. Negative when there is nothing left. */
+  daily_left_cents: Cents;
+  status: "under" | "on_track" | "over";
+};
+
+/**
+ * Am I okay *right now*.
+ *
+ * Every other number in this app compares a plan to a month that is over or a
+ * month that has not started. This one compares the plan to the day it is: four
+ * days into a fourteen-day period with 70% of the money gone is the only signal
+ * that arrives while there is still something to do about it.
+ *
+ * Null outside the period, which is what makes "the current one" a filter rather
+ * than an argument the caller has to work out. `today` is passed in because
+ * budget-core does not read a clock.
+ */
+export function periodPace(
+  period: Pick<PeriodSummary, "start" | "end" | "planned_free_cents" | "spent_discretionary_cents">,
+  today: ISODate,
+): PeriodPace | null {
+  if (d.compare(today, period.start) < 0 || d.compare(today, period.end) > 0) return null;
+
+  const days = d.diffDays(period.start, period.end) + 1;
+  const day = d.diffDays(period.start, today) + 1;
+  const daysLeft = days - day + 1;
+  const planned = period.planned_free_cents;
+  const spent = period.spent_discretionary_cents;
+  const dayShare = day / days;
+  const onTrack = Math.round(planned * dayShare);
+  const delta = spent - onTrack;
+  // A tolerance rather than a knife edge: $12 either side of pace on day three is
+  // noise, and a tile that flips colour every afternoon stops being read.
+  const slack = Math.max(2000, Math.round(Math.abs(planned) * 0.05));
+
+  return {
+    day,
+    days,
+    days_left: daysLeft,
+    day_share: dayShare,
+    spent_share: planned === 0 ? (spent === 0 ? 0 : 1) : spent / planned,
+    on_track_cents: onTrack,
+    delta_cents: delta,
+    daily_left_cents: divRound(planned - spent, daysLeft),
+    status: delta > slack ? "over" : delta < -slack ? "under" : "on_track",
+  };
+}
+
+/** The period `today` falls in, if any. The dashboard's "this paycheck" row. */
+export const currentPeriod = (periods: PeriodSummary[], today: ISODate): PeriodSummary | null =>
+  periods.find((p) => d.compare(today, p.start) >= 0 && d.compare(today, p.end) <= 0) ?? null;

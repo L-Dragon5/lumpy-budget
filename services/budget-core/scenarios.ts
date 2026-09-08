@@ -29,6 +29,20 @@ export function run(h: Household) {
     lumpyOpeningBalanceCents: h.openingBalance,
   });
   const t = core.timeline(h.lumpyItems, h.month, 12, h.openingBalance, h.lumpyMode);
+  // A fixed "today" inside the month: pace, cash position and the recurring
+  // detector all read a clock, and a scenario that reads the real one is a
+  // scenario that fails on the 11th.
+  const today = core.addDays(core.monthStart(h.month), 9);
+  const f = core.forecast({
+    streams: h.streams,
+    fixedCosts: h.fixedCosts,
+    lumpyItems: h.lumpyItems,
+    savingsGoals: h.savingsGoals,
+    start: h.month,
+    months: 12,
+    lumpyMode: h.lumpyMode,
+    lumpyOpeningBalanceCents: h.openingBalance,
+  });
   return {
     name: h.name,
     month: h.month,
@@ -95,13 +109,77 @@ export function run(h: Household) {
       total_cents: m.total_cents,
       extra_paycheck: m.extra_paycheck,
     })),
+    forecast: {
+      total_free_cents: f.total_free_cents,
+      average_free_cents: f.average_free_cents,
+      tightest_month: f.tightest_month,
+      first_tight_month: f.first_tight_month,
+      first_short_month: f.first_short_month,
+      rows: f.rows.map((r) => ({
+        month: r.month,
+        income_cents: r.income_cents,
+        free: r.planned_free_cents,
+        lumpy_due_cents: r.lumpy_due_cents,
+        tight: r.tight,
+      })),
+    },
+    pace: summary.periods.map((p) => {
+      const pace = core.periodPace(p, today);
+      return pace === null
+        ? { window: `${p.start}..${p.end}`, pace: null }
+        : {
+            window: `${p.start}..${p.end}`,
+            day: `${pace.day}/${pace.days}`,
+            on_track_cents: pace.on_track_cents,
+            delta_cents: pace.delta_cents,
+            daily_left_cents: pace.daily_left_cents,
+            status: pace.status,
+          };
+    }),
+    cash: (() => {
+      const c = core.cashPosition({
+        paychecks: summary.paychecks,
+        today,
+        // A round balance rather than a stored one: the scenario is pinning the
+        // arithmetic between the balance and the bills, not a household's cash.
+        balanceCents: 250000,
+        asOf: core.monthStart(h.month),
+      });
+      return {
+        next_paycheck_date: c.next_paycheck_date,
+        due: c.due.map((x) => `${x.name} ${x.amount_cents} due ${x.due_date}`),
+        due_before_next_paycheck_cents: c.due_before_next_paycheck_cents,
+        projected_cents: c.projected_cents,
+        short: c.short,
+      };
+    })(),
+    recurring: core
+      .recurringCandidates(h.expenses, {
+        today,
+        categories: h.categories,
+        lumpyItems: h.lumpyItems,
+        fixedCosts: h.fixedCosts,
+      })
+      .map((c) => `${c.key} every ${c.frequency_months}mo ${c.amount_cents} next ${c.next_due_date}`),
     // A month's paychecks must add up to the month's income, always.
-    invariants: checkInvariants(summary),
+    invariants: checkInvariants(summary, f),
   };
 }
 
-function checkInvariants(s: core.MonthSummary): string[] {
+function checkInvariants(s: core.MonthSummary, f: core.Forecast): string[] {
   const problems: string[] = [];
+  // The forecast is the month summary run forward, so its first row has to be
+  // the month summary. Two ways to compute one number is one way to drift.
+  const first = f.rows[0];
+  if (first) {
+    if (first.month !== s.month) problems.push(`forecast starts at ${first.month}, summary is ${s.month}`);
+    if (first.income_cents !== s.income_cents)
+      problems.push(`forecast income ${first.income_cents} != summary ${s.income_cents}`);
+    if (first.lumpy_cents !== s.lumpy_cents)
+      problems.push(`forecast lumpy ${first.lumpy_cents} != summary ${s.lumpy_cents}`);
+    if (first.planned_free_cents !== s.planned_free_cents)
+      problems.push(`forecast free ${first.planned_free_cents} != summary ${s.planned_free_cents}`);
+  }
   const inMonth = s.paychecks.filter((p) => !p.prior_month);
   const paycheckSum = inMonth.reduce((a, p) => a + p.amount_cents, 0);
   if (paycheckSum !== s.income_cents)

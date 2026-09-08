@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { category, expense, fixedCost } from "../fixtures/factories";
-import { fixedCostVariance } from "../src/variance";
+import { fixedCostVariance, monthsWithoutStatements, varianceWindow } from "../src/variance";
 
 const utilities = category({ name: "Utilities", bucket: "fixed" });
 const rentCat = category({ name: "Rent", bucket: "fixed" });
@@ -179,4 +179,59 @@ test("a whole-word bill leaves the transaction for the next pattern, not unclaim
   const out = fixedCostVariance([strict, loose], cats, rows, { through: "2026-02", months: 1 });
   expect(out.find((r) => r.key === `cost:${strict.id}`)!.months_with_data).toBe(0);
   expect(out.find((r) => r.key === `cost:${loose.id}`)!.months_with_data).toBe(1);
+});
+
+test("a month a bill did not post is named, so it reads as a missing statement", () => {
+  const patterned = fixedCost({ name: "Gas and electric", amount_cents: 9000, category_id: utilities.id, merchant_pattern: "national grid" });
+  const [row] = fixedCostVariance([patterned], cats, expenses, { through: "2026-03", months: 3 });
+  expect(row!.missing_months).toEqual([]);
+
+  const gap = expenses.filter((e) => e.txn_date !== "2026-01-04");
+  const [withGap] = fixedCostVariance([patterned], cats, gap, { through: "2026-03", months: 3 });
+  expect(withGap!.months_with_data).toBe(2);
+  expect(withGap!.missing_months).toEqual(["2026-01"]);
+});
+
+test("a bill that has never been reconciled reports no missing months, only no data", () => {
+  // Every month is missing, which is not the same thing as one month missing:
+  // that row already says months_with_data 0, and twelve badges say nothing.
+  const [row] = fixedCostVariance([gas], cats, [], { through: "2026-03", months: 3 });
+  expect(row!.months_with_data).toBe(0);
+  expect(row!.missing_months).toEqual([]);
+});
+
+test("a merchant row names the bill it can write back to; a category row cannot", () => {
+  const patterned = fixedCost({ name: "Gas and electric", amount_cents: 9000, category_id: utilities.id, merchant_pattern: "national grid" });
+  const rows = fixedCostVariance([patterned, rent], cats, expenses, { through: "2026-03", months: 3 });
+  const byMerchant = rows.find((r) => r.matched_by === "merchant")!;
+  expect(byMerchant.fixed_cost_id).toBe(patterned.id);
+  const byCategory = rows.find((r) => r.matched_by === "category")!;
+  expect(byCategory.fixed_cost_id).toBeNull();
+});
+
+test("a month nobody imported is one fact about the window, not a fault of every bill", () => {
+  const patterned = fixedCost({ name: "Gas and electric", amount_cents: 9000, category_id: utilities.id, merchant_pattern: "national grid" });
+  // February is missing from the file entirely: no bill posted, nothing at all did.
+  const noFebruary = expenses.filter((e) => !e.txn_date.startsWith("2026-02"));
+
+  const [row] = fixedCostVariance([patterned], cats, noFebruary, { through: "2026-03", months: 3 });
+  expect(row!.months_with_data).toBe(2);
+  // Not badged per bill: the window says it once.
+  expect(row!.missing_months).toEqual([]);
+  expect(monthsWithoutStatements(noFebruary, { through: "2026-03", months: 3 })).toEqual(["2026-02"]);
+});
+
+test("a bill that skipped a month other things did not is still badged", () => {
+  const patterned = fixedCost({ name: "Gas and electric", amount_cents: 9000, category_id: utilities.id, merchant_pattern: "national grid" });
+  const gap = expenses.filter((e) => e.txn_date !== "2026-01-04");
+  const [row] = fixedCostVariance([patterned], cats, gap, { through: "2026-03", months: 3 });
+  // January still has the rent, so January is a month this bill went missing in.
+  expect(row!.missing_months).toEqual(["2026-01"]);
+  expect(monthsWithoutStatements(gap, { through: "2026-03", months: 3 })).toEqual([]);
+});
+
+test("the window is three complete months, ending before `through`", () => {
+  expect(varianceWindow({ through: "2026-03", months: 3 })).toEqual(["2025-12", "2026-01", "2026-02"]);
+  expect(varianceWindow({ through: "2026-03" })).toEqual(["2025-12", "2026-01", "2026-02"]);
+  expect(varianceWindow({ through: "2026-03", months: 1 })).toEqual(["2026-02"]);
 });

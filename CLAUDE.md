@@ -83,6 +83,22 @@ Four places, in this order, or reads silently drop it:
 - **`categoryRuleInput.pattern` trims before it checks length.** Padding never
   reached the matcher, so it does not reach the column either; `"  a  "` is a
   one-character needle and a 422, not a three-character pattern.
+- **`normalizeMerchant` and `merchantKey` live in `contracts` too, and for the
+  same reason as `matchesPattern`.** The CSV importer hashes the normalized
+  merchant to decide whether it has seen a *transaction* before; the recurring
+  detector in `budget-core` groups by `merchantKey` to decide whether it has seen
+  a *bill* before. `csv-import/src/normalize.ts` re-exports `normalizeMerchant`
+  so `dedupeKey` reads unchanged. `merchantKey` is the first two tokens, digits
+  and joining words dropped: a heuristic, and only safe because nothing is
+  written from it without a person pressing Add.
+- **`missing_months` on a variance row means "this bill did not post while other
+  things did".** A month with no transactions at all is excluded from it and
+  reported once by `monthsWithoutStatements`. They read the same in a badge and
+  mean opposite things: one bill went missing, or one month never got imported.
+- **`periodPace`, `cashPosition` and `recurringCandidates` all take `today` as an
+  argument.** budget-core reads no clock; the web app passes `todayISO()` and the
+  scenarios pass a fixed day, which is the only reason a scenario run on the 11th
+  matches one run on the 3rd.
 - **`matchesPattern` in `contracts/types.ts` is the one matcher.** Both the CSV
   importer (`csv-import/src/normalize.ts`) and the budgeted-versus-actual report
   (`budget-core/src/variance.ts`) call it, because a bill that reconciles has to

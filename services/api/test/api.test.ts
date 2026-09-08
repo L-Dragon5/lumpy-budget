@@ -404,7 +404,9 @@ describe("backup export", () => {
       "import_profiles", "income_streams", "lumpy_items", "savings_goals", "settings",
     ]);
     expect(body.tables.categories).toHaveLength(24);
-    expect(body.tables.settings[0].name).toBe("lumpy_opening_balance_cents");
+    // Membership, not position: settings is a key/value table that grows a row
+    // every time a hand-kept balance is added, and the export orders by name.
+    expect(body.tables.settings.map((r: { name: string }) => r.name)).toContain("lumpy_opening_balance_cents");
   });
 
   test("rows come out as the contract describes them, not as raw driver output", async () => {
@@ -1171,5 +1173,191 @@ describe("fixed cost actuals", () => {
     expect((await api("/api/fixed-cost-actuals?through=2026-03")).body.months).toBe(3);
     expect((await api("/api/fixed-cost-actuals?through=2026-03&months=999")).body.months).toBe(24);
     expect((await api("/api/fixed-cost-actuals?through=2026-03&months=0")).body.months).toBe(1);
+  });
+});
+
+describe("recurring candidates", () => {
+  beforeEach(() => resetDb({ withSeed: true }));
+
+  const monthsAgo = (n: number) => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - n);
+    return d.toISOString().slice(0, 10);
+  };
+  const spend = (txn_date: string, amount_cents: number, merchant: string) =>
+    post("/api/expenses", { txn_date, amount_cents, merchant, description: "", category_id: null, source: "manual" });
+
+  test("two annual charges become one suggestion, with the cycle worked out", async () => {
+    await spend(monthsAgo(24), 118000, "ERIE INSURANCE 8829");
+    await spend(monthsAgo(12), 124000, "ERIE INSURANCE 9134");
+
+    const res = await api("/api/recurring-candidates");
+    expect(res.status).toBe(200);
+    const row = res.body.rows.find((r: { key: string }) => r.key === "ERIE INSURANCE");
+    expect(row.frequency_months).toBe(12);
+    expect(row.amount_cents).toBe(124000);
+    expect(row.occurrences).toHaveLength(2);
+    // Never written by this route: it suggests, the Add dialog writes.
+    expect((await api("/api/lumpy-items")).body).toEqual([]);
+  });
+
+  test("a suggestion stops being one once the item exists", async () => {
+    await spend(monthsAgo(24), 60000, "CITY TAX OFFICE");
+    await spend(monthsAgo(12), 61000, "CITY TAX OFFICE");
+    expect((await api("/api/recurring-candidates")).body.rows).toHaveLength(1);
+
+    await post("/api/lumpy-items", {
+      name: "City tax", amount_cents: 61000, frequency_months: 12,
+      next_due_date: "2027-01-05", category_id: null, active: true,
+    });
+    expect((await api("/api/recurring-candidates")).body.rows).toHaveLength(0);
+  });
+
+  test("the minimum amount and the window are the caller's to move", async () => {
+    await spend(monthsAgo(24), 3000, "SMALL THING");
+    await spend(monthsAgo(12), 3000, "SMALL THING");
+    expect((await api("/api/recurring-candidates")).body.rows).toHaveLength(0);
+    expect((await api("/api/recurring-candidates?min_amount_cents=1000")).body.rows).toHaveLength(1);
+    // A twelve-month window cannot hold two sightings of an annual charge.
+    expect((await api("/api/recurring-candidates?months=12&min_amount_cents=1000")).body.rows).toHaveLength(0);
+  });
+});
+
+describe("forecast", () => {
+  beforeEach(() => resetDb());
+
+  test("twelve months, and the first one is the month summary", async () => {
+    await post("/api/income-streams", { ...semiMonthly, anchor_date: null });
+    await post("/api/fixed-costs", {
+      name: "Rent", amount_cents: 150000, due_day: 1, lead_days: 3,
+      category_id: null, merchant_pattern: null, merchant_whole_word: false, active: true,
+    });
+
+    const res = await api("/api/forecast");
+    expect(res.status).toBe(200);
+    expect(res.body.rows).toHaveLength(12);
+    expect(res.body.months).toBe(12);
+
+    const month = res.body.rows[0].month as string;
+    const summary = (await api(`/api/summary?month=${month}`)).body;
+    expect(res.body.rows[0].planned_free_cents).toBe(summary.planned_free_cents);
+    expect(res.body.rows[0].income_cents).toBe(summary.income_cents);
+  });
+
+  test("the window is the caller's, clamped rather than rejected", async () => {
+    expect((await api("/api/forecast?months=3")).body.rows).toHaveLength(3);
+    expect((await api("/api/forecast?months=9999")).body.rows).toHaveLength(60);
+    expect((await api("/api/forecast?start=2026-03")).body.rows[0].month).toBe("2026-03");
+    expect((await api("/api/forecast?start=nonsense")).status).toBe(422);
+  });
+});
+
+describe("cash position", () => {
+  beforeEach(() => resetDb({ withSeed: true }));
+
+  const today = () => new Date().toISOString().slice(0, 10);
+  const inDays = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
+
+  test("the balance is read with what the plan is about to ask of it", async () => {
+    await put("/api/settings", { name: "checking_balance_cents", value: "180000" });
+    // Weekly pay, so there is always a paycheck ahead inside the window.
+    await post("/api/income-streams", {
+      name: "Job", amount_cents: 90000, frequency: "weekly", anchor_date: today(),
+      day_1: null, day_2: null, day_of_month: null, active: true,
+    });
+
+    const res = await api("/api/cash-position");
+    expect(res.status).toBe(200);
+    expect(res.body.balance_cents).toBe(180000);
+    expect(res.body.as_of).toBe(today());
+    expect(res.body.days_stale).toBe(0);
+    expect(res.body.next_paycheck_date).not.toBeNull();
+    expect(res.body.projected_cents).toBe(180000 - res.body.due_before_next_paycheck_cents);
+  });
+
+  test("spending recorded since the balance was typed in comes back with it", async () => {
+    await put("/api/settings", { name: "checking_balance_cents", value: "180000" });
+    const cats = (await api("/api/categories")).body as { id: number; bucket: string }[];
+    const groceries = cats.find((c) => c.bucket === "discretionary")!.id;
+    const fixed = cats.find((c) => c.bucket === "fixed")!.id;
+    const transfer = cats.find((c) => c.bucket === "transfer")!.id;
+
+    const spend = (amount_cents: number, category_id: number) =>
+      post("/api/expenses", {
+        txn_date: today(), amount_cents, merchant: "Shop", description: "",
+        category_id, source: "manual",
+      });
+    await spend(4300, groceries);
+    // A bill is reconciliation in the budget and a withdrawal in the account.
+    await spend(21000, fixed);
+    // A card payment is the same money leaving twice; counting it would be a lie.
+    await spend(50000, transfer);
+    // Money dated ahead of today has not moved.
+    await post("/api/expenses", {
+      txn_date: inDays(10), amount_cents: 99900, merchant: "Later", description: "",
+      category_id: groceries, source: "manual",
+    });
+
+    const res = await api("/api/cash-position");
+    expect(res.body.spent_since_cents).toBe(25300);
+    expect(res.body.spent_since_count).toBe(2);
+  });
+
+  test("no balance typed in yet is zero, not a crash", async () => {
+    const res = await api("/api/cash-position");
+    expect(res.status).toBe(200);
+    expect(res.body.balance_cents).toBe(0);
+    expect(res.body.short).toBe(false);
+  });
+});
+
+describe("budgeted versus actual, through the API", () => {
+  beforeEach(() => resetDb({ withSeed: true }));
+
+  test("a month with no charge for a bill is named, and the bill can be corrected to its actual", async () => {
+    const cats = (await api("/api/categories")).body as { id: number; bucket: string }[];
+    const utilities = cats.find((c) => c.bucket === "fixed")!.id;
+    const made = await post("/api/fixed-costs", {
+      name: "Gas and electric", amount_cents: 9000, due_day: 18, lead_days: 2,
+      category_id: utilities, merchant_pattern: "national grid", merchant_whole_word: false, active: true,
+    });
+
+    // Two of the three complete months before this one have a statement.
+    const month = (n: number) => {
+      const d = new Date();
+      d.setDate(1);
+      d.setMonth(d.getMonth() - n);
+      return d.toISOString().slice(0, 10);
+    };
+    for (const n of [1, 3]) {
+      await post("/api/expenses", {
+        txn_date: month(n), amount_cents: 21000, merchant: "NATIONAL GRID",
+        description: "", category_id: utilities, source: "manual",
+      });
+    }
+    // The middle month was imported -- it just has no charge from this bill in
+    // it, which is the difference between a missing statement and a missing bill.
+    await post("/api/expenses", {
+      txn_date: month(2), amount_cents: 8800, merchant: "WEGMANS",
+      description: "", category_id: null, source: "manual",
+    });
+
+    const res = await api("/api/fixed-cost-actuals?months=3");
+    const row = res.body.rows.find((r: { fixed_cost_id: number | null }) => r.fixed_cost_id === made.body.id);
+    expect(row.months_with_data).toBe(2);
+    // The month with no statement at all is named once, at the top; the month
+    // this bill skipped while other bills posted is the row's own badge.
+    expect(res.body.months_without_statements).toEqual([]);
+    expect(row.missing_months).toHaveLength(1);
+    expect(row.actual_avg_cents).toBe(21000);
+
+    // What the "use the actual" button does: the same PUT the edit dialog does.
+    const fixed = await put(`/api/fixed-costs/${made.body.id}`, {
+      name: "Gas and electric", amount_cents: row.actual_avg_cents, due_day: 18, lead_days: 2,
+      category_id: utilities, merchant_pattern: "national grid", merchant_whole_word: false, active: true,
+    });
+    expect(fixed.body.amount_cents).toBe(21000);
+    const after = await api("/api/fixed-cost-actuals?months=3");
+    expect(after.body.rows.find((r: { fixed_cost_id: number | null }) => r.fixed_cost_id === made.body.id).delta_cents).toBe(0);
   });
 });

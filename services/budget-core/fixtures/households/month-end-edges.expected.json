@@ -298,5 +298,124 @@
       "extra_paycheck": false
     }
   ],
+  "forecast": {
+    "total_free_cents": 3966000,
+    "average_free_cents": 330500,
+    "tightest_month": "2024-03",
+    "first_tight_month": null,
+    "first_short_month": null,
+    "rows": [
+      {
+        "month": "2024-02",
+        "income_cents": 730000,
+        "free": 413000,
+        "lumpy_due_cents": 60000,
+        "tight": false
+      },
+      {
+        "month": "2024-03",
+        "income_cents": 640000,
+        "free": 323000,
+        "lumpy_due_cents": 0,
+        "tight": false
+      },
+      {
+        "month": "2024-04",
+        "income_cents": 640000,
+        "free": 323000,
+        "lumpy_due_cents": 0,
+        "tight": false
+      },
+      {
+        "month": "2024-05",
+        "income_cents": 640000,
+        "free": 323000,
+        "lumpy_due_cents": 0,
+        "tight": false
+      },
+      {
+        "month": "2024-06",
+        "income_cents": 640000,
+        "free": 323000,
+        "lumpy_due_cents": 0,
+        "tight": false
+      },
+      {
+        "month": "2024-07",
+        "income_cents": 640000,
+        "free": 323000,
+        "lumpy_due_cents": 0,
+        "tight": false
+      },
+      {
+        "month": "2024-08",
+        "income_cents": 640000,
+        "free": 323000,
+        "lumpy_due_cents": 0,
+        "tight": false
+      },
+      {
+        "month": "2024-09",
+        "income_cents": 640000,
+        "free": 323000,
+        "lumpy_due_cents": 0,
+        "tight": false
+      },
+      {
+        "month": "2024-10",
+        "income_cents": 640000,
+        "free": 323000,
+        "lumpy_due_cents": 0,
+        "tight": false
+      },
+      {
+        "month": "2024-11",
+        "income_cents": 640000,
+        "free": 323000,
+        "lumpy_due_cents": 0,
+        "tight": false
+      },
+      {
+        "month": "2024-12",
+        "income_cents": 640000,
+        "free": 323000,
+        "lumpy_due_cents": 0,
+        "tight": false
+      },
+      {
+        "month": "2025-01",
+        "income_cents": 640000,
+        "free": 323000,
+        "lumpy_due_cents": 0,
+        "tight": false
+      }
+    ]
+  },
+  "pace": [
+    {
+      "window": "2024-02-29..2024-03-30",
+      "pace": null
+    },
+    {
+      "window": "2024-02-29..2024-03-30",
+      "pace": null
+    },
+    {
+      "window": "2024-02-29..2024-03-30",
+      "pace": null
+    },
+    {
+      "window": "2024-02-29..2024-03-30",
+      "pace": null
+    }
+  ],
+  "cash": {
+    "next_paycheck_date": "2024-02-29",
+    "due": [],
+    "due_before_next_paycheck_cents": 0,
+    "projected_cents": 250000,
+    "short": false
+  },
+  "recurring": [],
   "invariants": []
 }

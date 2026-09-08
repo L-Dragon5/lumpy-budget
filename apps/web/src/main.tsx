@@ -9,6 +9,7 @@ import Income from "@/pages/Income";
 import FixedCosts from "@/pages/FixedCosts";
 import LumpyFund from "@/pages/LumpyFund";
 import LumpyTimeline from "@/pages/LumpyTimeline";
+import Forecast from "@/pages/Forecast";
 import Savings from "@/pages/Savings";
 import Expenses from "@/pages/Expenses";
 import Reports from "@/pages/Reports";
@@ -31,6 +32,7 @@ createRoot(document.getElementById("root")!).render(
             <Route path="fixed-costs" element={<FixedCosts />} />
             <Route path="lumpy" element={<LumpyFund />} />
             <Route path="lumpy/timeline" element={<LumpyTimeline />} />
+            <Route path="forecast" element={<Forecast />} />
             <Route path="savings" element={<Savings />} />
             <Route path="expenses" element={<Expenses />} />
             <Route path="reports" element={<Reports />} />

@@ -18,7 +18,7 @@ import { BalanceTile } from "@/components/app/balance-tile";
 import { StatTile } from "@/components/app/stat-tile";
 import { Loading, LoadError, PageHeader } from "@/components/app/page";
 import { eden, useApi, useMutate } from "@/lib/api";
-import { CYCLE_LABEL, dateLabelFull, monthLabel, thisMonth } from "@/lib/format";
+import { CYCLE_LABEL, dateLabelFull, merchantTitle, money, monthLabel, thisMonth } from "@/lib/format";
 
 
 type Draft = {
@@ -61,6 +61,7 @@ export default function LumpyFund() {
   const timeline = useApi(["lumpy-timeline", month], () =>
     eden.api["lumpy-timeline"].get({ query: { start: month, months: 12 } }));
   const drift = useApi(["lumpy-drift"], () => eden.api["lumpy-drift"].get());
+  const found = useApi(["recurring-candidates"], () => eden.api["recurring-candidates"].get());
   const create = useMutate((body: LumpyItemInput) => eden.api["lumpy-items"].post(body));
   const update = useMutate((v: { id: number; body: LumpyItemInput }) =>
     eden.api["lumpy-items"]({ id: v.id }).put(v.body));
@@ -69,6 +70,22 @@ export default function LumpyFund() {
   const [editing, setEditing] = useState<LumpyItem | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const set = (patch: Partial<Draft>) => setDraft((d) => (d ? { ...d, ...patch } : d));
+
+  // A detected cycle the list has no word for still has to be selectable, or the
+  // dropdown opens blank on a suggestion of, say, every four months.
+  const cycleOptions = [...new Set([...CYCLES, Number(draft?.frequency_months ?? 12)])].sort((a, b) => a - b);
+
+  const applySuggestion = (c: NonNullable<typeof found.data>["rows"][number]) => {
+    setEditing(null);
+    setDraft({
+      name: merchantTitle(c.name),
+      amount_cents: c.amount_cents,
+      frequency_months: String(c.frequency_months),
+      next_due_date: c.next_due_date,
+      category_id: c.category_id === null ? "none" : String(c.category_id),
+      active: true,
+    });
+  };
 
   const save = () => {
     if (!draft) return;
@@ -91,6 +108,7 @@ export default function LumpyFund() {
   // rows[0] is the current month, so rows[1] is what the fund has to cover next.
   const nextMonth = timeline.data?.rows[1];
   const drifted = drift.data?.total_cents ?? 0;
+  const suggestions = found.data?.rows ?? [];
 
   return (
     <>
@@ -179,6 +197,73 @@ export default function LumpyFund() {
                 </li>
               ))}
             </ul>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {suggestions.length > 0 ? (
+        <Card className="mb-4">
+          <CardHeader>
+            <CardTitle>Found in your statements</CardTitle>
+            <CardDescription>
+              Charges that have arrived on a cycle longer than a month and are not in the fund or on the fixed
+              costs page. Nothing is added until you say so: Add opens the form filled in, and every field is
+              still yours to change.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Charge</TableHead>
+                  <TableHead>Seen</TableHead>
+                  <TableHead>Cycle</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead className="text-right">Per year</TableHead>
+                  <TableHead className="w-24" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {suggestions.map((c) => (
+                  <TableRow key={c.key}>
+                    <TableCell>
+                      <div className="font-medium">{merchantTitle(c.name)}</div>
+                      {/* The merchants actually seen, so a suggestion that grouped
+                          two different things is visible rather than trusted. */}
+                      <div className="text-xs text-muted-foreground">{c.merchants.join(", ")}</div>
+                    </TableCell>
+                    {/* The count and the last one, not every date: a quarterly bill
+                        across three years is twelve dates and one useful fact. */}
+                    <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                      {c.occurrences.length} times, last {dateLabelFull(c.last_date)}
+                      {c.regular ? null : <span className="block text-xs">spacing varies by a month</span>}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {CYCLE_LABEL(c.frequency_months)}
+                      <span className="block text-xs text-muted-foreground">next {dateLabelFull(c.next_due_date)}</span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Money cents={c.amount_cents} />
+                      {c.typical_cents !== c.amount_cents ? (
+                        <div className="text-xs text-muted-foreground">
+                          was {money(c.typical_cents, { cents: false })} on average
+                        </div>
+                      ) : null}
+                    </TableCell>
+                    <TableCell className="text-right text-muted-foreground">
+                      <Money cents={c.annual_cents} />
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex justify-end">
+                        <Button variant="outline" size="sm" onClick={() => applySuggestion(c)}>
+                          Add
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       ) : null}
@@ -275,7 +360,7 @@ export default function LumpyFund() {
             <SelectField
               value={draft.frequency_months}
               onChange={(v) => set({ frequency_months: v })}
-              options={CYCLES.map((m) => ({ value: String(m), label: CYCLE_LABEL(m) }))}
+              options={cycleOptions.map((m) => ({ value: String(m), label: CYCLE_LABEL(m) }))}
             />
           </Field>
 

@@ -137,7 +137,7 @@ a flag somebody gets wrong.
 
 ```bash
 bun run check                 # typecheck + tests + scenarios; what the commit hook runs
-bun test                      # 198 tests, no network, under a second
+bun test                      # 253 tests, no network, under a second
 bun run scenarios             # whole-household fixtures, diffed against expectations
 bun run scenarios:update      # accept a change, after reading the diff
 ```
@@ -150,8 +150,9 @@ parser, and the API against a separate `lumpy_budget_test` database.
 
 **Scenario lane** (`bun run scenarios`): whole households run end to end through
 the engine and compared to a stored expectation, with invariants checked every
-run — a month's paychecks must sum to its income, and every split must sum to
-its total. There is no model in this app, so a prompt-eval suite would be
+run — a month's paychecks must sum to its income, every split must sum to its
+total, and the forecast's first month must be the month summary, since two ways
+to compute one number is one way to drift. There is no model in this app, so a prompt-eval suite would be
 theater; this is the honest equivalent, and it has already caught two real bugs.
 
 ## Talking to the API
@@ -188,6 +189,9 @@ through the Vite proxy and is same-origin.
 ```
 contracts/types.ts      zod schemas + types, imported by the API and the web app
 services/budget-core/   the engine: pure functions, no DB, no HTTP, no I/O
+                        recurring.ts finds lumpy items in imported statements,
+                        forecast.ts runs the month forward, cash.ts reads the
+                        balance against the next bills
 services/db/            Bun.sql client, numbered .sql migrations, seed data
                         001_init.sql is the whole schema; next migration is 011
 services/api/           Elysia routes; exports its own type, which Eden gives the web app
@@ -252,6 +256,43 @@ month, not $100, because you did not start saving for it a year ago. Money
 already in the account is claimed by whatever comes due first. The timeline runs
 12 months and names the first month the fund would run dry.
 
+**Lumpy items the statements already know about.** The setup is the one job
+this app cannot do for you, except that after an import the evidence is already
+in the expenses table: a charge that arrived last March and again this March,
+for about the same money, is an annual bill whether or not anybody wrote it
+down. The lumpy fund page lists what it found -- cycle, amount, next due date,
+and the category those charges already carry -- and Add opens the ordinary form
+filled in. Nothing is written without a person pressing it, which is exactly
+what lets the merchant matching be a heuristic here (the first two words of the
+normalized merchant, so `GEICO *AUTO 8829` and `GEICO AUTO PAY 9134` are one
+bill) where the variance report has to use an exact pattern. Charges a bill
+already claims, items already in the fund, monthly charges, transfers and
+anything under $50 are left out; so are amounts that disagree by more than half
+and spacings that disagree by more than a month, because those are two things
+happening at one merchant rather than one bill.
+
+**The next twelve months.** The month summary run forward: what each month is
+scheduled to leave free once the bills, the fund and the goals have taken their
+share, which month is leanest, and whether a one-off purchase fits in one month
+or has to be saved for. Deliberately plan-only -- a month that has not happened
+has no transactions in it -- so an extra-paycheck month shows up as the roomiest
+month in the year rather than as a number you have to work out.
+
+**What is actually in the account.** Everything else in the app is derived from
+a plan; the checking balance is the one number that says whether the account
+survives the next eleven days. It is typed in, like the lumpy fund's, and read
+beside what the plan is about to ask of it: the bills due between today and the
+next paycheck, and what is left after them. A hand-kept number goes stale, so
+the tile also says how long ago it was typed and what has been recorded as spent
+since -- a balance that says you are fine on the strength of a week-old fact is
+worse than no balance at all.
+
+**Am I okay right now.** Inside the current paycheck period the dashboard shows
+the pace: day 3 of 9, what an even burn would have spent by now, and how far
+ahead or behind that you are. Every other number in the app compares a plan to a
+month that is over or a month that has not started; this is the one that arrives
+while there is still something to do about it.
+
 **Budgeted, and what it really cost.** A fixed cost is one flat number, which is
 right for rent and wrong for gas and electric. Tell a bill how it posts on a
 statement ("NATIONAL GRID", any part of the name, matched the same way the
@@ -262,6 +303,14 @@ three of them never imported, reads as a category miles under budget rather than
 as three missing statements. A transaction claimed by a bill is not counted again
 under its category, and the row names the merchants actually seen rather than the
 pattern you typed, so a pattern matching the wrong thing shows up as wrong.
+
+A month where a bill did not post while other things did is named on the row:
+either the payment did not happen or that statement is missing. A month where
+*nothing* posted is named once at the top of the card instead, because a month
+nobody imported is one fact about the window rather than a fault of every bill in
+it. And where a bill has run consistently over what it was entered at, the row
+offers to write the real number back -- the same edit the dialog does, one click,
+so the report ends in a decision instead of retyping.
 
 Only complete months count, the current one is half billed. The average divides
 by months that have a transaction, not by the length of the window: an empty month

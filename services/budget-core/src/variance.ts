@@ -12,6 +12,8 @@ export type CostVariance = {
   key: string;
   /** How the actuals were found. A named merchant is per bill; a category is a lump. */
   matched_by: "merchant" | "category";
+  /** The bill this row answers for, when it is exactly one. Null for a category group. */
+  fixed_cost_id: number | null;
   /** The pattern that did the matching, when one did. */
   merchant_pattern: string | null;
   category_id: number | null;
@@ -29,6 +31,17 @@ export type CostVariance = {
    * statement you have not imported, not a month the gas company forgot to bill.
    */
   months_with_data: number;
+  /**
+   * Months where this bill did not post while *other* things did. That is the
+   * anomaly worth a badge: either a payment that did not happen or a statement
+   * missing this account.
+   *
+   * Months with no transactions at all are left out, however few the bill has.
+   * A month nobody imported is one fact about the window, not a fault of every
+   * bill in it -- see `monthsWithoutStatements`, which the page says once. A row
+   * with nothing anywhere is neither; it already says so with months_with_data 0.
+   */
+  missing_months: ISOMonth[];
   /** Actual minus budgeted. Positive means the bill costs more than it is planned at. */
   delta_cents: Cents;
   pct_off: number;
@@ -55,20 +68,45 @@ const hay = (e: Pick<Expense, "merchant" | "description">): string =>
  * Only complete months count. `through` is normally the current month, which is
  * half-billed and would drag every average down, so the window ends the month before.
  */
+export type VarianceWindow = { through: ISOMonth; months?: number };
+
+/**
+ * The months a variance report covers: `months` complete ones, ending the month
+ * *before* `through`, because `through` is normally the current month and a
+ * half-billed month would drag every average down.
+ */
+export function varianceWindow(opts: VarianceWindow): ISOMonth[] {
+  const n = Math.max(1, opts.months ?? 3);
+  const last = d.addMonths(opts.through, -1);
+  return d.monthRange(d.addMonths(last, -(n - 1)), n);
+}
+
+/**
+ * Months in the window with no transactions at all: statements nobody imported.
+ *
+ * Kept apart from a row's `missing_months` because it is one fact about the
+ * window rather than a fault of each bill in it. Said once, it reads as "import
+ * June"; said per row, twelve badges say nothing at all.
+ */
+export function monthsWithoutStatements(expenses: Expense[], opts: VarianceWindow): ISOMonth[] {
+  const seen = new Set(expenses.map((e) => d.monthOf(e.txn_date)));
+  return varianceWindow(opts).filter((m) => !seen.has(m));
+}
+
 export function fixedCostVariance(
   costs: FixedCost[],
   categories: Category[],
   expenses: Expense[],
-  opts: { through: ISOMonth; months?: number },
+  opts: VarianceWindow,
 ): CostVariance[] {
-  const n = Math.max(1, opts.months ?? 3);
-  const last = d.addMonths(opts.through, -1);
-  const window = d.monthRange(d.addMonths(last, -(n - 1)), n);
+  const window = varianceWindow(opts);
   const inWindow = new Set(window);
   const byId = categoryIndex(categories);
 
   const active = costs.filter((c) => c.active);
   const rows = expenses.filter((e) => inWindow.has(d.monthOf(e.txn_date)));
+  // A month nobody imported cannot be a month a bill went missing.
+  const imported = new Set(rows.map((e) => d.monthOf(e.txn_date)));
 
   // Longest pattern first so a specific one wins over a broad one that contains it
   // ("national grid" over "grid"), with the id breaking ties so the result is stable.
@@ -91,7 +129,10 @@ export function fixedCostVariance(
   }
 
   const summarize = (
-    base: Omit<CostVariance, "actual_avg_cents" | "actual_by_month" | "months_with_data" | "delta_cents" | "pct_off" | "merchants">,
+    base: Omit<
+      CostVariance,
+      "actual_avg_cents" | "actual_by_month" | "months_with_data" | "missing_months" | "delta_cents" | "pct_off" | "merchants"
+    >,
     matched: Expense[],
   ): CostVariance => {
     const per = new Map<ISOMonth, Cents>();
@@ -108,6 +149,10 @@ export function fixedCostVariance(
       actual_avg_cents: avg,
       actual_by_month,
       months_with_data: withData.length,
+      missing_months:
+        withData.length === 0
+          ? []
+          : actual_by_month.filter((r) => r.amount_cents === 0 && imported.has(r.month)).map((r) => r.month),
       delta_cents: withData.length === 0 ? 0 : avg - base.budgeted_cents,
       pct_off:
         withData.length === 0 || base.budgeted_cents === 0
@@ -124,6 +169,7 @@ export function fixedCostVariance(
         {
           key: `cost:${cost.id}`,
           matched_by: "merchant",
+          fixed_cost_id: cost.id,
           merchant_pattern: cost.merchant_pattern,
           category_id: cost.category_id,
           category_name: cost.category_id === null ? "" : byId.get(cost.category_id)?.name ?? `#${cost.category_id}`,
@@ -149,6 +195,10 @@ export function fixedCostVariance(
         {
           key: `category:${categoryId}`,
           matched_by: "category",
+          // Null even for a category holding exactly one bill: which bill a
+          // category row is about is a question the row cannot answer, and
+          // "update this to the actual" must not write to a guess.
+          fixed_cost_id: null,
           merchant_pattern: null,
           category_id: categoryId,
           category_name: byId.get(categoryId)?.name ?? `#${categoryId}`,

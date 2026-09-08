@@ -12,6 +12,7 @@ const NAV = [
   { to: "/fixed-costs", label: "Fixed costs" },
   { to: "/lumpy", label: "Lumpy fund" },
   { to: "/savings", label: "Savings" },
+  { to: "/forecast", label: "Forecast" },
   { to: "/expenses", label: "Expenses" },
   { to: "/reports", label: "Reports" },
   { to: "/settings", label: "Settings" },

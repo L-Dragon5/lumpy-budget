@@ -1,0 +1,390 @@
+{
+  "name": "Three years of statements, with the annual bills still outside the fund",
+  "month": "2026-03",
+  "money": {
+    "income_cents": 420000,
+    "income_normalized_cents": 455000,
+    "surplus_cents": -35000,
+    "extra_paycheck": false,
+    "fixed_cents": 181000,
+    "lumpy_cents": 0,
+    "lumpy_steady_cents": 0,
+    "savings_cents": 25000,
+    "planned_free_cents": 214000,
+    "spent": {
+      "discretionary": 25700,
+      "fixed": 0,
+      "lumpy": 0,
+      "savings": 0,
+      "transfer": 0,
+      "total": 25700
+    },
+    "available_cents": 188300
+  },
+  "paychecks": [
+    {
+      "date": "2026-02-13",
+      "stream": "Paycheck",
+      "prior_month": true,
+      "amount_cents": 210000,
+      "holds": [
+        "Rent 160000"
+      ],
+      "hold_total_cents": 160000,
+      "lumpy_cents": 0,
+      "savings_cents": 0,
+      "free_cents": 50000,
+      "over_committed": false
+    },
+    {
+      "date": "2026-03-13",
+      "stream": "Paycheck",
+      "prior_month": false,
+      "amount_cents": 210000,
+      "holds": [
+        "Gas and electric 21000"
+      ],
+      "hold_total_cents": 21000,
+      "lumpy_cents": 0,
+      "savings_cents": 12500,
+      "free_cents": 176500,
+      "over_committed": false
+    },
+    {
+      "date": "2026-03-27",
+      "stream": "Paycheck",
+      "prior_month": false,
+      "amount_cents": 210000,
+      "holds": [],
+      "hold_total_cents": 0,
+      "lumpy_cents": 0,
+      "savings_cents": 12500,
+      "free_cents": 197500,
+      "over_committed": false
+    }
+  ],
+  "periods": [
+    {
+      "window": "2026-03-13..2026-03-26",
+      "income_cents": 210000,
+      "planned_free_cents": 176500,
+      "spent_discretionary_cents": 0,
+      "available_cents": 176500
+    },
+    {
+      "window": "2026-03-27..2026-04-09",
+      "income_cents": 210000,
+      "planned_free_cents": 197500,
+      "spent_discretionary_cents": 0,
+      "available_cents": 197500
+    }
+  ],
+  "unfunded": [],
+  "savings_goals": [
+    {
+      "name": "Emergency",
+      "balance_cents": 120000,
+      "target_cents": 600000,
+      "monthly_cents": 25000,
+      "pct": 20,
+      "remaining_cents": 480000,
+      "months_to_target": 20,
+      "funded": false
+    }
+  ],
+  "lumpy": {
+    "monthly_contribution_cents": 0,
+    "total_outflow_cents": 0,
+    "worst_balance_cents": 0,
+    "first_short_month": null,
+    "rows": [
+      {
+        "month": "2026-03",
+        "start": 0,
+        "in": 0,
+        "out": 0,
+        "end": 0,
+        "due": [],
+        "short": false
+      },
+      {
+        "month": "2026-04",
+        "start": 0,
+        "in": 0,
+        "out": 0,
+        "end": 0,
+        "due": [],
+        "short": false
+      },
+      {
+        "month": "2026-05",
+        "start": 0,
+        "in": 0,
+        "out": 0,
+        "end": 0,
+        "due": [],
+        "short": false
+      },
+      {
+        "month": "2026-06",
+        "start": 0,
+        "in": 0,
+        "out": 0,
+        "end": 0,
+        "due": [],
+        "short": false
+      },
+      {
+        "month": "2026-07",
+        "start": 0,
+        "in": 0,
+        "out": 0,
+        "end": 0,
+        "due": [],
+        "short": false
+      },
+      {
+        "month": "2026-08",
+        "start": 0,
+        "in": 0,
+        "out": 0,
+        "end": 0,
+        "due": [],
+        "short": false
+      },
+      {
+        "month": "2026-09",
+        "start": 0,
+        "in": 0,
+        "out": 0,
+        "end": 0,
+        "due": [],
+        "short": false
+      },
+      {
+        "month": "2026-10",
+        "start": 0,
+        "in": 0,
+        "out": 0,
+        "end": 0,
+        "due": [],
+        "short": false
+      },
+      {
+        "month": "2026-11",
+        "start": 0,
+        "in": 0,
+        "out": 0,
+        "end": 0,
+        "due": [],
+        "short": false
+      },
+      {
+        "month": "2026-12",
+        "start": 0,
+        "in": 0,
+        "out": 0,
+        "end": 0,
+        "due": [],
+        "short": false
+      },
+      {
+        "month": "2027-01",
+        "start": 0,
+        "in": 0,
+        "out": 0,
+        "end": 0,
+        "due": [],
+        "short": false
+      },
+      {
+        "month": "2027-02",
+        "start": 0,
+        "in": 0,
+        "out": 0,
+        "end": 0,
+        "due": [],
+        "short": false
+      }
+    ]
+  },
+  "income_calendar": [
+    {
+      "month": "2026-01",
+      "total_cents": 630000,
+      "extra_paycheck": true
+    },
+    {
+      "month": "2026-02",
+      "total_cents": 420000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2026-03",
+      "total_cents": 420000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2026-04",
+      "total_cents": 420000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2026-05",
+      "total_cents": 420000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2026-06",
+      "total_cents": 420000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2026-07",
+      "total_cents": 630000,
+      "extra_paycheck": true
+    },
+    {
+      "month": "2026-08",
+      "total_cents": 420000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2026-09",
+      "total_cents": 420000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2026-10",
+      "total_cents": 420000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2026-11",
+      "total_cents": 420000,
+      "extra_paycheck": false
+    },
+    {
+      "month": "2026-12",
+      "total_cents": 420000,
+      "extra_paycheck": false
+    }
+  ],
+  "forecast": {
+    "total_free_cents": 2988000,
+    "average_free_cents": 249000,
+    "tightest_month": "2026-03",
+    "first_tight_month": null,
+    "first_short_month": null,
+    "rows": [
+      {
+        "month": "2026-03",
+        "income_cents": 420000,
+        "free": 214000,
+        "lumpy_due_cents": 0,
+        "tight": false
+      },
+      {
+        "month": "2026-04",
+        "income_cents": 420000,
+        "free": 214000,
+        "lumpy_due_cents": 0,
+        "tight": false
+      },
+      {
+        "month": "2026-05",
+        "income_cents": 420000,
+        "free": 214000,
+        "lumpy_due_cents": 0,
+        "tight": false
+      },
+      {
+        "month": "2026-06",
+        "income_cents": 420000,
+        "free": 214000,
+        "lumpy_due_cents": 0,
+        "tight": false
+      },
+      {
+        "month": "2026-07",
+        "income_cents": 630000,
+        "free": 424000,
+        "lumpy_due_cents": 0,
+        "tight": false
+      },
+      {
+        "month": "2026-08",
+        "income_cents": 420000,
+        "free": 214000,
+        "lumpy_due_cents": 0,
+        "tight": false
+      },
+      {
+        "month": "2026-09",
+        "income_cents": 420000,
+        "free": 214000,
+        "lumpy_due_cents": 0,
+        "tight": false
+      },
+      {
+        "month": "2026-10",
+        "income_cents": 420000,
+        "free": 214000,
+        "lumpy_due_cents": 0,
+        "tight": false
+      },
+      {
+        "month": "2026-11",
+        "income_cents": 420000,
+        "free": 214000,
+        "lumpy_due_cents": 0,
+        "tight": false
+      },
+      {
+        "month": "2026-12",
+        "income_cents": 420000,
+        "free": 214000,
+        "lumpy_due_cents": 0,
+        "tight": false
+      },
+      {
+        "month": "2027-01",
+        "income_cents": 630000,
+        "free": 424000,
+        "lumpy_due_cents": 0,
+        "tight": false
+      },
+      {
+        "month": "2027-02",
+        "income_cents": 420000,
+        "free": 214000,
+        "lumpy_due_cents": 0,
+        "tight": false
+      }
+    ]
+  },
+  "pace": [
+    {
+      "window": "2026-03-13..2026-03-26",
+      "pace": null
+    },
+    {
+      "window": "2026-03-27..2026-04-09",
+      "pace": null
+    }
+  ],
+  "cash": {
+    "next_paycheck_date": "2026-03-13",
+    "due": [],
+    "due_before_next_paycheck_cents": 0,
+    "projected_cents": 250000,
+    "short": false
+  },
+  "recurring": [
+    "GEICO AUTO every 12mo 124000 next 2026-04-02",
+    "TOWN PERINTON every 12mo 92000 next 2027-01-10",
+    "MONROE COUNTY every 3mo 21500 next 2026-06-08",
+    "AAA MEMBERSHIP every 6mo 19200 next 2026-08-19"
+  ],
+  "invariants": []
+}

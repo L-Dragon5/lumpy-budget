@@ -24,7 +24,12 @@ export async function resetDb({ withSeed = false } = {}) {
   await sql.unsafe("SET FOREIGN_KEY_CHECKS = 0");
   for (const t of TABLES) await sql.unsafe(`TRUNCATE TABLE \`${t}\``);
   await sql.unsafe("SET FOREIGN_KEY_CHECKS = 1");
-  await sql.unsafe("UPDATE settings SET value = '0' WHERE name = 'lumpy_opening_balance_cents'");
+  // settings is not truncated -- it is a key/value table shared with the
+  // migrations -- so the hand-kept balances are zeroed instead, or one test's
+  // typed-in balance is the next test's starting state.
+  await sql.unsafe(
+    "UPDATE settings SET value = '0' WHERE name IN ('lumpy_opening_balance_cents', 'checking_balance_cents')",
+  );
   if (withSeed) await seed();
 }
 

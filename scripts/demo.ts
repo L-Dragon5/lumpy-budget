@@ -124,7 +124,10 @@ await upsert("savings-goals", {
 
 await call("PUT", "/api/settings", { name: "lumpy_opening_balance_cents", value: "250000" });
 
-// Three months of transactions, deterministic so re-running changes nothing.
+// Four months of transactions, deterministic so re-running changes nothing. Four,
+// not three, because budgeted-vs-actual reads the three *complete* months before
+// this one: with three the earliest of them has no statement and every bill in it
+// reads as missing.
 const MERCHANTS: [merchant: string, low: number, high: number, perMonth: number][] = [
   ["WEGMANS #1042", 4200, 19500, 5],
   ["TRADER JOES", 2800, 9400, 3],
@@ -162,7 +165,7 @@ const rand = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 21474836
 const pick = (low: number, high: number) => low + Math.floor(rand() * (high - low + 1));
 
 const rows: { txn_date: string; amount_cents: number; merchant: string; description: string; category_id: null; source: string }[] = [];
-for (const offset of [-2, -1, 0]) {
+for (const offset of [-3, -2, -1, 0]) {
   const m = rel(offset);
   for (const [merchant, low, high, perMonth] of MERCHANTS) {
     for (let i = 0; i < perMonth; i++) {
@@ -177,10 +180,43 @@ for (const offset of [-2, -1, 0]) {
     }
   }
   for (const [merchant, cents, day, swing] of FIXED_PAYMENTS) {
+    // One bill, one month, deliberately absent: the demo should show what a bill
+    // that did not post looks like, since that is the whole point of the badge.
+    if (offset === -3 && merchant === "NATIONAL GRID") continue;
     rows.push({
       txn_date: `${m}-${String(day).padStart(2, "0")}`,
       // Skewed upward: a utility bill that varies mostly varies by costing more.
       amount_cents: swing === 0 ? cents : pick(cents - Math.round(swing / 3), cents + swing),
+      merchant,
+      description: "",
+      category_id: null,
+      source: "demo",
+    });
+  }
+}
+
+/**
+ * Older statements, so the app has something to *find*: charges on a cycle
+ * longer than a month that nobody has entered as a lumpy item. These are
+ * deliberately not in the `lumpy` list above -- a suggestion the fund already
+ * covers is filtered out, and a demo of the detector needs something left to
+ * detect. Each one rises a little between renewals, the way a real premium does.
+ */
+const RECURRING_HISTORY: [merchant: string, cents: number, cycleMonths: number, day: number][] = [
+  ["ERIE INSURANCE UMBRELLA", 34500, 12, 14],
+  ["TOWN OF PERINTON TAX", 89000, 12, 22],
+  ["MONROE COUNTY WATER", 21400, 3, 6],
+  ["AAA MEMBERSHIP", 18600, 6, 19],
+  ["CHIMNEY SWEEP LLC", 27500, 12, 11],
+];
+for (const [merchant, cents, cycleMonths, day] of RECURRING_HISTORY) {
+  // Back far enough that an annual charge has been seen twice, which is what the
+  // detector needs before it will say anything.
+  for (let back = 30; back >= 1; back -= cycleMonths) {
+    rows.push({
+      txn_date: `${rel(-back)}-${String(day).padStart(2, "0")}`,
+      // 2% a year, rounded to the dollar, so "was $214 on average" has something to say.
+      amount_cents: Math.round((cents * (1 + (30 - back) * 0.0017)) / 100) * 100,
       merchant,
       description: "",
       category_id: null,
@@ -197,5 +233,6 @@ const result = await call("POST", "/api/import", {
 
 console.log(
   `demo data loaded: 3 income streams, ${fixed.length} fixed costs, ${lumpy.length} lumpy items, ` +
-    `2 savings goals, ${result.inserted} expenses (${result.skipped} already there)`,
+    `2 savings goals, ${result.inserted} expenses (${result.skipped} already there), ` +
+    `${RECURRING_HISTORY.length} recurring charges waiting to be found`,
 );

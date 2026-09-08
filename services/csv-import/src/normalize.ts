@@ -1,4 +1,4 @@
-import { matchesPattern, needleOf } from "@lumpy/contracts";
+import { matchesPattern, needleOf, normalizeMerchant } from "@lumpy/contracts";
 import type { CategoryRule, ExpenseInput, ImportMapping } from "@lumpy/contracts";
 import type { ParsedCsv } from "./parse";
 import { detectDateFormat, parseAmountCents, parseDate } from "./parse";
@@ -102,9 +102,12 @@ export function normalize(csv: ParsedCsv, mapping: ImportMapping, source = "impo
   return { rows, errors };
 }
 
-/** Collapse the noise banks add so the same purchase always hashes the same. */
-export const normalizeMerchant = (m: string): string =>
-  (m ?? "").normalize("NFKD").toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
+/**
+ * Re-exported, not defined here: the detector that suggests lumpy items from an
+ * imported statement groups by the same identity this hashes, and budget-core
+ * cannot reach into a sibling package. See `normalizeMerchant` in contracts.
+ */
+export { normalizeMerchant } from "@lumpy/contracts";
 
 /**
  * The identity of a transaction: same day, same amount, same merchant. The API

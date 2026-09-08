@@ -5,6 +5,7 @@ const TITLES: Record<string, string> = {
   "/lumpy": "Lumpy fund",
   "/lumpy/timeline": "Lumpy timeline",
   "/savings": "Savings",
+  "/forecast": "Forecast",
   "/expenses": "Expenses",
   "/reports": "Reports",
   "/settings": "Settings",

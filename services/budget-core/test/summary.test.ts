@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { category, expense, fixedCost, goal, lumpy, stream } from "../fixtures/factories";
-import { monthSummary, type BudgetInputs } from "../src/summary";
+import { currentPeriod, monthSummary, periodPace, type BudgetInputs } from "../src/summary";
 
 // Joe's actual shape: semi-monthly day job, monthly rental income.
 const dayJob = stream({ name: "Day job", frequency: "semimonthly", anchor_date: null, day_1: 15, day_2: 0, amount_cents: 300000 });
@@ -136,4 +136,75 @@ test("bills nobody can pay are reported, not swallowed", () => {
   // No income: 200000 of bills, 10000 lumpy, 50000 fixed savings (the 5% goal is 5% of nothing),
   // then 35000 already spent.
   expect(s.available_cents).toBe(-295000);
+});
+
+// ------------------------------------------------------------------- pace
+
+test("pace: four days into a fourteen-day period, spending faster than the days pass", () => {
+  const period = {
+    start: "2026-03-01",
+    end: "2026-03-14",
+    planned_free_cents: 140000,
+    spent_discretionary_cents: 80000,
+  };
+  const p = periodPace(period, "2026-03-04")!;
+  expect(p.day).toBe(4);
+  expect(p.days).toBe(14);
+  expect(p.days_left).toBe(11);
+  expect(p.on_track_cents).toBe(40000); // 4/14 of the plan
+  expect(p.delta_cents).toBe(40000);
+  expect(p.status).toBe("over");
+  // 60000 left over the 11 days that are still coming.
+  expect(p.daily_left_cents).toBe(5455);
+});
+
+test("pace: on payday you are one day in, not zero", () => {
+  const p = periodPace(
+    { start: "2026-03-01", end: "2026-03-14", planned_free_cents: 140000, spent_discretionary_cents: 0 },
+    "2026-03-01",
+  )!;
+  expect(p.day).toBe(1);
+  expect(p.days_left).toBe(14);
+  expect(p.status).toBe("under");
+});
+
+test("pace: the last day of the period is still inside it", () => {
+  const p = periodPace(
+    { start: "2026-03-01", end: "2026-03-14", planned_free_cents: 140000, spent_discretionary_cents: 139000 },
+    "2026-03-14",
+  )!;
+  expect(p.day).toBe(14);
+  expect(p.days_left).toBe(1);
+  expect(p.status).toBe("on_track");
+});
+
+test("pace: a small difference early is noise, not a warning", () => {
+  const p = periodPace(
+    { start: "2026-03-01", end: "2026-03-14", planned_free_cents: 140000, spent_discretionary_cents: 11000 },
+    "2026-03-01",
+  )!;
+  // 1000 over an even burn, against a 7000 tolerance.
+  expect(p.delta_cents).toBe(1000);
+  expect(p.status).toBe("on_track");
+});
+
+test("pace: outside the period there is no pace to report", () => {
+  const period = { start: "2026-03-01", end: "2026-03-14", planned_free_cents: 1, spent_discretionary_cents: 0 };
+  expect(periodPace(period, "2026-02-28")).toBeNull();
+  expect(periodPace(period, "2026-03-15")).toBeNull();
+});
+
+test("pace: a period with nothing planned is either untouched or blown", () => {
+  const dry = { start: "2026-03-01", end: "2026-03-14", planned_free_cents: 0, spent_discretionary_cents: 0 };
+  expect(periodPace(dry, "2026-03-05")!.spent_share).toBe(0);
+  expect(periodPace({ ...dry, spent_discretionary_cents: 500 }, "2026-03-05")!.spent_share).toBe(1);
+});
+
+test("the current period is the one today falls in", () => {
+  const s = monthSummary(inputs());
+  const first = s.periods[0]!;
+  expect(currentPeriod(s.periods, first.start)!.start).toBe(first.start);
+  expect(currentPeriod(s.periods, "2020-01-01")).toBeNull();
+  // Every period the month reports is covered, so "today" always finds one.
+  for (const p of s.periods) expect(currentPeriod(s.periods, p.start)!.start).toBe(p.start);
 });

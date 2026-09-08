@@ -86,3 +86,22 @@ export const CYCLE_LABEL = (months: number): string =>
   months === 12 ? "Yearly" :
   months === 24 ? "Every 2 years" :
   `Every ${months} months`;
+
+/**
+ * "GEICO *AUTO 8829" -> "Geico Auto". A prefill for the Add dialog, not a name:
+ * the statement's punctuation and its per-charge digits are noise, and the field
+ * is right there to correct.
+ *
+ * A trailing LLC or INC goes: that is the legal entity, not the thing you are
+ * budgeting for. Acronyms come out title-cased ("Aaa Membership") and are left
+ * that way on purpose -- telling AAA from TAX needs a dictionary, and the field
+ * this fills is one keystroke from being right.
+ */
+const ENTITY_SUFFIX = new Set(["LLC", "INC", "LTD", "CORP"]);
+
+export function merchantTitle(m: string): string {
+  const words = m.replace(/[^A-Za-z0-9 ]+/g, " ").replace(/\b\d+\b/g, " ").trim().split(/\s+/).filter(Boolean);
+  while (words.length > 1 && ENTITY_SUFFIX.has(words[words.length - 1]!.toUpperCase())) words.pop();
+  if (words.length === 0) return m.trim();
+  return words.map((w) => w[0]!.toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+}

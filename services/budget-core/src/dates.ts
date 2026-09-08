@@ -86,6 +86,17 @@ export function monthRange(start: ISOMonth, count: number): ISOMonth[] {
   return Array.from({ length: count }, (_, i) => addMonths(start, i));
 }
 
+/**
+ * Add N months to a *date*, keeping the day of the month and clamping at the end
+ * of a short one: the 31st is the 30th in April. The cycle every repeating thing
+ * in this app steps on, from a lumpy item's due date to a detected annual charge.
+ */
+export function addMonthsToDate(date: ISODate, months: number): ISODate {
+  const [, , day] = parts(date);
+  const [y, m] = monthParts(addMonths(monthOf(date), months));
+  return clampDay(y, m, day);
+}
+
 /** 0 = Sunday. */
 export function dayOfWeek(d: ISODate): number {
   const [y, m, dd] = parts(d);

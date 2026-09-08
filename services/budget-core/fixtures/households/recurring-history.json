@@ -1,0 +1,390 @@
+{
+  "name": "Three years of statements, with the annual bills still outside the fund",
+  "month": "2026-03",
+  "year": 2026,
+  "lumpyMode": "recommended",
+  "openingBalance": 0,
+  "streams": [
+    {
+      "id": 1,
+      "name": "Paycheck",
+      "amount_cents": 210000,
+      "frequency": "biweekly",
+      "anchor_date": "2026-01-02",
+      "day_1": null,
+      "day_2": null,
+      "day_of_month": null,
+      "active": true
+    }
+  ],
+  "fixedCosts": [
+    {
+      "id": 1,
+      "name": "Rent",
+      "amount_cents": 160000,
+      "due_day": 1,
+      "lead_days": 3,
+      "category_id": null,
+      "merchant_pattern": null,
+      "merchant_whole_word": false,
+      "active": true
+    },
+    {
+      "id": 2,
+      "name": "Gas and electric",
+      "amount_cents": 21000,
+      "due_day": 18,
+      "lead_days": 2,
+      "category_id": 2,
+      "merchant_pattern": "national grid",
+      "merchant_whole_word": false,
+      "active": true
+    }
+  ],
+  "lumpyItems": [],
+  "savingsGoals": [
+    {
+      "id": 1,
+      "name": "Emergency",
+      "mode": "fixed",
+      "amount_cents": 25000,
+      "percent": null,
+      "target_cents": 600000,
+      "balance_cents": 120000,
+      "active": true
+    }
+  ],
+  "expenses": [
+    {
+      "id": 1,
+      "txn_date": "2024-04-02",
+      "amount_cents": 118000,
+      "merchant": "GEICO *AUTO 8829",
+      "description": "",
+      "category_id": 3,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h1"
+    },
+    {
+      "id": 2,
+      "txn_date": "2025-04-02",
+      "amount_cents": 124000,
+      "merchant": "GEICO AUTO PAY 9134",
+      "description": "",
+      "category_id": 3,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h2"
+    },
+    {
+      "id": 3,
+      "txn_date": "2024-01-10",
+      "amount_cents": 90000,
+      "merchant": "TOWN OF PERINTON TAX",
+      "description": "",
+      "category_id": null,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h3"
+    },
+    {
+      "id": 4,
+      "txn_date": "2025-01-10",
+      "amount_cents": 92000,
+      "merchant": "TOWN OF PERINTON TAX",
+      "description": "",
+      "category_id": null,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h4"
+    },
+    {
+      "id": 5,
+      "txn_date": "2025-03-05",
+      "amount_cents": 21000,
+      "merchant": "MONROE COUNTY WATER",
+      "description": "",
+      "category_id": 2,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h5"
+    },
+    {
+      "id": 6,
+      "txn_date": "2025-06-04",
+      "amount_cents": 22000,
+      "merchant": "MONROE COUNTY WATER",
+      "description": "",
+      "category_id": 2,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h6"
+    },
+    {
+      "id": 7,
+      "txn_date": "2025-09-03",
+      "amount_cents": 20500,
+      "merchant": "MONROE COUNTY WATER",
+      "description": "",
+      "category_id": 2,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h7"
+    },
+    {
+      "id": 8,
+      "txn_date": "2025-12-08",
+      "amount_cents": 21500,
+      "merchant": "MONROE COUNTY WATER",
+      "description": "",
+      "category_id": 2,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h8"
+    },
+    {
+      "id": 9,
+      "txn_date": "2025-03-20",
+      "amount_cents": 18600,
+      "merchant": "AAA MEMBERSHIP",
+      "description": "",
+      "category_id": null,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h9"
+    },
+    {
+      "id": 10,
+      "txn_date": "2025-09-18",
+      "amount_cents": 18600,
+      "merchant": "AAA MEMBERSHIP",
+      "description": "",
+      "category_id": null,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h10"
+    },
+    {
+      "id": 11,
+      "txn_date": "2026-02-19",
+      "amount_cents": 19200,
+      "merchant": "AAA MEMBERSHIP",
+      "description": "",
+      "category_id": null,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h11"
+    },
+    {
+      "id": 12,
+      "txn_date": "2025-01-14",
+      "amount_cents": 21000,
+      "merchant": "NATIONAL GRID",
+      "description": "",
+      "category_id": 2,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h12"
+    },
+    {
+      "id": 13,
+      "txn_date": "2025-02-14",
+      "amount_cents": 21000,
+      "merchant": "NATIONAL GRID",
+      "description": "",
+      "category_id": 2,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h13"
+    },
+    {
+      "id": 14,
+      "txn_date": "2025-03-14",
+      "amount_cents": 21000,
+      "merchant": "NATIONAL GRID",
+      "description": "",
+      "category_id": 2,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h14"
+    },
+    {
+      "id": 15,
+      "txn_date": "2025-04-14",
+      "amount_cents": 21000,
+      "merchant": "NATIONAL GRID",
+      "description": "",
+      "category_id": 2,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h15"
+    },
+    {
+      "id": 16,
+      "txn_date": "2025-05-14",
+      "amount_cents": 21000,
+      "merchant": "NATIONAL GRID",
+      "description": "",
+      "category_id": 2,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h16"
+    },
+    {
+      "id": 17,
+      "txn_date": "2025-06-14",
+      "amount_cents": 21000,
+      "merchant": "NATIONAL GRID",
+      "description": "",
+      "category_id": 2,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h17"
+    },
+    {
+      "id": 18,
+      "txn_date": "2025-07-14",
+      "amount_cents": 21000,
+      "merchant": "NATIONAL GRID",
+      "description": "",
+      "category_id": 2,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h18"
+    },
+    {
+      "id": 19,
+      "txn_date": "2025-08-14",
+      "amount_cents": 21000,
+      "merchant": "NATIONAL GRID",
+      "description": "",
+      "category_id": 2,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h19"
+    },
+    {
+      "id": 20,
+      "txn_date": "2025-09-14",
+      "amount_cents": 21000,
+      "merchant": "NATIONAL GRID",
+      "description": "",
+      "category_id": 2,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h20"
+    },
+    {
+      "id": 21,
+      "txn_date": "2025-10-14",
+      "amount_cents": 21000,
+      "merchant": "NATIONAL GRID",
+      "description": "",
+      "category_id": 2,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h21"
+    },
+    {
+      "id": 22,
+      "txn_date": "2025-11-14",
+      "amount_cents": 21000,
+      "merchant": "NATIONAL GRID",
+      "description": "",
+      "category_id": 2,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h22"
+    },
+    {
+      "id": 23,
+      "txn_date": "2025-12-14",
+      "amount_cents": 21000,
+      "merchant": "NATIONAL GRID",
+      "description": "",
+      "category_id": 2,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h23"
+    },
+    {
+      "id": 24,
+      "txn_date": "2026-01-14",
+      "amount_cents": 21500,
+      "merchant": "NATIONAL GRID",
+      "description": "",
+      "category_id": 2,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h24"
+    },
+    {
+      "id": 25,
+      "txn_date": "2026-02-14",
+      "amount_cents": 21500,
+      "merchant": "NATIONAL GRID",
+      "description": "",
+      "category_id": 2,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h25"
+    },
+    {
+      "id": 26,
+      "txn_date": "2026-03-03",
+      "amount_cents": 8200,
+      "merchant": "WEGMANS",
+      "description": "",
+      "category_id": 1,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h26"
+    },
+    {
+      "id": 27,
+      "txn_date": "2026-03-09",
+      "amount_cents": 11400,
+      "merchant": "WEGMANS",
+      "description": "",
+      "category_id": 1,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h27"
+    },
+    {
+      "id": 28,
+      "txn_date": "2026-03-12",
+      "amount_cents": 6100,
+      "merchant": "WEGMANS",
+      "description": "",
+      "category_id": 1,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h28"
+    }
+  ],
+  "categories": [
+    {
+      "id": 1,
+      "name": "Groceries",
+      "bucket": "discretionary",
+      "icon": null,
+      "color": null
+    },
+    {
+      "id": 2,
+      "name": "Utilities",
+      "bucket": "fixed",
+      "icon": null,
+      "color": null
+    },
+    {
+      "id": 3,
+      "name": "Insurance",
+      "bucket": "lumpy",
+      "icon": null,
+      "color": null
+    }
+  ]
+}

@@ -169,6 +169,120 @@ export const computed = new Elysia({ prefix: "/api" })
     };
   })
 
+  /**
+   * Lumpy items the statements already prove, which nobody has typed in yet.
+   *
+   * The one job this app cannot do for you is the setup, and after an import the
+   * evidence is sitting in the expenses table: a charge that arrived last March
+   * and again this March, for about the same money, is an annual bill. Nothing
+   * is written from here -- the web app prefills the Add dialog and a person
+   * confirms it. See budget-core/recurring.ts for what counts as evidence.
+   */
+  .get(
+    "/recurring-candidates",
+    async ({ query }) => {
+      const today = core.todayISO();
+      const months = clamp(query.months, 36, 12, 120);
+      const [cats, items, costs] = await Promise.all([
+        store.categories(),
+        store.lumpyItems(),
+        store.fixedCosts(),
+      ]);
+      const start = core.monthStart(core.addMonths(core.monthOf(today), -(months - 1)));
+      const expenses = await store.expensesBetween(start, today);
+      return {
+        today,
+        months,
+        rows: core.recurringCandidates(expenses, {
+          today,
+          lookbackMonths: months,
+          minAmountCents: clamp(query.min_amount_cents, 5000, 0, 100000000),
+          categories: cats,
+          lumpyItems: items,
+          fixedCosts: costs,
+        }),
+      };
+    },
+    { query: z.object({ months: num, min_amount_cents: num }) },
+  )
+
+  /**
+   * The month summary run forward: what is planned to be free in each of the
+   * next twelve months. Plan only -- a month that has not happened has no
+   * transactions in it, so this answers "can I afford it in March", never "what
+   * will I spend in March".
+   */
+  .get(
+    "/forecast",
+    async ({ query }) => {
+      const start = query.start ?? core.monthOf(core.todayISO());
+      const months = clamp(query.months, 12, 1, 60);
+      const [streams, fixedCosts, lumpyItems, savingsGoals, opening] = await Promise.all([
+        store.streams(), store.fixedCosts(), store.lumpyItems(), store.savingsGoals(),
+        store.setting("lumpy_opening_balance_cents", "0"),
+      ]);
+      return {
+        start,
+        months,
+        ...core.forecast({
+          streams, fixedCosts, lumpyItems, savingsGoals, start, months,
+          lumpyMode: MODE(query.lumpy_mode),
+          lumpyOpeningBalanceCents: Number(opening) || 0,
+        }),
+      };
+    },
+    { query: z.object({ start: isoMonth.optional(), months: num, lumpy_mode: lumpyMode }) },
+  )
+
+  /**
+   * What is actually in the account, against what the plan is about to ask of it.
+   *
+   * The balance is hand-kept, like the lumpy fund's, so it is read with the day
+   * it was last really changed and the spending recorded since -- a balance that
+   * says you are fine on the strength of a week-old fact is worse than no
+   * balance at all. Two months of allocation are passed in so the gap across a
+   * month end is covered: the paycheck after the last one of March is in April.
+   */
+  .get("/cash-position", async () => {
+    const today = core.todayISO();
+    const month = core.monthOf(today);
+    const row = await store.settingRow("checking_balance_cents");
+    const asOf = row?.updated_on ?? today;
+    const [streams, fixedCosts, lumpyItems, savingsGoals, opening, cats] = await Promise.all([
+      store.streams(), store.fixedCosts(), store.lumpyItems(), store.savingsGoals(),
+      store.setting("lumpy_opening_balance_cents", "0"),
+      store.categories(),
+    ]);
+    const income = core.monthlyActual(streams, month);
+    const plan = (m: string) =>
+      core.allocateMonth({
+        streams,
+        fixedCosts,
+        month: m,
+        lumpyMonthlyCents: core.recommendedMonthlyTotal(lumpyItems, m, Number(opening) || 0),
+        savingsMonthlyCents: core.savingsMonthlyTotal(savingsGoals, income),
+      }).paychecks;
+
+    // Bounded at today: money dated ahead of itself has not left the account.
+    const since = await store.expensesBetween(asOf, today);
+    const byId = core.categoryIndex(cats);
+    // Every bucket, not just discretionary. A mortgage payment is reconciliation
+    // in the budget and a withdrawal in the account, and this is the account.
+    const spent = since.filter((e) => core.bucketOf(e, byId) !== "transfer");
+
+    return {
+      set_at: row?.updated_at ?? null,
+      ...core.cashPosition({
+        paychecks: [...plan(month), ...plan(core.addMonths(month, 1))],
+        today,
+        balanceCents: Number(row?.value ?? "0") || 0,
+        asOf,
+        spentSinceCents: core.sum(spent.map((e) => e.amount_cents)),
+        spentSinceCount: spent.length,
+      }),
+    };
+  })
+
   /** Budgeted versus what the bills have actually cost. See budget-core/variance.ts. */
   .get(
     "/fixed-cost-actuals",
@@ -182,6 +296,9 @@ export const computed = new Elysia({ prefix: "/api" })
       return {
         through,
         months,
+        // Said once, at the top of the card: a month nobody imported is one fact
+        // about the window, not a fault of every bill in it.
+        months_without_statements: core.monthsWithoutStatements(expenses, { through, months }),
         rows: core.fixedCostVariance(costs, cats, expenses, { through, months }),
       };
     },
@@ -197,7 +314,9 @@ export const computed = new Elysia({ prefix: "/api" })
   .get("/export", async () => {
     const tables: Record<string, unknown[]> = {};
     for (const t of Object.keys(TABLES) as TableName[]) tables[t] = await rows(t);
-    tables.settings = (await sql.unsafe("SELECT name, value FROM settings")) as unknown[];
+    // Ordered, unlike the other tables, which get theirs from the table spec: a
+    // backup file two people compare should differ where the data differs.
+    tables.settings = (await sql.unsafe("SELECT name, value FROM settings ORDER BY name")) as unknown[];
     const body = { version: 1, exported_at: new Date().toISOString(), tables };
     return new Response(JSON.stringify(body, null, 2), {
       headers: {
