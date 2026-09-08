@@ -173,8 +173,17 @@ export type CategoryInput = z.infer<typeof categoryInput>;
 export type Category = z.infer<typeof category>;
 
 export const categoryRuleInput = z.object({
-  /** Case-insensitive substring, matched against "merchant description". */
-  pattern: z.string().min(2).max(160),
+  /**
+   * Case-insensitive substring, matched against "merchant description".
+   *
+   * Trimmed on the way in, because `applyRules` matches on
+   * `pattern.toLowerCase().trim()`: the padding never did anything except show up
+   * in the rules table and in the sentence a merge writes back at you. Trimming
+   * before the length check is deliberate -- a pattern that is only padding is
+   * two characters of nothing, and a one-character needle matches nearly every
+   * merchant you have.
+   */
+  pattern: z.string().trim().min(2).max(160),
   category_id: id,
   priority: z.number().int().default(100),
 });

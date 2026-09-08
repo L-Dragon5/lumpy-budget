@@ -77,6 +77,13 @@ Four places, in this order, or reads silently drop it:
 - **A merged rule is keyed on `pattern.toLowerCase().trim()`**, the same needle
   `applyRules` matches on (`csv-import/src/normalize.ts:122`). Change one and
   change the other, or a merge starts writing rules that can never fire.
+- **`categoryRuleInput.pattern` trims before it checks length.** Padding never
+  reached the matcher, so it does not reach the column either; `"  a  "` is a
+  one-character needle and a 422, not a three-character pattern.
+- **MySQL ignores trailing spaces when it compares strings.** `col <> TRIM(col)`
+  is false for `'bp '`, so any query looking for padding compares
+  `CHAR_LENGTH(col) <> CHAR_LENGTH(TRIM(col))` instead. Migration 008 is written
+  that way and a test pins it.
 - **A backup restores rows with the ids they were exported with** (`bulkInsert`
   in `db/src/client.ts`), which is the only reason the file's foreign keys still
   resolve. It writes the spec's columns, not the row's keys, so a column added to

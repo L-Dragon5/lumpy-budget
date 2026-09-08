@@ -126,7 +126,8 @@ curl -X POST localhost:3001/api/category-rules/merge \
 Rules are matched on `pattern.toLowerCase().trim()`, which is what `applyRules`
 matches on: two rules that reduce to the same needle can never both fire, so that
 is the engine's own notion of one rule. Merging the same file twice is the same
-database.
+database. Patterns are stored trimmed, by that route and by the ordinary editor
+both, since the padding never reached the matcher anyway.
 
 Both are their own route rather than a flag on `/restore`, because one replaces
 everything and the other replaces nothing, and a flag that flips between those is
@@ -136,7 +137,7 @@ a flag somebody gets wrong.
 
 ```bash
 bun run check                 # typecheck + tests + scenarios; what the commit hook runs
-bun test                      # 175 tests, no network, under a second
+bun test                      # 180 tests, no network, under a second
 bun run scenarios             # whole-household fixtures, diffed against expectations
 bun run scenarios:update      # accept a change, after reading the diff
 ```

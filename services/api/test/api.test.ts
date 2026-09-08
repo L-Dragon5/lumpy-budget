@@ -49,6 +49,28 @@ describe("crud", () => {
     expect(byMonth("2026-03").normalized_cents).toBe(0);
   });
 
+  test("a rule pattern is stored trimmed, whichever route wrote it", async () => {
+    // This block resets without the seed, so the category the rule needs is ours.
+    const cat = await post("/api/categories", { name: "Groceries", bucket: "discretionary", icon: null, color: null });
+    const groceries = cat.body.id as number;
+
+    const made = await post("/api/category-rules", { pattern: "  wegmans  ", category_id: groceries, priority: 10 });
+    expect(made.status).toBe(201);
+    // The padding never did anything: applyRules matches on the trimmed needle,
+    // so storing it only put whitespace in the rules table.
+    expect(made.body.pattern).toBe("wegmans");
+
+    const edited = await put(`/api/category-rules/${made.body.id}`, {
+      pattern: "\ttrader joe\n", category_id: groceries, priority: 10,
+    });
+    expect(edited.body.pattern).toBe("trader joe");
+
+    // Trimmed before the length check, so padding cannot buy a shorter needle.
+    const tooShort = await post("/api/category-rules", { pattern: "  a  ", category_id: groceries, priority: 10 });
+    expect(tooShort.status).toBe(422);
+    expect(tooShort.body.errors[0]!.path).toEqual(["pattern"]);
+  });
+
   test("a bad body is a 422 that names the field", async () => {
     const res = await post("/api/income-streams", { ...semiMonthly, frequency: "biweekly", anchor_date: null });
     expect(res.status).toBe(422);
@@ -692,6 +714,37 @@ describe("merging import profiles", () => {
   });
 });
 
+describe("rule patterns carry no padding", () => {
+  beforeEach(() => resetDb({ withSeed: true }));
+
+  test("the seed ships none, so a fresh database agrees with the contract", async () => {
+    const padded = (await sql.unsafe(
+      "SELECT pattern FROM category_rules WHERE CHAR_LENGTH(pattern) <> CHAR_LENGTH(TRIM(pattern))",
+    )) as { pattern: string }[];
+    expect(padded).toEqual([]);
+  });
+
+  test("MySQL will not find a trailing space by comparing strings", async () => {
+    // Why migration 008 compares lengths. MySQL ignores trailing spaces when it
+    // compares strings, so `pattern <> TRIM(pattern)` is false for 'bp ' -- the
+    // exact shape the seed used to ship, and the one a value comparison misses.
+    const cat = (await sql.unsafe("SELECT id FROM categories LIMIT 1")) as { id: number }[];
+    await sql.unsafe("INSERT INTO category_rules (pattern, category_id, priority) VALUES (?, ?, 100)", [
+      "bp ", cat[0]!.id,
+    ]);
+
+    const byValue = (await sql.unsafe(
+      "SELECT pattern FROM category_rules WHERE pattern <> TRIM(pattern)",
+    )) as unknown[];
+    const byLength = (await sql.unsafe(
+      "SELECT pattern FROM category_rules WHERE CHAR_LENGTH(pattern) <> CHAR_LENGTH(TRIM(pattern))",
+    )) as { pattern: string }[];
+
+    expect(byValue).toEqual([]);
+    expect(byLength.map((r) => r.pattern)).toEqual(["bp "]);
+  });
+});
+
 describe("merging category rules", () => {
   let groceries: number;
   let dining: number;
@@ -735,15 +788,32 @@ describe("merging category rules", () => {
     const mine = await post("/api/category-rules", { pattern: "Wegmans", category_id: dining, priority: 100 });
 
     const res = await merge(file([{ pattern: "  WEGMANS  ", category_id: 801, priority: 5 }]));
-    expect(res.body).toEqual({ added: [], updated: ["  WEGMANS  "], skipped: [] });
+    // Reported as it is stored, which is trimmed.
+    expect(res.body).toEqual({ added: [], updated: ["WEGMANS"], skipped: [] });
 
     const after = await rules();
     // One rule, not two: the matcher lowercases and trims, so these are the same
     // rule and a second one could never have fired.
     expect(after).toHaveLength(1);
     expect(after[0]!.id).toBe(mine.body.id);
+    expect(after[0]!.pattern).toBe("WEGMANS");
     expect(after[0]!.category_id).toBe(groceries);
     expect(after[0]!.priority).toBe(5);
+  });
+
+  test("a merged pattern is stored trimmed, not as the file spelled it", async () => {
+    const res = await merge(file([{ pattern: "  farm stand  ", category_id: 801, priority: 15 }]));
+    expect(res.body.added).toEqual(["farm stand"]);
+    expect((await rules())[0]!.pattern).toBe("farm stand");
+  });
+
+  test("a pattern that is only padding is two characters of nothing", async () => {
+    // Trimmed before the length check, so " a " is a one-character needle that
+    // would match nearly every merchant, not a three-character pattern.
+    const res = await merge(file([{ pattern: "  a  ", category_id: 801, priority: 10 }]));
+    expect(res.status).toBe(422);
+    expect(res.body.errors[0]!.path).toEqual(["tables", "category_rules", 0, "pattern"]);
+    expect(await rules()).toEqual([]);
   });
 
   test("a rule whose category is not here is skipped, and says which", async () => {
