@@ -16,6 +16,7 @@ bun run scenarios                # household fixtures diffed against stored expe
 bun run scenarios:update         # accept the diff, only after reading it
 bun run --cwd apps/web lint      # oxlint; not part of `check`
 bun run backup                   # mysqldump to ~/lumpy-backups; run before a migration
+bun run reset                    # row counts only; --yes backs up, wipes, re-seeds
 ```
 
 `bun test` needs MySQL running: `services/api/test/*` hits a real

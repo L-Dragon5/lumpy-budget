@@ -43,6 +43,34 @@ Re-running it is safe: setup rows are matched by name and updated rather than
 added again, and the expense dedupe hash makes the import a no-op the second
 time.
 
+## Starting over
+
+When the demo data or a run of test imports has to go and the real statements
+are about to come in:
+
+```bash
+bun run reset                 # counts every table, deletes nothing
+bun run reset --yes           # backs up, wipes, re-seeds categories and rules
+```
+
+Dry by default: the bare command prints a row count per table and exits, so the
+destructive spelling is one you have to type on purpose. `--yes` takes a full
+`bun run backup` first and stops without deleting anything if that dump does not
+finish, because the file is the only way back.
+
+It truncates every table in `services/db/src/tables.ts`, which is why a table
+added there cannot be quietly left behind, and truncates rather than deletes so
+the first expense in the fresh database is id 1. `_migrations` is left alone --
+emptying it would tell `migrate` to run `001_init.sql` against a schema that is
+already there -- and `settings` is zeroed rather than dropped, because the lumpy
+opening balance row is inserted by that migration and the reports read it. A
+database whose name ends in `_test` is refused outright: that one belongs to the
+test suite, which truncates it on every test.
+
+Not to be confused with `bun run demo --reset`, which deletes the demo household
+and its import batches through the running API and leaves your categories, rules
+and hand-entered expenses where they are.
+
 ## Backing up
 
 Everything lives in one MySQL database on one machine, and months of hand-entered
