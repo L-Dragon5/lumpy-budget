@@ -27,8 +27,11 @@ export const TABLES = {
     order: "active DESC, name ASC",
   },
   fixed_costs: {
-    cols: ["id", "name", "amount_cents", "due_day", "lead_days", "category_id", "merchant_pattern", "active"],
-    bool: ["active"],
+    cols: [
+      "id", "name", "amount_cents", "due_day", "lead_days", "category_id",
+      "merchant_pattern", "merchant_whole_word", "active",
+    ],
+    bool: ["merchant_whole_word", "active"],
     order: "active DESC, due_day ASC, name ASC",
   },
   lumpy_items: {

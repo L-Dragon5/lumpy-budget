@@ -137,7 +137,7 @@ a flag somebody gets wrong.
 
 ```bash
 bun run check                 # typecheck + tests + scenarios; what the commit hook runs
-bun test                      # 189 tests, no network, under a second
+bun test                      # 198 tests, no network, under a second
 bun run scenarios             # whole-household fixtures, diffed against expectations
 bun run scenarios:update      # accept a change, after reading the diff
 ```
@@ -309,7 +309,15 @@ word** and it needs a non-letter on each side, so `bp` finds `BP #4021` and
 on purpose: a merchant descriptor glues the store number straight onto the name,
 so a digit has to count as the end of the word. It is off unless you ask for it,
 because most rules want the opposite — `trader joe` has to keep finding
-`TRADER JOES`, which a whole-word match would not. Both the category and the note are edited in place in that table
+`TRADER JOES`, which a whole-word match would not.
+
+A fixed cost's **shows up on the statement as** carries the same switch, matched
+by the same code (`matchesPattern` in `contracts/types.ts`), because a bill that
+reconciles has to be a transaction the importer would have categorised the same
+way. It is worth more there than on a rule: a rule that over-matches puts a
+charge in the wrong category, while a bill that over-matches quietly rewrites
+what the bill costs. A $50 fuel card that also swallows one $999 charge from a
+company whose name starts the same way reads as $366.67 a month. Both the category and the note are edited in place in that table
 — Enter keeps the change, Escape drops it — because fixing a hundred imported
 rows through a dialog is not fixing them at all.
 

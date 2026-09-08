@@ -29,6 +29,7 @@ export function fixedCost(p: Partial<FixedCost> = {}): FixedCost {
     lead_days: 3,
     category_id: null,
     merchant_pattern: null,
+    merchant_whole_word: false,
     active: true,
     ...p,
   };

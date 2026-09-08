@@ -91,7 +91,12 @@ Four places, in this order, or reads silently drop it:
   the end of a word, so `bp` still finds `BP1234` while passing over `BPOST`.
   Default FALSE, so no rule that already existed changed behaviour; migration
   009 turns it on for `bp` and `amc` alone, which is what their trailing space
-  in the seed was reaching for.
+  in the seed was reaching for. `fixed_costs.merchant_whole_word` (migration
+  010) is the same switch for a bill, and 010 turns on nothing.
+- **The variance window ends the month *before* `through`.** A test that puts
+  its decisive transaction in `through`'s own month passes whatever the matcher
+  does, because the calendar excluded it. Two of these tests were written that
+  way before the window was checked.
 - **MySQL ignores trailing spaces when it compares strings.** `col <> TRIM(col)`
   is false for `'bp '`, so any query looking for padding compares
   `CHAR_LENGTH(col) <> CHAR_LENGTH(TRIM(col))` instead. Migration 008 is written

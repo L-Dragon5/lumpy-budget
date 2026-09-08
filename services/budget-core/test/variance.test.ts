@@ -137,3 +137,46 @@ test("a bill with neither a category nor a merchant is left out: nothing to comp
   const orphan = fixedCost({ name: "Storage unit", amount_cents: 5000, category_id: null });
   expect(fixedCostVariance([orphan], cats, expenses, { through: "2026-03" })).toEqual([]);
 });
+
+test("a whole-word pattern will not reconcile a bill with a longer name", () => {
+  const bill = fixedCost({
+    name: "Fuel card", amount_cents: 5000, category_id: null,
+    merchant_pattern: "bp", merchant_whole_word: true,
+  });
+  const rows = [
+    expense({ txn_date: "2026-01-04", amount_cents: 5200, merchant: "BP #4021 FUEL", description: "" }),
+    expense({ txn_date: "2026-02-04", amount_cents: 4900, merchant: "BP1234", description: "" }),
+    // The one that should not count: a different company entirely. Inside the
+    // window on purpose -- `through` ends the window the month before, so a March
+    // charge with through="2026-03" would be excluded by the calendar and the
+    // test would pass whatever the matcher did.
+    expense({ txn_date: "2026-03-04", amount_cents: 99900, merchant: "BPOST BRUSSELS", description: "" }),
+  ];
+  const [row] = fixedCostVariance([bill], cats, rows, { through: "2026-04", months: 3 });
+  expect(row!.months_with_data).toBe(2);
+  expect(row!.merchants.sort()).toEqual(["BP #4021 FUEL", "BP1234"]);
+  // Without the switch that BPOST charge drags the average from 5050 to 36666.
+  expect(row!.actual_avg_cents).toBe(5050);
+});
+
+test("without the switch the same bill is the substring it has always been", () => {
+  const bill = fixedCost({ name: "Fuel card", amount_cents: 5000, category_id: null, merchant_pattern: "bp" });
+  const rows = [expense({ txn_date: "2026-01-04", amount_cents: 99900, merchant: "BPOST BRUSSELS", description: "" })];
+  const [row] = fixedCostVariance([bill], cats, rows, { through: "2026-02", months: 1 });
+  expect(row!.months_with_data).toBe(1);
+});
+
+test("a whole-word bill leaves the transaction for the next pattern, not unclaimed", () => {
+  // Claiming is exclusive: a bill that passes on a transaction has to really pass,
+  // and the pattern behind it must still get it. The strict pattern is the longer
+  // of the two on purpose, so the sort puts it first and it is the one declining.
+  const strict = fixedCost({
+    name: "Post office", amount_cents: 1800, category_id: null,
+    merchant_pattern: "bpos", merchant_whole_word: true,
+  });
+  const loose = fixedCost({ name: "Fuel card", amount_cents: 5000, category_id: null, merchant_pattern: "bp" });
+  const rows = [expense({ txn_date: "2026-01-04", amount_cents: 1900, merchant: "BPOST BRUSSELS", description: "" })];
+  const out = fixedCostVariance([strict, loose], cats, rows, { through: "2026-02", months: 1 });
+  expect(out.find((r) => r.key === `cost:${strict.id}`)!.months_with_data).toBe(0);
+  expect(out.find((r) => r.key === `cost:${loose.id}`)!.months_with_data).toBe(1);
+});

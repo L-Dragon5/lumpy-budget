@@ -25,11 +25,13 @@ type Draft = {
   lead_days: string;
   category_id: string;
   merchant_pattern: string;
+  merchant_whole_word: boolean;
   active: boolean;
 };
 
 const emptyDraft = (): Draft => ({
-  name: "", amount_cents: null, due_day: "1", lead_days: "3", category_id: "none", merchant_pattern: "", active: true,
+  name: "", amount_cents: null, due_day: "1", lead_days: "3", category_id: "none",
+  merchant_pattern: "", merchant_whole_word: false, active: true,
 });
 
 const toDraft = (c: FixedCost): Draft => ({
@@ -39,6 +41,7 @@ const toDraft = (c: FixedCost): Draft => ({
   lead_days: String(c.lead_days),
   category_id: c.category_id === null ? "none" : String(c.category_id),
   merchant_pattern: c.merchant_pattern ?? "",
+  merchant_whole_word: c.merchant_whole_word,
   active: c.active,
 });
 
@@ -50,6 +53,7 @@ const toBody = (d: Draft) => ({
   category_id: d.category_id === "none" ? null : Number(d.category_id),
   // Below the schema's 2-character minimum it is not a pattern, it is a typo.
   merchant_pattern: d.merchant_pattern.trim().length >= 2 ? d.merchant_pattern.trim() : null,
+  merchant_whole_word: d.merchant_whole_word,
   active: d.active,
 });
 
@@ -367,6 +371,24 @@ export default function FixedCosts() {
               its category.
             </FieldDescription>
           </Field>
+
+          {/* Only worth asking once there is a pattern for it to change. */}
+          {draft.merchant_pattern.trim().length >= 2 ? (
+            <Field orientation="horizontal">
+              <Switch
+                id="fc-whole-word"
+                checked={draft.merchant_whole_word}
+                onCheckedChange={(v) => set({ merchant_whole_word: v })}
+              />
+              <div>
+                <FieldLabel htmlFor="fc-whole-word">Match as a whole word</FieldLabel>
+                <FieldDescription>
+                  On, <span className="font-mono">bp</span> reconciles BP #4021 and BP1234 but not BPOST.
+                  Leave it off for a name a statement adds letters to.
+                </FieldDescription>
+              </div>
+            </Field>
+          ) : null}
 
           <Field orientation="horizontal">
             <Switch id="fc-active" checked={draft.active} onCheckedChange={(v) => set({ active: v })} />

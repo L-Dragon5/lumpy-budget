@@ -778,6 +778,92 @@ describe("whole-word rules, end to end", () => {
   });
 });
 
+describe("whole-word bills, end to end", () => {
+  let utilities: number;
+
+  beforeEach(async () => {
+    await resetDb({ withSeed: true });
+    utilities = ((await api("/api/categories")).body as { id: number; name: string; bucket: string }[])
+      .find((c) => c.bucket === "fixed")!.id;
+  });
+
+  const bill = (body: Record<string, unknown>) =>
+    post("/api/fixed-costs", {
+      name: "Fuel card", amount_cents: 5000, due_day: 4, lead_days: 3,
+      category_id: utilities, active: true, ...body,
+    });
+
+  const spend = (txn_date: string, amount_cents: number, merchant: string) =>
+    post("/api/expenses", { txn_date, amount_cents, merchant, description: "", category_id: utilities, source: "manual" });
+
+  const actualsFor = async (through: string) =>
+    (await api(`/api/fixed-cost-actuals?through=${through}&months=3`)).body as {
+      rows: { key: string; merchants: string[]; months_with_data: number; actual_avg_cents: number }[];
+    };
+
+  test("the switch survives the round trip", async () => {
+    const made = await bill({ merchant_pattern: "bp", merchant_whole_word: true });
+    expect(made.status).toBe(201);
+    expect(made.body.merchant_whole_word).toBe(true);
+    // A boolean column read back as 0/1 would still be truthy; this is the coercion.
+    expect((await api(`/api/fixed-costs/${made.body.id}`)).body.merchant_whole_word).toBe(true);
+
+    const off = await put(`/api/fixed-costs/${made.body.id}`, {
+      name: "Fuel card", amount_cents: 5000, due_day: 4, lead_days: 3,
+      category_id: utilities, merchant_pattern: "bp", merchant_whole_word: false, active: true,
+    });
+    expect(off.body.merchant_whole_word).toBe(false);
+  });
+
+  test("a bill written before the column existed defaults to off", async () => {
+    const made = await bill({ merchant_pattern: "bp" });
+    expect(made.body.merchant_whole_word).toBe(false);
+  });
+
+  test("the pattern is stored trimmed, and padding cannot buy a shorter needle", async () => {
+    const made = await bill({ merchant_pattern: "  national grid  " });
+    expect(made.body.merchant_pattern).toBe("national grid");
+    expect((await bill({ merchant_pattern: "  a  " })).status).toBe(422);
+  });
+
+  test("budgeted versus actual stops counting a charge from a longer name", async () => {
+    const made = await bill({ merchant_pattern: "bp", merchant_whole_word: true });
+    await spend("2026-01-04", 5200, "BP #4021 FUEL");
+    await spend("2026-02-04", 4900, "BP1234");
+    await spend("2026-03-04", 99900, "BPOST BRUSSELS");
+
+    // through="2026-04", because the window ends the month before: with "2026-03"
+    // the March charge is outside it and this passes whatever the matcher does.
+    const { rows } = await actualsFor("2026-04");
+    const mine = rows.find((r) => r.key === `cost:${made.body.id}`)!;
+    expect(mine.merchants.sort()).toEqual(["BP #4021 FUEL", "BP1234"]);
+    expect(mine.months_with_data).toBe(2);
+    // The BPOST charge would have dragged this from 5050 to 36666.
+    expect(mine.actual_avg_cents).toBe(5050);
+  });
+
+  test("off, the same bill counts all three", async () => {
+    const made = await bill({ merchant_pattern: "bp", merchant_whole_word: false });
+    await spend("2026-01-04", 5200, "BP #4021 FUEL");
+    await spend("2026-02-04", 4900, "BP1234");
+    await spend("2026-03-04", 99900, "BPOST BRUSSELS");
+
+    const { rows } = await actualsFor("2026-04");
+    expect(rows.find((r) => r.key === `cost:${made.body.id}`)!.months_with_data).toBe(3);
+  });
+
+  test("a backup carries it", async () => {
+    await bill({ merchant_pattern: "bp", merchant_whole_word: true });
+    const dumped = await (await raw("/api/export")).json();
+    expect(dumped.tables.fixed_costs[0].merchant_whole_word).toBe(true);
+
+    await resetDb({ withSeed: true });
+    expect((await post("/api/restore", dumped)).status).toBe(200);
+    expect(((await api("/api/fixed-costs")).body as { merchant_whole_word: boolean }[])[0]!.merchant_whole_word)
+      .toBe(true);
+  });
+});
+
 describe("rule patterns carry no padding", () => {
   beforeEach(() => resetDb({ withSeed: true }));
 

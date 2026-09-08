@@ -72,6 +72,8 @@ export function fixedCostVariance(
 
   // Longest pattern first so a specific one wins over a broad one that contains it
   // ("national grid" over "grid"), with the id breaking ties so the result is stable.
+  // A whole-word pattern is not sorted ahead of a plain one: length still decides,
+  // and a bill that wants to win against a longer pattern says so with a longer one.
   const matchers = active
     .filter((c) => (c.merchant_pattern ?? "").trim().length > 0)
     .map((c) => ({ cost: c, needle: needleOf(c.merchant_pattern!) }))
@@ -83,9 +85,7 @@ export function fixedCostVariance(
   const spare: Expense[] = [];
   for (const e of rows) {
     const h = hay(e);
-    // Plain substring: a bill has no whole-word switch of its own yet, and this
-    // has to keep agreeing with what the importer would have done.
-    const hit = matchers.find((m) => matchesPattern(h, m.needle));
+    const hit = matchers.find((m) => matchesPattern(h, m.needle, m.cost.merchant_whole_word));
     if (hit) (claimed.get(hit.cost.id) ?? claimed.set(hit.cost.id, []).get(hit.cost.id)!).push(e);
     else spare.push(e);
   }

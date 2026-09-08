@@ -110,8 +110,14 @@ export const fixedCostInput = z.object({
    * "merchant description", matched the way the importer matches category_rules.
    * Set it and budgeted-vs-actual answers for this bill alone; leave it null and
    * the bill is compared with everything else sharing its category.
+   *
+   * Trimmed on the way in for the same reason a rule's pattern is: the matcher
+   * has always worked on the trimmed needle, so padding only ever reached the
+   * column.
    */
-  merchant_pattern: z.string().min(2).max(160).nullable().default(null),
+  merchant_pattern: z.string().trim().min(2).max(160).nullable().default(null),
+  /** See `matchesPattern`: a BP fuel bill is not reconciled by a BPOST charge. */
+  merchant_whole_word: z.boolean().default(false),
   active: z.boolean().default(true),
 });
 export const fixedCost = z.object({ id }).and(fixedCostInput);
