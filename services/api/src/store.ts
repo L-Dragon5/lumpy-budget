@@ -1,6 +1,6 @@
 import type {
   BackupTables, Category, CategoryRule, Expense, ExpenseInput, FixedCost, IncomeStream,
-  LumpyItem, RestoreResult, SavingsGoal,
+  ImportProfile, ImportProfileInput, LumpyItem, MergeResult, RestoreResult, SavingsGoal,
 } from "@lumpy/contracts";
 import { bulkInsert, insert, rows, sql, update, type Executor } from "@lumpy/db";
 import { applyRules, dedupeKey } from "@lumpy/csv-import";
@@ -172,4 +172,38 @@ export async function restore(tables: BackupTables): Promise<RestoreResult> {
     restored.settings = tables.settings.length;
   });
   return { restored, total: Object.values(restored).reduce((a, b) => a + b, 0) };
+}
+
+/**
+ * Import formats from a backup file, added to whatever is already here.
+ *
+ * The additive counterpart to restore(): nothing is deleted, and the incoming
+ * ids are dropped rather than kept, because this lands in a database where id 1
+ * is already some other profile. `name` is the identity instead -- it is the
+ * column with the UNIQUE index and the thing you actually recognise in the
+ * import wizard -- so a profile you already have has its mapping updated and
+ * everything else is inserted fresh.
+ *
+ * Two rows with the same name in one file is a file that contradicts itself; the
+ * unique index says so as a 409 and the transaction takes the whole merge back.
+ */
+export async function mergeImportProfiles(incoming: ImportProfileInput[]): Promise<MergeResult> {
+  const byName = new Map(
+    (await rows<ImportProfile>("import_profiles")).map((p) => [p.name, p.id]),
+  );
+  const added: string[] = [];
+  const updated: string[] = [];
+  await sql.begin(async (tx: Executor) => {
+    for (const profile of incoming) {
+      const existing = byName.get(profile.name);
+      if (existing === undefined) {
+        await insert("import_profiles", profile, tx);
+        added.push(profile.name);
+      } else {
+        await update("import_profiles", existing, profile, tx);
+        updated.push(profile.name);
+      }
+    }
+  });
+  return { added, updated };
 }

@@ -232,6 +232,29 @@ export const importProfile = z.object({ id }).and(importProfileInput);
 export type ImportProfileInput = z.infer<typeof importProfileInput>;
 export type ImportProfile = z.infer<typeof importProfile>;
 
+/**
+ * What `POST /api/import-profiles/merge` accepts: a whole backup file, of which
+ * only `tables.import_profiles` is read. Zod strips the rest, so a file whose
+ * expenses are malformed still merges its profiles -- a merge has no business
+ * failing on a table it never touches.
+ *
+ * Rows come in as `importProfileInput`, without an id: unlike a restore, these
+ * land in a database whose ids already mean something, so each profile is
+ * matched by its (UNIQUE) name and gets a local id of its own.
+ */
+export const importProfileMergeInput = z.object({
+  version: z.literal(1),
+  tables: z.object({ import_profiles: z.array(importProfileInput).default([]) }),
+});
+export type ImportProfileMergeInput = z.infer<typeof importProfileMergeInput>;
+
+/** Named rather than counted: "which ones did it touch" is the question you ask. */
+export const mergeResult = z.object({
+  added: z.array(z.string()),
+  updated: z.array(z.string()),
+});
+export type MergeResult = z.infer<typeof mergeResult>;
+
 export const importBatch = z.object({
   id,
   filename: z.string(),

@@ -89,11 +89,35 @@ curl -X POST localhost:3001/api/restore -H 'Content-Type: application/json' \
 and is how you get *this* database back; the JSON carries the data the app knows
 about and is how you get it into *another* one.
 
+### Taking only the import formats
+
+Replacing everything is the wrong move when the destination already has a year of
+spending on it and you only want the column mapping you worked out for a bank.
+**Settings -> Import formats -> Add from a backup** takes the same file and reads
+only `tables.import_profiles` from it. Nothing is deleted: a format whose name you
+already have gets its mapping updated in place, the rest are added, and the file's
+ids are dropped, because id 1 already means something here.
+
+```bash
+curl -X POST localhost:3001/api/import-profiles/merge \
+  -H 'Content-Type: application/json' --data-binary @backup.json
+# -> {"added":["Airline Card"],"updated":["Big Bank"]}
+```
+
+Everything outside `tables.import_profiles` is stripped before validation, so a
+file whose expenses are malformed still merges its formats. A merge is one
+transaction too: a bad mapping is a 422 naming the field, and a file that lists
+the same profile twice is a 409, and neither leaves half a merge behind.
+
+Its own route rather than a flag on `/restore`, because one replaces everything
+and the other replaces nothing, and a flag that flips between those is a flag
+somebody gets wrong.
+
 ## Checks
 
 ```bash
 bun run check                 # typecheck + tests + scenarios; what the commit hook runs
-bun test                      # 158 tests, no network, under a second
+bun test                      # 165 tests, no network, under a second
 bun run scenarios             # whole-household fixtures, diffed against expectations
 bun run scenarios:update      # accept a change, after reading the diff
 ```

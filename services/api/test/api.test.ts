@@ -580,6 +580,118 @@ describe("backup restore", () => {
   });
 });
 
+describe("merging import profiles", () => {
+  const mapping = {
+    date_column: "Posted Date", amount_column: "Amount", debit_column: null, credit_column: null,
+    merchant_column: "Payee", description_column: "Memo",
+    date_format: "MM/DD/YYYY", flip_sign: true, skip_rows: 1,
+  };
+  /** A file carrying profiles, shaped exactly like a real export. */
+  const file = (profiles: unknown[]) => ({ version: 1, tables: { import_profiles: profiles } });
+  const profiles = async () => (await api("/api/import-profiles")).body as
+    { id: number; name: string; mapping: typeof mapping }[];
+
+  beforeEach(() => resetDb({ withSeed: true }));
+
+  test("profiles arrive without the rest of the file coming with them", async () => {
+    await post("/api/fixed-costs", {
+      name: "Power", amount_cents: 14000, due_day: 12, lead_days: 3,
+      category_id: null, merchant_pattern: null, active: true,
+    });
+
+    const res = await post("/api/import-profiles/merge", file([
+      { id: 7, name: "Big Bank", mapping },
+      { id: 9, name: "Card", mapping: { ...mapping, flip_sign: false } },
+    ]));
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ added: ["Big Bank", "Card"], updated: [] });
+
+    // The point of a merge: everything already here is still here.
+    expect((await api("/api/categories")).body).toHaveLength(24);
+    expect((await api("/api/fixed-costs")).body).toHaveLength(1);
+
+    const after = await profiles();
+    expect(after.map((p) => p.name)).toEqual(["Big Bank", "Card"]);
+    expect(after[0]!.mapping).toEqual(mapping);
+    // The file's ids are dropped: 7 and 9 mean something else in this database.
+    expect(after.every((p) => p.id !== 7 && p.id !== 9)).toBe(true);
+  });
+
+  test("a name you already have is updated in place, not duplicated", async () => {
+    const mine = await post("/api/import-profiles", { name: "Big Bank", mapping });
+    expect(mine.status).toBe(201);
+
+    const fixed = { ...mapping, skip_rows: 3, merchant_column: "Description" };
+    const res = await post("/api/import-profiles/merge", file([
+      { name: "Big Bank", mapping: fixed },
+      { name: "Card", mapping },
+    ]));
+    expect(res.body).toEqual({ added: ["Card"], updated: ["Big Bank"] });
+
+    const after = await profiles();
+    expect(after).toHaveLength(2);
+    const big = after.find((p) => p.name === "Big Bank")!;
+    // Same row, so anything pointing at it still points at it.
+    expect(big.id).toBe(mine.body.id);
+    expect(big.mapping).toEqual(fixed);
+  });
+
+  test("a whole backup file merges only its profiles, however bad the rest is", async () => {
+    // The file you already have on disk is the file you get to use. Everything
+    // outside tables.import_profiles is stripped before it is ever validated.
+    const res = await post("/api/import-profiles/merge", {
+      version: 1,
+      exported_at: "2026-03-01T00:00:00.000Z",
+      tables: {
+        import_profiles: [{ id: 3, name: "Big Bank", mapping }],
+        expenses: [{ txn_date: "not a date", amount_cents: "lots" }],
+        categories: [{ bucket: "invented" }],
+      },
+    });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ added: ["Big Bank"], updated: [] });
+    expect((await profiles())).toHaveLength(1);
+    expect((await api("/api/expenses")).body).toEqual([]);
+  });
+
+  test("a broken mapping is a 422 that names the field, and nothing lands", async () => {
+    const res = await post("/api/import-profiles/merge", file([
+      { name: "Big Bank", mapping },
+      { name: "Card", mapping: { ...mapping, date_format: "YYYY/DD/MM" } },
+    ]));
+    expect(res.status).toBe(422);
+    expect(res.body.errors[0]!.path).toEqual(["tables", "import_profiles", 1, "mapping", "date_format"]);
+    expect(await profiles()).toEqual([]);
+  });
+
+  test("a file that names the same profile twice is a 409, and takes nothing with it", async () => {
+    await post("/api/import-profiles", { name: "Card", mapping });
+    const res = await post("/api/import-profiles/merge", file([
+      { name: "Big Bank", mapping },
+      { name: "Big Bank", mapping: { ...mapping, skip_rows: 2 } },
+    ]));
+    expect(res.status).toBe(409);
+    // One transaction: the first "Big Bank" is not sitting there half-merged.
+    expect((await profiles()).map((p) => p.name)).toEqual(["Card"]);
+  });
+
+  test("a file with no profiles in it changes nothing", async () => {
+    await post("/api/import-profiles", { name: "Card", mapping });
+    const res = await post("/api/import-profiles/merge", { version: 1, tables: {} });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ added: [], updated: [] });
+    expect((await profiles()).map((p) => p.name)).toEqual(["Card"]);
+  });
+
+  test("merge does not shadow the crud routes it sits next to", async () => {
+    const made = await post("/api/import-profiles", { name: "Big Bank", mapping });
+    expect((await api(`/api/import-profiles/${made.body.id}`)).status).toBe(200);
+    // "merge" is a word, not an id, and the id route must still say so.
+    expect((await api("/api/import-profiles/merge")).status).toBe(422);
+    expect((await del(`/api/import-profiles/${made.body.id}`)).status).toBe(200);
+  });
+});
+
 describe("lumpy fund drift", () => {
   let lumpyCategory: number;
 

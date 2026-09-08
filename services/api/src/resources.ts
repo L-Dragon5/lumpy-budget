@@ -1,8 +1,9 @@
 import { Elysia, status } from "elysia";
 import {
   category, categoryInput, categoryRule, categoryRuleInput, expenseInput, fixedCost,
-  fixedCostInput, importProfile, importProfileInput, incomeStream, incomeStreamInput,
-  expense, importBatch, isoDate, lumpyItem, lumpyItemInput, savingsGoal, savingsGoalInput,
+  fixedCostInput, importProfile, importProfileInput, importProfileMergeInput, incomeStream,
+  incomeStreamInput, expense, importBatch, isoDate, lumpyItem, lumpyItemInput, mergeResult,
+  savingsGoal, savingsGoalInput,
 } from "@lumpy/contracts";
 import type { Expense, ImportBatch } from "@lumpy/contracts";
 import { byId, remove, rows } from "@lumpy/db";
@@ -79,6 +80,23 @@ const importBatches = new Elysia({ name: "import-batches" })
   // 405 is a truer answer than the 404 an undeclared route would give.
   .post("/import-batches", () => status(405, { error: "import-batches is not writable" }));
 
+/**
+ * Import formats out of a backup file, without the rest of the file coming with
+ * them. /restore replaces every table, which is right for cloning a whole
+ * environment and wrong for carrying one bank's column mapping to a machine that
+ * already has a year of spending on it.
+ *
+ * Its own route rather than a `?mode=merge` on /restore: one replaces everything
+ * and one replaces nothing, and a flag that flips between those two is a flag
+ * somebody gets wrong.
+ */
+const importProfileMerge = new Elysia({ name: "import-profile-merge" })
+  .post(
+    "/import-profiles/merge",
+    ({ body }) => store.mergeImportProfiles(body.tables.import_profiles),
+    { body: importProfileMergeInput, response: mergeResult },
+  );
+
 export const resources = new Elysia({ prefix: "/api" })
   .use(crud("income-streams", "income_streams", incomeStreamInput, incomeStream))
   .use(crud("fixed-costs", "fixed_costs", fixedCostInput, fixedCost))
@@ -86,6 +104,9 @@ export const resources = new Elysia({ prefix: "/api" })
   .use(crud("savings-goals", "savings_goals", savingsGoalInput, savingsGoal))
   .use(crud("categories", "categories", categoryInput, category))
   .use(crud("category-rules", "category_rules", categoryRuleInput, categoryRule))
+  // Before the crud block: `/import-profiles/:id` would otherwise try to read
+  // "merge" as an id on any verb they share.
+  .use(importProfileMerge)
   .use(crud("import-profiles", "import_profiles", importProfileInput, importProfile))
   .use(expenses)
   .use(importBatches);

@@ -12,7 +12,7 @@ import {
 import { Field, FieldGroup, FieldLabel, FieldDescription } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ApiError } from "@/lib/api";
+import { errorText } from "@/lib/api";
 import { centsToInput, toCents } from "@/lib/format";
 
 /**
@@ -69,16 +69,9 @@ export function RecordDialog({
 }
 
 export function FormError({ error }: { error: unknown }) {
-  const issues = error instanceof ApiError ? error.issues : [];
   return (
     <Alert variant="destructive" className="mb-4">
-      <AlertDescription>
-        {issues.length > 0
-          ? issues.map((i) => `${i.path}: ${i.message}`).join("; ")
-          : error instanceof Error
-            ? error.message
-            : "Could not save. Try again."}
-      </AlertDescription>
+      <AlertDescription>{errorText(error)}</AlertDescription>
     </Alert>
   );
 }

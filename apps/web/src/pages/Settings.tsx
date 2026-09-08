@@ -21,7 +21,7 @@ import { CategoryIcon, CategoryLabel } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 import { AddButton, DeleteButton, FormError, RecordDialog } from "@/components/app/record-dialog";
 import { Loading, LoadError, PageHeader } from "@/components/app/page";
-import { eden, useApi, useMutate } from "@/lib/api";
+import { eden, errorText, useApi, useMutate } from "@/lib/api";
 import { BUCKET_HINT, BUCKET_LABEL, BUCKET_ORDER } from "@/lib/format";
 
 const BUCKETS: { value: Bucket; label: string }[] = BUCKET_ORDER.map((value) => ({
@@ -178,12 +178,18 @@ export default function Settings() {
           <Card>
             <CardHeader>
               <CardTitle>Saved import formats</CardTitle>
-              <CardDescription>Column mappings saved from the import wizard, one per bank or card.</CardDescription>
+              <CardDescription>
+                Column mappings saved from the import wizard, one per bank or card. A backup file
+                from another machine can hand over its formats without bringing its spending too.
+              </CardDescription>
             </CardHeader>
             <CardContent>
+              <div className="mb-3">
+                <MergeProfilesButton />
+              </div>
               {(profiles.data ?? []).length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  None yet. Save one the next time you import a statement.
+                  None yet. Save one the next time you import a statement, or add them from a backup.
                 </p>
               ) : (
                 <Table>
@@ -337,13 +343,87 @@ const rowCount = (b: Backup): number =>
   Object.values(b.tables ?? {}).reduce((n, t) => n + (Array.isArray(t) ? t.length : 0), 0);
 
 /**
+ * Read a picked file as a backup. Parsed here rather than posted raw so "that is
+ * not a backup" is a local answer and the server only ever sees JSON.
+ */
+async function readBackup(file: File): Promise<Backup | null> {
+  try {
+    return JSON.parse(await file.text()) as Backup;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A button that hands you a backup file. The input is hidden rather than
+ * sr-only: a file input is its own button, and two buttons for one action is one
+ * too many. click() still reaches it.
+ */
+function PickBackupButton({
+  label, icon: Icon, onPick,
+}: {
+  label: string;
+  icon: typeof UploadIcon;
+  onPick: (file: File) => void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  return (
+    <>
+      <input
+        ref={input}
+        type="file"
+        accept="application/json,.json"
+        hidden
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          // Cleared so picking the same file twice still fires a change event.
+          e.target.value = "";
+          if (file) onPick(file);
+        }}
+      />
+      <Button variant="outline" onClick={() => input.current?.click()}>
+        <Icon data-icon="inline-start" />
+        {label}
+      </Button>
+    </>
+  );
+}
+
+/**
+ * Take only the saved import formats out of a backup file. Additive, so there is
+ * nothing to confirm: a format you already have has its columns updated, the
+ * rest are added, and everything else in the file is ignored.
+ */
+function MergeProfilesButton() {
+  const merge = useMutate((body: Backup) => eden.api["import-profiles"].merge.post(body));
+
+  const pick = async (file: File) => {
+    const body = await readBackup(file);
+    if (!body) return void toast.error(`${file.name} is not a file this can read.`);
+    merge.mutate(body, {
+      onSuccess: ({ added, updated }) => {
+        if (added.length + updated.length === 0) return toast.info("That file has no import formats in it.");
+        // Named, not counted: "updated Big Bank" is the sentence that tells you
+        // your corrected column mapping is the one that won.
+        const parts: string[] = [];
+        if (added.length) parts.push(`Added ${added.join(", ")}`);
+        if (updated.length) parts.push(`${parts.length ? "updated" : "Updated"} ${updated.join(", ")}`);
+        toast.success(`${parts.join(", ")}.`);
+      },
+      onError: (error) => toast.error(errorText(error, "Could not read those formats.")),
+    });
+  };
+
+  return <PickBackupButton label="Add from a backup" icon={UploadIcon} onPick={(f) => void pick(f)} />;
+}
+
+/**
  * Load a downloaded backup, here or in another environment. It replaces every
  * table, so it asks first and says how many rows are in the file; the server
  * does the whole thing in one transaction, so a "no" from the validator or the
  * database leaves what is already here untouched.
  */
 function RestoreButton() {
-  const input = useRef<HTMLInputElement>(null);
   const [picked, setPicked] = useState<{ name: string; body: Backup } | null>(null);
   const [unreadable, setUnreadable] = useState<string | null>(null);
   const restore = useMutate((body: Backup) => eden.api.restore.post(body));
@@ -351,35 +431,14 @@ function RestoreButton() {
   const pick = async (file: File) => {
     setUnreadable(null);
     restore.reset();
-    try {
-      // Parsed here rather than posted raw so "that is not a backup" is a local
-      // answer, and the server only ever sees JSON.
-      setPicked({ name: file.name, body: JSON.parse(await file.text()) as Backup });
-    } catch {
-      setUnreadable(`${file.name} is not a file this can read.`);
-    }
+    const body = await readBackup(file);
+    if (body) setPicked({ name: file.name, body });
+    else setUnreadable(`${file.name} is not a file this can read.`);
   };
 
   return (
     <>
-      <input
-        ref={input}
-        type="file"
-        accept="application/json,.json"
-        // Hidden rather than sr-only: a file input is its own button, and two
-        // buttons for one action is one too many. click() still reaches it.
-        hidden
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          // Cleared so picking the same file twice still fires a change event.
-          e.target.value = "";
-          if (file) void pick(file);
-        }}
-      />
-      <Button variant="outline" onClick={() => input.current?.click()}>
-        <UploadIcon data-icon="inline-start" />
-        Restore a backup
-      </Button>
+      <PickBackupButton label="Restore a backup" icon={UploadIcon} onPick={(f) => void pick(f)} />
 
       <AlertDialog open={picked !== null || unreadable !== null} onOpenChange={(o) => {
         if (!o) { setPicked(null); setUnreadable(null); }

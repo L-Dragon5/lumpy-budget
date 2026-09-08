@@ -37,6 +37,13 @@ export class ApiError extends Error {
   }
 }
 
+/** The most specific thing we can say about a failure: the field, then the message. */
+export function errorText(error: unknown, fallback = "Could not save. Try again."): string {
+  const issues = error instanceof ApiError ? error.issues : [];
+  if (issues.length > 0) return issues.map((i) => `${i.path}: ${i.message}`).join("; ");
+  return error instanceof Error ? error.message : fallback;
+}
+
 type EdenResponse = { data: unknown; error: unknown; status: number };
 type Payload<R> = R extends { data: infer D } ? Exclude<D, null> : never;
 
