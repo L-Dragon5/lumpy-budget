@@ -73,11 +73,11 @@ const cat = (name: string) => categories.find((c) => c.name === name)?.id ?? nul
 const fixed: [string, number, number, number, string | null, string | null][] = [
   ["Mortgage", 241800, 1, 3, "Housing", "MORTGAGE CO ACH"],
   ["Childcare", 92000, 1, 3, "Childcare", "BRIGHT HORIZONS"],
-  ["Car loan", 48900, 16, 2, "Auto Loan", null],
+  ["Car loan", 48900, 16, 2, "Auto Loan", "CAPITAL ONE AUTO"],
   ["Health insurance", 38000, 15, 2, "Utilities", null],
   ["Student loan", 32700, 28, 2, null, null],
   ["Gas & electric", 21500, 12, 2, "Utilities", "NATIONAL GRID"],
-  ["Rental property mgmt", 14800, 10, 2, "Housing", null],
+  ["Rental property mgmt", 14800, 10, 2, "Housing", "GREENTREE PROPERTY"],
   ["Cell phone", 11000, 8, 2, "Internet & Phone", "VERIZON WIRELESS"],
   ["Internet", 8999, 20, 2, "Internet & Phone", "COMCAST XFINITY"],
   ["Water & sewer", 7200, 25, 2, "Utilities", null],
@@ -148,6 +148,8 @@ const MERCHANTS: [merchant: string, low: number, high: number, perMonth: number]
 const FIXED_PAYMENTS: [merchant: string, cents: number, day: number, swing: number][] = [
   ["MORTGAGE CO ACH", 241800, 2, 0],
   ["BRIGHT HORIZONS", 92000, 2, 0],
+  ["CAPITAL ONE AUTO", 48900, 16, 0],
+  ["GREENTREE PROPERTY", 14800, 10, 1500],
   ["NATIONAL GRID", 21500, 12, 9500],
   ["COMCAST XFINITY", 8999, 20, 0],
   ["VERIZON WIRELESS", 11000, 8, 1200],
