@@ -17,6 +17,7 @@ bun run scenarios:update         # accept the diff, only after reading it
 bun run --cwd apps/web lint      # oxlint; not part of `check`
 bun run backup                   # mysqldump to ~/lumpy-backups; run before a migration
 bun run reset                    # row counts only; --yes backs up, wipes, re-seeds
+bun run seed --no-rules          # categories without the merchant rules; --no-rules works on reset too
 ```
 
 `bun test` needs MySQL running: `services/api/test/*` hits a real

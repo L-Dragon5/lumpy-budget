@@ -25,6 +25,7 @@ bun install
 cp .env.example .env          # edit DATABASE_URL if yours differs
 bun run migrate               # creates the database and its tables
 bun run seed                  # 24 categories and ~94 merchant rules
+bun run seed --no-rules       # the categories only, rules left to you
 bun run api                   # http://localhost:3001
 bun run web                   # http://localhost:5173
 ```
@@ -51,6 +52,7 @@ are about to come in:
 ```bash
 bun run reset                 # counts every table, deletes nothing
 bun run reset --yes           # backs up, wipes, re-seeds categories and rules
+bun run reset --yes --no-rules  # categories only, no merchant rules
 ```
 
 Dry by default: the bare command prints a row count per table and exits, so the
@@ -66,6 +68,13 @@ already there -- and `settings` is zeroed rather than dropped, because the lumpy
 opening balance row is inserted by that migration and the reports read it. A
 database whose name ends in `_test` is refused outright: that one belongs to the
 test suite, which truncates it on every test.
+
+`--no-rules` on either command leaves out the ~94 merchant rules and keeps the
+24 categories. The rules are guesses about which merchant means which category:
+useful on day one, and wrong for anybody whose bank writes different descriptors
+or who would rather build them from what actually shows up on their statements.
+The categories are the buckets everything else references, so those always land.
+`bun run seed` later fills the rules in without duplicating a category.
 
 Not to be confused with `bun run demo --reset`, which deletes the demo household
 and its import batches through the running API and leaves your categories, rules

@@ -3,8 +3,9 @@
  * Empties the ledger and leaves the database seeded, for starting over on real
  * data after a run of demo or test imports.
  *
- * Run:  bun run reset          -> counts every table and deletes nothing
- *       bun run reset --yes    -> backs up first, then wipes and re-seeds
+ * Run:  bun run reset                    -> counts every table and deletes nothing
+ *       bun run reset --yes              -> backs up first, then wipes and re-seeds
+ *       bun run reset --yes --no-rules   -> categories only, no merchant rules
  *
  * Dry by default because this is the one script in the repo that destroys data
  * a person cannot get back except from the backup it takes on the way past.
@@ -85,8 +86,10 @@ if (import.meta.main) {
   for (const t of wipeOrder()) console.log(`  ${t.padEnd(width)}  ${String(before[t]).padStart(6)}`);
   console.log(`  ${"total".padEnd(width)}  ${String(total).padStart(6)}\n`);
 
+  const rules = !process.argv.includes("--no-rules");
   if (!process.argv.includes("--yes")) {
     console.log("nothing was deleted. to wipe all of it and re-seed categories and rules:\n  bun run reset --yes");
+    console.log("to leave the merchant rules out and write your own:\n  bun run reset --yes --no-rules");
     await sql.end();
     process.exit(0);
   }
@@ -103,10 +106,14 @@ if (import.meta.main) {
   }
 
   await wipe();
-  await seed();
+  await seed({ rules });
   const after = await counts();
   console.log(`\nwiped ${total} row(s) from ${db}`);
-  console.log(`re-seeded ${after.categories} categories and ${after.category_rules} merchant rules`);
+  console.log(
+    rules
+      ? `re-seeded ${after.categories} categories and ${after.category_rules} merchant rules`
+      : `re-seeded ${after.categories} categories, no rules (--no-rules)`,
+  );
   console.log("hand-kept balances zeroed; everything else is empty");
   await sql.end();
 }

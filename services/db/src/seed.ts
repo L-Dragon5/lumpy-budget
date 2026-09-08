@@ -76,7 +76,16 @@ const RULES: [pattern: string, category: string, priority?: number][] = [
   ["payroll", "Income", 10], ["direct dep", "Income", 10],
 ];
 
-export async function seed() {
+/**
+ * Categories always; the merchant rules unless you say otherwise.
+ *
+ * `rules: false` is for a database about to meet real statements. The 94 rules
+ * are guesses about which merchant means which category -- useful on day one,
+ * and wrong for anybody whose bank writes different descriptors or who would
+ * rather build the rules from what actually shows up. The categories are the
+ * buckets everything else references, so those are never optional.
+ */
+export async function seed({ rules = true } = {}) {
   const existing = new Map(
     (await rows<{ id: number; name: string }>("categories")).map((c) => [c.name.toLowerCase(), c.id]),
   );
@@ -91,7 +100,7 @@ export async function seed() {
     (await rows<{ pattern: string }>("category_rules")).map((r) => r.pattern.toLowerCase()),
   );
   let addedRules = 0;
-  for (const [pattern, category, priority] of RULES) {
+  for (const [pattern, category, priority] of rules ? RULES : []) {
     const categoryId = existing.get(category.toLowerCase());
     if (!categoryId || haveRules.has(pattern.toLowerCase())) continue;
     await insert("category_rules", {
@@ -103,7 +112,12 @@ export async function seed() {
 }
 
 if (import.meta.main) {
-  const r = await seed();
-  console.log(`seeded: +${r.addedCategories} categories, +${r.addedRules} rules`);
+  const rules = !process.argv.includes("--no-rules");
+  const r = await seed({ rules });
+  console.log(
+    rules
+      ? `seeded: +${r.addedCategories} categories, +${r.addedRules} rules`
+      : `seeded: +${r.addedCategories} categories, no rules (--no-rules)`,
+  );
   await sql.end();
 }
