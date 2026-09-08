@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { allowedOrigin, api, corsHeaders, del, post, put, resetDb } from "./setup";
+import { allowedOrigin, api, corsHeaders, del, post, put, raw, resetDb } from "./setup";
 
 const semiMonthly = {
   name: "Day job", amount_cents: 300000, frequency: "semimonthly",
@@ -363,5 +363,123 @@ describe("cors", () => {
     // The plugin default is Allow-Credentials: true. Combined with an origin it
     // reflects, that hands any site a credentialed read of this API.
     expect((await corsHeaders("http://localhost:5173")).get("access-control-allow-credentials")).toBeNull();
+  });
+});
+
+describe("backup export", () => {
+  beforeEach(() => resetDb({ withSeed: true }));
+
+  test("every table is in the export, with a filename the browser will save under", async () => {
+    const res = await raw("/api/export");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-disposition")).toMatch(/attachment; filename="lumpy-backup-\d{4}-\d{2}-\d{2}\.json"/);
+
+    const body = await res.json();
+    expect(body.version).toBe(1);
+    // Every table the app reads through, plus settings, which is not in TABLES.
+    expect(Object.keys(body.tables).sort()).toEqual([
+      "categories", "category_rules", "expenses", "fixed_costs", "import_batches",
+      "import_profiles", "income_streams", "lumpy_items", "savings_goals", "settings",
+    ]);
+    expect(body.tables.categories).toHaveLength(24);
+    expect(body.tables.settings[0].name).toBe("lumpy_opening_balance_cents");
+  });
+
+  test("rows come out as the contract describes them, not as raw driver output", async () => {
+    await post("/api/lumpy-items", {
+      name: "Car insurance", amount_cents: 120000, frequency_months: 12,
+      next_due_date: "2027-03-01", category_id: null, active: true,
+    });
+    const body = await (await raw("/api/export")).json();
+    const item = body.tables.lumpy_items[0];
+    // A backup full of local-midnight Date objects would restore a day off.
+    expect(item.next_due_date).toBe("2027-03-01");
+    expect(item.active).toBe(true);
+  });
+});
+
+describe("lumpy fund drift", () => {
+  let lumpyCategory: number;
+
+  beforeEach(async () => {
+    await resetDb({ withSeed: true });
+    const cats = (await api("/api/categories")).body as { id: number; name: string; bucket: string }[];
+    lumpyCategory = cats.find((c) => c.bucket === "lumpy")!.id;
+  });
+
+  const spend = (txn_date: string, amount_cents: number, category_id: number | null) =>
+    post("/api/expenses", { txn_date, amount_cents, merchant: "Insurer", description: "", category_id, source: "manual" });
+
+  test("nothing has left the fund until something in the lumpy bucket does", async () => {
+    await put("/api/settings", { name: "lumpy_opening_balance_cents", value: "250000" });
+    const before = (await api("/api/lumpy-drift")).body;
+    expect(before.balance_cents).toBe(250000);
+    expect(before.total_cents).toBe(0);
+    expect(before.count).toBe(0);
+
+    const today = new Date().toISOString().slice(0, 10);
+    await spend(today, 120000, lumpyCategory);
+    const after = (await api("/api/lumpy-drift")).body;
+    expect(after.total_cents).toBe(120000);
+    expect(after.count).toBe(1);
+    expect(after.items[0].merchant).toBe("Insurer");
+  });
+
+  test("discretionary spending is not fund drift, whatever else it is", async () => {
+    await put("/api/settings", { name: "lumpy_opening_balance_cents", value: "250000" });
+    const cats = (await api("/api/categories")).body as { id: number; bucket: string }[];
+    const groceries = cats.find((c) => c.bucket === "discretionary")!.id;
+    await spend(new Date().toISOString().slice(0, 10), 9000, groceries);
+    expect((await api("/api/lumpy-drift")).body.total_cents).toBe(0);
+  });
+
+  test("a transaction dated in the future has not left the account yet", async () => {
+    await put("/api/settings", { name: "lumpy_opening_balance_cents", value: "250000" });
+    const later = new Date(Date.now() + 14 * 86_400_000).toISOString().slice(0, 10);
+    await spend(later, 120000, lumpyCategory);
+    expect((await api("/api/lumpy-drift")).body.total_cents).toBe(0);
+  });
+
+  test("spending from before the balance was set is already accounted for", async () => {
+    await put("/api/settings", { name: "lumpy_opening_balance_cents", value: "250000" });
+    // You typed the balance in today, so it already reflects last month's payout.
+    await spend("2020-01-15", 120000, lumpyCategory);
+    const drift = (await api("/api/lumpy-drift")).body;
+    expect(drift.total_cents).toBe(0);
+    expect(drift.since).toBe(new Date().toISOString().slice(0, 10));
+  });
+});
+
+describe("fixed cost actuals", () => {
+  beforeEach(() => resetDb({ withSeed: true }));
+
+  test("a bill budgeted low reports what it has actually been costing", async () => {
+    const cats = (await api("/api/categories")).body as { id: number; name: string }[];
+    const utilities = cats.find((c) => c.name === "Utilities")!.id;
+    await post("/api/fixed-costs", {
+      name: "Gas and electric", amount_cents: 9000, due_day: 12, lead_days: 3,
+      category_id: utilities, active: true,
+    });
+    for (const [date, cents] of [["2025-12-12", 13000], ["2026-01-12", 15000], ["2026-02-12", 14000]] as const) {
+      await post("/api/expenses", {
+        txn_date: date, amount_cents: cents, merchant: "Utility Co", description: "",
+        category_id: utilities, source: "manual",
+      });
+    }
+
+    const res = await api("/api/fixed-cost-actuals?through=2026-03&months=3");
+    expect(res.status).toBe(200);
+    const row = res.body.rows.find((r: { category_name: string }) => r.category_name === "Utilities");
+    expect(row.budgeted_cents).toBe(9000);
+    expect(row.actual_avg_cents).toBe(14000);
+    expect(row.delta_cents).toBe(5000);
+    expect(row.months_with_data).toBe(3);
+    expect(row.cost_names).toEqual(["Gas and electric"]);
+  });
+
+  test("months defaults to 3 and clamps rather than 422s", async () => {
+    expect((await api("/api/fixed-cost-actuals?through=2026-03")).body.months).toBe(3);
+    expect((await api("/api/fixed-cost-actuals?through=2026-03&months=999")).body.months).toBe(24);
+    expect((await api("/api/fixed-cost-actuals?through=2026-03&months=0")).body.months).toBe(1);
   });
 });

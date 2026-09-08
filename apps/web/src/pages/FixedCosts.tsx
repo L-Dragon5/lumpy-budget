@@ -56,6 +56,8 @@ export default function FixedCosts() {
   const update = useMutate((v: { id: number; body: FixedCostInput }) =>
     eden.api["fixed-costs"]({ id: v.id }).put(v.body));
   const remove = useMutate((id: number) => eden.api["fixed-costs"]({ id }).delete());
+  const actuals = useApi(["fixed-cost-actuals", month], () =>
+    eden.api["fixed-cost-actuals"].get({ query: { through: month, months: 3 } }));
 
   const [editing, setEditing] = useState<FixedCost | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -75,6 +77,7 @@ export default function FixedCosts() {
   const rows = costs.data ?? [];
   const alloc = allocation.data;
   const monthlyTotal = rows.filter((c) => c.active).reduce((a, c) => a + c.amount_cents, 0);
+  const variance = actuals.data?.rows ?? [];
   const categoryOf = (id: number | null) =>
     id === null ? null : (categories.data ?? []).find((c) => c.id === id) ?? null;
 
@@ -224,6 +227,70 @@ export default function FixedCosts() {
           </CardContent>
         </Card>
       </div>
+
+      {variance.length > 0 ? (
+        <Card className="mt-4">
+          <CardHeader>
+            <CardTitle>Budgeted vs actual</CardTitle>
+            <CardDescription>
+              What these bills have really cost over the last three complete months. A bill entered flat that
+              runs higher every month is eating discretionary money without ever showing up as a surprise.
+              Bills sharing a category are compared together, and coming in under budget usually means a
+              statement has not been imported rather than a bill getting cheaper.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Bill</TableHead>
+                  <TableHead className="text-right">Budgeted</TableHead>
+                  <TableHead className="text-right">Typical</TableHead>
+                  <TableHead className="text-right">Difference</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {variance.map((v) => (
+                  <TableRow key={v.category_id}>
+                    <TableCell>
+                      <div className="font-medium">{v.cost_names.join(", ")}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {v.category_name}
+                        {v.months_with_data > 0 && v.months_with_data < 3
+                          ? ` · ${v.months_with_data} month${v.months_with_data === 1 ? "" : "s"} of statements`
+                          : null}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Money cents={v.budgeted_cents} />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {v.months_with_data === 0 ? (
+                        <span className="text-sm text-muted-foreground">no statements</span>
+                      ) : (
+                        <Money cents={v.actual_avg_cents} />
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {v.months_with_data === 0 ? (
+                        <span className="text-muted-foreground">&mdash;</span>
+                      ) : Math.abs(v.pct_off) < 5 ? (
+                        <span className="text-sm text-muted-foreground">on budget</span>
+                      ) : (
+                        <span className={v.delta_cents > 0 ? "text-destructive" : "text-muted-foreground"}>
+                          {v.delta_cents > 0 ? "+" : "-"}
+                          <Money cents={Math.abs(v.delta_cents)} />
+                          <span className="ml-1 text-xs">({Math.round(v.pct_off)}%)</span>
+                        </span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {draft ? (
         <RecordDialog

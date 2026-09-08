@@ -7,3 +7,4 @@ export * from "./fixed";
 export * from "./savings";
 export * from "./reports";
 export * from "./summary";
+export * from "./variance";

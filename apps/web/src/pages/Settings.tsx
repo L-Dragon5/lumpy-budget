@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { CATEGORY_ICONS, type Bucket, type CategoryIconName, type CategoryInput, type CategoryRuleInput } from "@lumpy/contracts";
-import { PencilIcon } from "lucide-react";
+import { DownloadIcon, PencilIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,7 +45,18 @@ export default function Settings() {
 
   return (
     <>
-      <PageHeader title="Settings" description="Categories, the rules that apply them, and saved import formats." />
+      <PageHeader
+        title="Settings"
+        description="Categories, the rules that apply them, and saved import formats."
+        actions={
+          // A plain link: the server names the file and marks it an attachment, so
+          // there is nothing for JavaScript to do here.
+          <Button variant="outline" render={<a href="/api/export" />} nativeButton={false}>
+            <DownloadIcon data-icon="inline-start" />
+            Download a backup
+          </Button>
+        }
+      />
 
       <Tabs defaultValue="categories">
         <TabsList>

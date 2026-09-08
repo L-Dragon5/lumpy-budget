@@ -45,6 +45,9 @@ export const put = (path: string, body: unknown) =>
   api(path, { method: "PUT", body: JSON.stringify(body) });
 export const del = (path: string) => api(path, { method: "DELETE" });
 
+/** The whole Response, for the routes whose headers are the point. */
+export const raw = (path: string): Promise<Response> => app.handle(new Request(`${base}${path}`));
+
 /** The CORS headers the API returns to a browser at a given Origin. */
 export const corsHeaders = async (origin: string): Promise<Headers> => {
   const res = await app.handle(new Request(`${base}/api/categories`, { headers: { Origin: origin } }));

@@ -43,11 +43,33 @@ Re-running it is safe: setup rows are matched by name and updated rather than
 added again, and the expense dedupe hash makes the import a no-op the second
 time.
 
+## Backing up
+
+Everything lives in one MySQL database on one machine, and months of hand-entered
+setup is not something the CSV importer can put back.
+
+```bash
+bun run backup                # ~/lumpy-backups/lumpy_budget-<timestamp>.sql
+bun run backup /path/out.sql  # somewhere else
+```
+
+That is a `mysqldump` with `--databases`, so the file carries its own
+`CREATE DATABASE` and restores on its own: the script prints the exact `mysql`
+command when it finishes. It refuses to call a dump a success unless mysqldump
+signed it off, because an exit code of 0 and a plausible file size are not proof
+the thing restores.
+
+**Settings -> Download a backup** is the other half: every table as one JSON
+file, named and marked as an attachment by the server, so it is a plain link with
+no JavaScript behind it. That one is readable and portable, not a restore path.
+Use the `.sql` for getting a database back, the JSON for reading the data
+somewhere else.
+
 ## Checks
 
 ```bash
 bun run check                 # typecheck + tests + scenarios; what the commit hook runs
-bun test                      # 98 tests, no network, under a second
+bun test                      # 143 tests, no network, under a second
 bun run scenarios             # whole-household fixtures, diffed against expectations
 bun run scenarios:update      # accept a change, after reading the diff
 ```
@@ -103,6 +125,7 @@ services/api/           Elysia routes; exports its own type, which Eden gives th
 services/csv-import/    CSV parse / normalize / dedupe; runs in the browser too
 apps/web/               Vite + React + Tailwind v4 + shadcn/ui + React Bits
 scripts/demo.ts         fills a running instance through the public API
+scripts/backup.ts       mysqldump wrapper; the restore path the migrations do not have
 ```
 
 Each service has its own tests and no shared mutable state, so two sessions can
@@ -160,6 +183,14 @@ month, not $100, because you did not start saving for it a year ago. Money
 already in the account is claimed by whatever comes due first. The timeline runs
 12 months and names the first month the fund would run dry.
 
+**A hand-kept balance says when it went stale.** The lumpy fund's balance is
+typed in by a person, and the schedule heals itself where the balance cannot: a
+passed due date rolls forward on its own, but the day the insurance is actually
+paid the balance still claims the money is sitting there, and the app quietly
+tells you to save less. So `settings` records when each value last really
+changed, and the tile shows what has left the lumpy bucket since. Transactions
+dated ahead of today do not count, because that money has not left yet.
+
 **Savings goals are buckets.** Each one holds its own balance and can carry its
 own target. With a target it shows how far along it is — past 100% when it is
 overfunded, rather than capping and pretending it is merely full — and the month
@@ -206,6 +237,10 @@ eight the tail folds into one grey "Other" rather than repeating hues.
 
 - Single user, no login. It is meant to run on localhost.
 - Fixed costs are assumed monthly and roughly constant. A bill that varies (gas
-  and electric) is budgeted at the amount you enter.
+  and electric) is still budgeted at the amount you enter, but the fixed costs
+  page now shows what it has actually cost over the last three complete months,
+  so the gap is visible instead of silently eating discretionary money. Bills
+  sharing a category are compared as a group, because a category is all the app
+  has to match a transaction to a bill.
 - Migrations are forward-only, and DDL in MySQL cannot roll back: a migration
   that fails halfway leaves the database partly changed and needs a manual fix.

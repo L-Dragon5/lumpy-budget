@@ -15,6 +15,7 @@ bun test -t "largest remainder"  # one test by name
 bun run scenarios                # household fixtures diffed against stored expectations
 bun run scenarios:update         # accept the diff, only after reading it
 bun run --cwd apps/web lint      # oxlint; not part of `check`
+bun run backup                   # mysqldump to ~/lumpy-backups; run before a migration
 ```
 
 `bun test` needs MySQL running: `services/api/test/*` hits a real
@@ -62,6 +63,11 @@ Four places, in this order, or reads silently drop it:
   required. Default inside the handler instead.
 - **Validation failures are 422 in Elysia's shape, not 400.** The shape is
   recorded in `services/api/test/fixtures/validation-error.json` and asserted.
+- **`settings` is not in `TABLES`.** It is queried by hand in `store.ts`, so the
+  four-place checklist above does not apply to it. `updated_on` is computed with
+  SQL `DATE()` rather than sliced off an ISO string: a TIMESTAMP written at 8pm
+  local is already tomorrow in UTC, and comparing that to a DATE column drops a
+  day of rows.
 - **Only discretionary spending subtracts from available.** Fixed / lumpy /
   savings transactions are reconciliation; counting them twice is the bug this
   app exists to avoid.

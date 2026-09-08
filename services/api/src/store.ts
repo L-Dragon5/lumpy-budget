@@ -20,6 +20,28 @@ export async function setting(name: string, fallback = "0"): Promise<string> {
   return out[0]?.value ?? fallback;
 }
 
+/**
+ * A setting plus when it was last actually changed.
+ *
+ * `updated_on` is computed by the database rather than sliced off the ISO string:
+ * a TIMESTAMP set at 8pm local is already the next day in UTC, and comparing that
+ * against a DATE column would silently drop a whole day of spending. DATE() reads
+ * it on the same clock the DATE columns were written with.
+ */
+export async function settingRow(name: string): Promise<{ value: string; updated_at: string; updated_on: string } | null> {
+  const out = (await sql.unsafe(
+    "SELECT value, updated_at, DATE_FORMAT(DATE(updated_at), '%Y-%m-%d') AS updated_on FROM settings WHERE name = ?",
+    [name],
+  )) as { value: string; updated_at: Date | string; updated_on: string }[];
+  const row = out[0];
+  if (!row) return null;
+  return {
+    value: row.value,
+    updated_at: row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at),
+    updated_on: row.updated_on,
+  };
+}
+
 export async function setSetting(name: string, value: string): Promise<void> {
   await sql.unsafe("INSERT INTO settings (name, value) VALUES (?, ?) ON DUPLICATE KEY UPDATE value = VALUES(value)", [name, value]);
 }

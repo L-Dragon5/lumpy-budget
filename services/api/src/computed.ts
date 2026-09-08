@@ -1,7 +1,7 @@
 import { Elysia } from "elysia";
 import { bulkExpenseInput, isoDate, isoMonth } from "@lumpy/contracts";
 import * as core from "@lumpy/budget-core";
-import { sql } from "@lumpy/db";
+import { rows, sql, TABLES, type TableName } from "@lumpy/db";
 import { z } from "zod";
 import * as store from "./store";
 
@@ -134,4 +134,74 @@ export const computed = new Elysia({ prefix: "/api" })
   .put("/settings", async ({ body }) => {
     await store.setSetting(body.name, body.value);
     return { [body.name]: body.value } as Record<string, string>;
-  }, { body: settingInput });
+  }, { body: settingInput })
+
+  /**
+   * How much has left the lumpy fund since its balance was last typed in.
+   *
+   * The schedule heals itself -- nextDueOnOrAfter rolls a passed due date forward --
+   * but the balance cannot. The day the annual insurance is paid, the item jumps to
+   * next year while the balance still claims the money is sitting there, so it gets
+   * claimed against the next item and the recommended contribution quietly drops.
+   * This is the number that makes that drift visible on the page that reads it.
+   */
+  .get("/lumpy-drift", async () => {
+    const row = await store.settingRow("lumpy_opening_balance_cents");
+    const today = core.todayISO();
+    const since = row?.updated_on ?? today;
+    // Bounded at today on purpose: a statement can carry a transaction dated ahead
+    // of itself, and money that has not left the account yet is not drift.
+    const [cats, expenses] = await Promise.all([
+      store.categories(),
+      store.expensesBetween(since, today),
+    ]);
+    const byId = core.categoryIndex(cats);
+    const out = expenses.filter((e) => core.bucketOf(e, byId) === "lumpy");
+    return {
+      since,
+      set_at: row?.updated_at ?? null,
+      balance_cents: Number(row?.value ?? "0") || 0,
+      total_cents: core.sum(out.map((e) => e.amount_cents)),
+      count: out.length,
+      items: out
+        .slice(0, 20)
+        .map((e) => ({ id: e.id, txn_date: e.txn_date, merchant: e.merchant, amount_cents: e.amount_cents })),
+    };
+  })
+
+  /** Budgeted versus what the bills have actually cost. See budget-core/variance.ts. */
+  .get(
+    "/fixed-cost-actuals",
+    async ({ query }) => {
+      const through = query.through ?? core.todayISO().slice(0, 7);
+      const months = clamp(query.months, 3, 1, 24);
+      const [costs, cats] = await Promise.all([store.fixedCosts(), store.categories()]);
+      // One month of slack on each end so a bill posted a day late still lands in its month.
+      const start = core.monthStart(core.addMonths(through, -(months + 1)));
+      const expenses = await store.expensesBetween(start, core.monthEnd(through));
+      return {
+        through,
+        months,
+        rows: core.fixedCostVariance(costs, cats, expenses, { through, months }),
+      };
+    },
+    { query: z.object({ through: isoMonth.optional(), months: num }) },
+  )
+
+  /**
+   * Every table as JSON, in one file, with a filename the browser will save under.
+   * Not a restore path -- that is scripts/backup.ts and mysqldump -- but it is the
+   * difference between months of hand-entered setup being recoverable and being gone.
+   */
+  .get("/export", async () => {
+    const tables: Record<string, unknown[]> = {};
+    for (const t of Object.keys(TABLES) as TableName[]) tables[t] = await rows(t);
+    tables.settings = (await sql.unsafe("SELECT name, value FROM settings")) as unknown[];
+    const body = { version: 1, exported_at: new Date().toISOString(), tables };
+    return new Response(JSON.stringify(body, null, 2), {
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Content-Disposition": `attachment; filename="lumpy-backup-${core.todayISO()}.json"`,
+      },
+    });
+  });

@@ -17,6 +17,7 @@
     "scenarios": "bun run services/budget-core/scenarios.ts",
     "scenarios:update": "bun run services/budget-core/scenarios.ts --update",
     "demo": "bun run scripts/demo.ts",
+    "backup": "bun run scripts/backup.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p apps/web/tsconfig.app.json",
     "check": "bun run typecheck && bun test && bun run scenarios",
     "build": "bun run --cwd apps/web build"

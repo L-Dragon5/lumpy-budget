@@ -60,6 +60,7 @@ export default function LumpyFund() {
   const categories = useApi(["categories"], () => eden.api.categories.get());
   const timeline = useApi(["lumpy-timeline", month], () =>
     eden.api["lumpy-timeline"].get({ query: { start: month, months: 12 } }));
+  const drift = useApi(["lumpy-drift"], () => eden.api["lumpy-drift"].get());
   const create = useMutate((body: LumpyItemInput) => eden.api["lumpy-items"].post(body));
   const update = useMutate((v: { id: number; body: LumpyItemInput }) =>
     eden.api["lumpy-items"]({ id: v.id }).put(v.body));
@@ -89,6 +90,7 @@ export default function LumpyFund() {
   const yearlyTotal = rows.filter((r) => r.active).reduce((a, r) => a + Math.round((r.amount_cents * 12) / r.frequency_months), 0);
   // rows[0] is the current month, so rows[1] is what the fund has to cover next.
   const nextMonth = timeline.data?.rows[1];
+  const drifted = drift.data?.total_cents ?? 0;
 
   return (
     <>
@@ -121,7 +123,19 @@ export default function LumpyFund() {
         <BalanceTile
           settingKey="lumpy_opening_balance_cents"
           label="In the fund now"
-          caption="What the savings account behind this fund actually holds."
+          caption={
+            // The schedule rolls a passed due date forward on its own; this number
+            // cannot. Saying what has left the account since you last typed it in is
+            // the difference between a stale balance and a silently wrong one.
+            drifted > 0 ? (
+              <span className="text-destructive">
+                <Money cents={drifted} /> left the fund since you set this on{" "}
+                {dateLabelFull(drift.data!.since)}. Check the account.
+              </span>
+            ) : (
+              "What the savings account behind this fund actually holds."
+            )
+          }
           editCaption="Whatever the account says right now. The 12-month timeline starts from it."
         />
         <StatTile
