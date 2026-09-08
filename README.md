@@ -189,6 +189,7 @@ through the Vite proxy and is same-origin.
 contracts/types.ts      zod schemas + types, imported by the API and the web app
 services/budget-core/   the engine: pure functions, no DB, no HTTP, no I/O
 services/db/            Bun.sql client, numbered .sql migrations, seed data
+                        001_init.sql is the whole schema; next migration is 011
 services/api/           Elysia routes; exports its own type, which Eden gives the web app
 services/csv-import/    CSV parse / normalize / dedupe; runs in the browser too
 apps/web/               Vite + React + Tailwind v4 + shadcn/ui + React Bits

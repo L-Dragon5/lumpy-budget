@@ -43,7 +43,10 @@ The hook is not installed by cloning: `git config core.hooksPath .githooks`.
 
 Four places, in this order, or reads silently drop it:
 
-1. a new numbered `services/db/migrations/NNN_*.sql` (forward-only, no rollback)
+1. a new numbered `services/db/migrations/NNN_*.sql` (forward-only, no rollback).
+   **Start at 011.** 001-010 were squashed into `001_init.sql`; the databases
+   that lived through them still record 002-010 in `_migrations`, so reusing a
+   number below 011 reads as history that already ran.
 2. `services/db/src/tables.ts` — `cols` plus the right coercion list
    (`date` / `datetime` / `bool` / `num` / `json`). `rows()` builds its SELECT
    from this spec; a column absent here does not exist as far as the app is concerned.
@@ -93,6 +96,10 @@ Four places, in this order, or reads silently drop it:
   009 turns it on for `bp` and `amc` alone, which is what their trailing space
   in the seed was reaching for. `fixed_costs.merchant_whole_word` (migration
   010) is the same switch for a bill, and 010 turns on nothing.
+- **`001_init.sql` is the whole schema and keeps that name deliberately.** An
+  existing database already records it as applied, so it skips the file and
+  stays where it is; a fresh one gets everything in one pass. Rename it and
+  every existing database tries to `CREATE TABLE` over itself.
 - **The variance window ends the month *before* `through`.** A test that puts
   its decisive transaction in `through`'s own month passes whatever the matcher
   does, because the calendar excluded it. Two of these tests were written that
