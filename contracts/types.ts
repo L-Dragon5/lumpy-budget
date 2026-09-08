@@ -134,6 +134,16 @@ export const lumpyItemInput = z.object({
   frequency_months: z.number().int().min(1).max(120),
   next_due_date: isoDate,
   category_id: id.nullable().default(null),
+  /**
+   * How this bill posts on a statement, matched exactly the way a fixed cost's
+   * pattern is. A lumpy item is the one thing in the app whose schedule heals
+   * itself while its balance cannot: `nextDueOnOrAfter` rolls a passed due date
+   * forward, and the money is still claimed as sitting in the fund. Naming the
+   * charge is what lets the app find the payment and offer to record it.
+   */
+  merchant_pattern: z.string().trim().min(2).max(160).nullable().default(null),
+  /** See `matchesPattern`: a BP fuel bill is not reconciled by a BPOST charge. */
+  merchant_whole_word: z.boolean().default(false),
   active: z.boolean().default(true),
 });
 export const lumpyItem = z.object({ id }).and(lumpyItemInput);
@@ -244,6 +254,16 @@ export type ImportMapping = z.infer<typeof importMapping>;
 export const importProfileInput = z.object({
   name: z.string().min(1).max(120),
   mapping: importMapping,
+  /**
+   * Does spending on this statement leave the checking account the moment it
+   * posts? True for a bank statement, false for a credit card: a card charge is
+   * money owed, and it only leaves checking when the card is paid. The cash
+   * position reads this, and nothing else does -- the budget still counts a card
+   * purchase as spending on the day it happened.
+   *
+   * Defaults true, which is what every profile that predates the column is.
+   */
+  cash_account: z.boolean().default(true),
 });
 export const importProfile = z.object({ id }).and(importProfileInput);
 export type ImportProfileInput = z.infer<typeof importProfileInput>;

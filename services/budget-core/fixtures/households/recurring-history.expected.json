@@ -7,10 +7,10 @@
     "surplus_cents": -35000,
     "extra_paycheck": false,
     "fixed_cents": 181000,
-    "lumpy_cents": 0,
-    "lumpy_steady_cents": 0,
+    "lumpy_cents": 3720,
+    "lumpy_steady_cents": 3100,
     "savings_cents": 25000,
-    "planned_free_cents": 214000,
+    "planned_free_cents": 210280,
     "spent": {
       "discretionary": 25700,
       "fixed": 0,
@@ -19,7 +19,7 @@
       "transfer": 0,
       "total": 25700
     },
-    "available_cents": 188300
+    "available_cents": 184580
   },
   "paychecks": [
     {
@@ -45,9 +45,9 @@
         "Gas and electric 21000"
       ],
       "hold_total_cents": 21000,
-      "lumpy_cents": 0,
+      "lumpy_cents": 1860,
       "savings_cents": 12500,
-      "free_cents": 176500,
+      "free_cents": 174640,
       "over_committed": false
     },
     {
@@ -57,9 +57,9 @@
       "amount_cents": 210000,
       "holds": [],
       "hold_total_cents": 0,
-      "lumpy_cents": 0,
+      "lumpy_cents": 1860,
       "savings_cents": 12500,
-      "free_cents": 197500,
+      "free_cents": 195640,
       "over_committed": false
     }
   ],
@@ -67,16 +67,16 @@
     {
       "window": "2026-03-13..2026-03-26",
       "income_cents": 210000,
-      "planned_free_cents": 176500,
+      "planned_free_cents": 174640,
       "spent_discretionary_cents": 0,
-      "available_cents": 176500
+      "available_cents": 174640
     },
     {
       "window": "2026-03-27..2026-04-09",
       "income_cents": 210000,
-      "planned_free_cents": 197500,
+      "planned_free_cents": 195640,
       "spent_discretionary_cents": 0,
-      "available_cents": 197500
+      "available_cents": 195640
     }
   ],
   "unfunded": [],
@@ -93,117 +93,121 @@
     }
   ],
   "lumpy": {
-    "monthly_contribution_cents": 0,
-    "total_outflow_cents": 0,
+    "monthly_contribution_cents": 3720,
+    "total_outflow_cents": 37200,
     "worst_balance_cents": 0,
     "first_short_month": null,
     "rows": [
       {
         "month": "2026-03",
         "start": 0,
-        "in": 0,
+        "in": 3720,
         "out": 0,
-        "end": 0,
+        "end": 3720,
         "due": [],
         "short": false
       },
       {
         "month": "2026-04",
-        "start": 0,
-        "in": 0,
+        "start": 3720,
+        "in": 3720,
         "out": 0,
-        "end": 0,
+        "end": 7440,
         "due": [],
         "short": false
       },
       {
         "month": "2026-05",
-        "start": 0,
-        "in": 0,
+        "start": 7440,
+        "in": 3720,
         "out": 0,
-        "end": 0,
+        "end": 11160,
         "due": [],
         "short": false
       },
       {
         "month": "2026-06",
-        "start": 0,
-        "in": 0,
+        "start": 11160,
+        "in": 3720,
         "out": 0,
-        "end": 0,
+        "end": 14880,
         "due": [],
         "short": false
       },
       {
         "month": "2026-07",
-        "start": 0,
-        "in": 0,
+        "start": 14880,
+        "in": 3720,
         "out": 0,
-        "end": 0,
+        "end": 18600,
         "due": [],
         "short": false
       },
       {
         "month": "2026-08",
-        "start": 0,
-        "in": 0,
-        "out": 0,
-        "end": 0,
-        "due": [],
+        "start": 18600,
+        "in": 3720,
+        "out": 18600,
+        "end": 3720,
+        "due": [
+          "AAA membership"
+        ],
         "short": false
       },
       {
         "month": "2026-09",
-        "start": 0,
-        "in": 0,
+        "start": 3720,
+        "in": 3720,
         "out": 0,
-        "end": 0,
+        "end": 7440,
         "due": [],
         "short": false
       },
       {
         "month": "2026-10",
-        "start": 0,
-        "in": 0,
+        "start": 7440,
+        "in": 3720,
         "out": 0,
-        "end": 0,
+        "end": 11160,
         "due": [],
         "short": false
       },
       {
         "month": "2026-11",
-        "start": 0,
-        "in": 0,
+        "start": 11160,
+        "in": 3720,
         "out": 0,
-        "end": 0,
+        "end": 14880,
         "due": [],
         "short": false
       },
       {
         "month": "2026-12",
-        "start": 0,
-        "in": 0,
+        "start": 14880,
+        "in": 3720,
         "out": 0,
-        "end": 0,
+        "end": 18600,
         "due": [],
         "short": false
       },
       {
         "month": "2027-01",
-        "start": 0,
-        "in": 0,
+        "start": 18600,
+        "in": 3720,
         "out": 0,
-        "end": 0,
+        "end": 22320,
         "due": [],
         "short": false
       },
       {
         "month": "2027-02",
-        "start": 0,
-        "in": 0,
-        "out": 0,
-        "end": 0,
-        "due": [],
+        "start": 22320,
+        "in": 3720,
+        "out": 18600,
+        "end": 7440,
+        "due": [
+          "AAA membership"
+        ],
         "short": false
       }
     ]
@@ -271,8 +275,8 @@
     }
   ],
   "forecast": {
-    "total_free_cents": 2988000,
-    "average_free_cents": 249000,
+    "total_free_cents": 2943360,
+    "average_free_cents": 245280,
     "tightest_month": "2026-03",
     "first_tight_month": null,
     "first_short_month": null,
@@ -280,85 +284,85 @@
       {
         "month": "2026-03",
         "income_cents": 420000,
-        "free": 214000,
+        "free": 210280,
         "lumpy_due_cents": 0,
         "tight": false
       },
       {
         "month": "2026-04",
         "income_cents": 420000,
-        "free": 214000,
+        "free": 210280,
         "lumpy_due_cents": 0,
         "tight": false
       },
       {
         "month": "2026-05",
         "income_cents": 420000,
-        "free": 214000,
+        "free": 210280,
         "lumpy_due_cents": 0,
         "tight": false
       },
       {
         "month": "2026-06",
         "income_cents": 420000,
-        "free": 214000,
+        "free": 210280,
         "lumpy_due_cents": 0,
         "tight": false
       },
       {
         "month": "2026-07",
         "income_cents": 630000,
-        "free": 424000,
+        "free": 420280,
         "lumpy_due_cents": 0,
         "tight": false
       },
       {
         "month": "2026-08",
         "income_cents": 420000,
-        "free": 214000,
-        "lumpy_due_cents": 0,
+        "free": 210280,
+        "lumpy_due_cents": 18600,
         "tight": false
       },
       {
         "month": "2026-09",
         "income_cents": 420000,
-        "free": 214000,
+        "free": 210280,
         "lumpy_due_cents": 0,
         "tight": false
       },
       {
         "month": "2026-10",
         "income_cents": 420000,
-        "free": 214000,
+        "free": 210280,
         "lumpy_due_cents": 0,
         "tight": false
       },
       {
         "month": "2026-11",
         "income_cents": 420000,
-        "free": 214000,
+        "free": 210280,
         "lumpy_due_cents": 0,
         "tight": false
       },
       {
         "month": "2026-12",
         "income_cents": 420000,
-        "free": 214000,
+        "free": 210280,
         "lumpy_due_cents": 0,
         "tight": false
       },
       {
         "month": "2027-01",
         "income_cents": 630000,
-        "free": 424000,
+        "free": 420280,
         "lumpy_due_cents": 0,
         "tight": false
       },
       {
         "month": "2027-02",
         "income_cents": 420000,
-        "free": 214000,
-        "lumpy_due_cents": 0,
+        "free": 210280,
+        "lumpy_due_cents": 18600,
         "tight": false
       }
     ]
@@ -383,8 +387,21 @@
   "recurring": [
     "GEICO AUTO every 12mo 124000 next 2026-04-02",
     "TOWN PERINTON every 12mo 92000 next 2027-01-10",
-    "MONROE COUNTY every 3mo 21500 next 2026-06-08",
-    "AAA MEMBERSHIP every 6mo 19200 next 2026-08-19"
+    "MONROE COUNTY every 3mo 21500 next 2026-06-08"
   ],
+  "lumpy_paid": [
+    "AAA membership due 2026-02-15 paid 2026-02-19 19200 (+4d, +600) rolls to 2026-08-15"
+  ],
+  "category_pace": {
+    "through_day": 10,
+    "months_compared": [
+      "2025-12",
+      "2026-01",
+      "2026-02"
+    ],
+    "rows": [
+      "Groceries 19600 vs 10300 (+9300)"
+    ]
+  },
   "invariants": []
 }

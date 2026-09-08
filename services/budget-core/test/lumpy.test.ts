@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
-import { lumpy } from "../fixtures/factories";
-import { dueDates, nextDueOnOrAfter, plan, recommendedMonthlyTotal, steadyMonthlyTotal, timeline } from "../src/lumpy";
+import { expense, lumpy } from "../fixtures/factories";
+import {
+  dueDates, lumpyPayments, nextDueOnOrAfter, plan, recommendedMonthlyTotal, steadyMonthlyTotal, timeline,
+} from "../src/lumpy";
 
 test("catch-up is bigger than steady state when the bill arrives before a full cycle", () => {
   const item = lumpy({ amount_cents: 120000, frequency_months: 12, next_due_date: "2026-04-15" });
@@ -108,4 +110,64 @@ test("money already in the fund is claimed by whatever comes due first", () => {
   const overFunded = plan([soon, later], "2026-03", 200000);
   expect(overFunded[1]!.already_covered_cents).toBe(120000);
   expect(overFunded[1]!.catch_up_cents).toBe(0);
+});
+
+// ------------------------------------------------- payments already imported
+
+test("a charge near the due date is the payment, and rolls the item forward", () => {
+  const item = lumpy({
+    name: "Car insurance", amount_cents: 120000, frequency_months: 12,
+    next_due_date: "2026-04-15", merchant_pattern: "geico",
+  });
+  const paid = expense({ txn_date: "2026-04-17", amount_cents: 123400, merchant: "GEICO *AUTO 8829" });
+  const [p] = lumpyPayments([item], [paid], { today: "2026-04-30" });
+  expect(p!.due_date).toBe("2026-04-15");
+  expect(p!.rolls_to).toBe("2027-04-15");
+  expect(p!.expense.id).toBe(paid.id);
+  expect(p!.days_off).toBe(2);
+  // The bill going up is the second thing this finds.
+  expect(p!.delta_cents).toBe(3400);
+});
+
+test("an item with no pattern is never reconciled, however obvious the charge", () => {
+  const item = lumpy({ next_due_date: "2026-04-15", merchant_pattern: null });
+  const paid = expense({ txn_date: "2026-04-15", amount_cents: 120000, merchant: "Car insurance" });
+  expect(lumpyPayments([item], [paid], { today: "2026-04-30" })).toEqual([]);
+  // Nor is an inactive one: it is not being saved for, so nothing left the fund.
+  const off = lumpy({ next_due_date: "2026-04-15", merchant_pattern: "geico", active: false });
+  expect(lumpyPayments([off], [expense({ txn_date: "2026-04-15", merchant: "GEICO" })], { today: "2026-04-30" })).toEqual([]);
+});
+
+test("money that has not left yet, and money coming back, are not payments", () => {
+  const item = lumpy({ next_due_date: "2026-04-15", merchant_pattern: "geico", amount_cents: 120000 });
+  // A statement can carry a transaction dated ahead of itself.
+  const ahead = expense({ txn_date: "2026-04-15", amount_cents: 120000, merchant: "GEICO" });
+  expect(lumpyPayments([item], [ahead], { today: "2026-04-10" })).toEqual([]);
+  // A refund matches the pattern and is the opposite of a payment.
+  const refund = expense({ txn_date: "2026-04-15", amount_cents: -4000, merchant: "GEICO REFUND" });
+  expect(lumpyPayments([item], [refund], { today: "2026-04-30" })).toEqual([]);
+});
+
+test("the window is half a cycle, so a monthly item is not paid by next month", () => {
+  const monthly = lumpy({ frequency_months: 1, next_due_date: "2026-04-15", merchant_pattern: "acme" });
+  const near = expense({ txn_date: "2026-04-25", merchant: "ACME" });
+  const far = expense({ txn_date: "2026-05-14", merchant: "ACME" });
+  expect(lumpyPayments([monthly], [far], { today: "2026-05-30" })).toEqual([]);
+  expect(lumpyPayments([monthly], [near], { today: "2026-05-30" })).toHaveLength(1);
+});
+
+test("the charge closest to the due date wins, whatever order the rows arrive in", () => {
+  const item = lumpy({ next_due_date: "2026-04-15", merchant_pattern: "geico", frequency_months: 12 });
+  const early = expense({ txn_date: "2026-03-28", merchant: "GEICO ONE" });
+  const close = expense({ txn_date: "2026-04-14", merchant: "GEICO TWO" });
+  expect(lumpyPayments([item], [early, close], { today: "2026-04-30" })[0]!.expense.id).toBe(close.id);
+  expect(lumpyPayments([item], [close, early], { today: "2026-04-30" })[0]!.expense.id).toBe(close.id);
+});
+
+test("whole_word here means what it means everywhere else", () => {
+  const item = lumpy({ next_due_date: "2026-04-15", merchant_pattern: "bp", merchant_whole_word: true });
+  const post = expense({ txn_date: "2026-04-15", merchant: "BPOST ANNUAL" });
+  const fuel = expense({ txn_date: "2026-04-16", merchant: "BP1234 FUEL CARD" });
+  expect(lumpyPayments([item], [post], { today: "2026-04-30" })).toEqual([]);
+  expect(lumpyPayments([item], [fuel], { today: "2026-04-30" })).toHaveLength(1);
 });

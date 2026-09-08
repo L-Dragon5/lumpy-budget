@@ -417,5 +417,13 @@
     "short": false
   },
   "recurring": [],
+  "lumpy_paid": [],
+  "category_pace": {
+    "through_day": 10,
+    "months_compared": [],
+    "rows": [
+      "Groceries 8200 vs 0 (+8200)"
+    ]
+  },
   "invariants": []
 }

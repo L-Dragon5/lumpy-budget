@@ -4,7 +4,7 @@ import type {
   MergeResult, RestoreResult, RuleMergeResult, SavingsGoal,
 } from "@lumpy/contracts";
 import { bulkInsert, insert, rows, sql, update, type Executor } from "@lumpy/db";
-import { applyRules, dedupeKey } from "@lumpy/csv-import";
+import { applyRules, dedupeKey, dedupeKeys } from "@lumpy/csv-import";
 import * as core from "@lumpy/budget-core";
 
 export const streams = () => rows<IncomeStream>("income_streams");
@@ -16,6 +16,25 @@ export const categoryRules = () => rows<CategoryRule>("category_rules");
 
 export const expensesBetween = (start: string, end: string) =>
   rows<Expense>("expenses", "txn_date BETWEEN ? AND ?", [start, end]);
+
+/**
+ * Import batches whose format is not the checking account -- a credit card.
+ *
+ * The cash position is the only reader. A card purchase is spending on the day it
+ * happens, which is what every other number in the app wants, and it is not money
+ * out of checking until the card is paid, which is what the balance tile wants.
+ * One boolean on the format the statement was imported under is the whole
+ * distinction; a manual row has no batch and counts, because a row typed by hand
+ * is a row that came off the account being tracked.
+ */
+export async function nonCashBatchIds(): Promise<Set<number>> {
+  const out = (await sql.unsafe(
+    `SELECT b.id FROM import_batches b
+       JOIN import_profiles p ON p.id = b.profile_id
+      WHERE p.cash_account = FALSE`,
+  )) as { id: number }[];
+  return new Set(out.map((r) => Number(r.id)));
+}
 
 export async function setting(name: string, fallback = "0"): Promise<string> {
   const out = (await sql.unsafe("SELECT value FROM settings WHERE name = ?", [name])) as { value: string }[];
@@ -87,15 +106,22 @@ export async function importExpenses(args: {
       tx,
     );
 
+    // Numbered across the whole file before it is chunked, so a charge listed
+    // twice gets two identities and both rows land. The indices depend on the
+    // file's own order, so re-importing the same statement produces the same
+    // hashes and is still a no-op.
+    const keys = dedupeKeys(categorized);
+
     let inserted = 0;
     for (let i = 0; i < categorized.length; i += 200) {
       const chunk = categorized.slice(i, i + 200);
+      const chunkKeys = keys.slice(i, i + 200);
       const values = chunk
         .map(() => "(?, ?, ?, ?, ?, ?, ?, ?)")
         .join(", ");
-      const params = chunk.flatMap((r) => [
+      const params = chunk.flatMap((r, j) => [
         r.txn_date, r.amount_cents, r.merchant, r.description ?? "",
-        r.category_id, r.source ?? "import", batchId, hash(dedupeKey(r)),
+        r.category_id, r.source ?? "import", batchId, hash(chunkKeys[j]!),
       ]);
       const res = (await tx.unsafe(
         `INSERT IGNORE INTO expenses
@@ -112,9 +138,53 @@ export async function importExpenses(args: {
   });
 }
 
-/** A single manual expense still gets a dedupe hash, so it cannot be double-entered. */
+/**
+ * How many identical transactions one day is allowed to hold. Four hundred is
+ * not a limit anybody reaches; it is there so a bug cannot turn this into an
+ * unbounded scan.
+ */
+const MAX_OCCURRENCES = 400;
+
+/**
+ * The hash for a hand-entered row: the first occurrence index this database does
+ * not already hold.
+ *
+ * The unique index exists so a re-imported statement inserts nothing, not so a
+ * person is forbidden from recording two identical coffees. Typing the second one
+ * is a deliberate act, and refusing it undercounts real spending -- which is the
+ * one number the whole app is protecting. So a manual row takes the next free
+ * index instead of colliding.
+ *
+ * `excludeId` is the row being edited: its own hash is not a duplicate of itself,
+ * and an edit that changes nothing must not renumber it.
+ *
+ * ponytail: one round trip, then a scan of the candidates in memory. Two writers
+ * racing for the same index would still collide, and the unique index would say
+ * so as a 409 -- which is the right answer for an app with one user on localhost.
+ */
+async function freeHash(
+  e: Pick<ExpenseInput, "txn_date" | "amount_cents" | "merchant">,
+  excludeId?: number,
+): Promise<string> {
+  const candidates = Array.from({ length: MAX_OCCURRENCES }, (_, i) => hash(dedupeKey(e, i)));
+  const params: unknown[] = [...candidates];
+  let where = `dedupe_hash IN (${candidates.map(() => "?").join(", ")})`;
+  if (excludeId !== undefined) {
+    where += " AND id <> ?";
+    params.push(excludeId);
+  }
+  const taken = (await sql.unsafe(`SELECT dedupe_hash FROM expenses WHERE ${where}`, params)) as {
+    dedupe_hash: string;
+  }[];
+  const used = new Set(taken.map((r) => r.dedupe_hash));
+  const free = candidates.find((h) => !used.has(h));
+  if (free === undefined) throw new Error(`more than ${MAX_OCCURRENCES} identical transactions on ${e.txn_date}`);
+  return free;
+}
+
+/** A single manual expense still gets a dedupe hash; see freeHash for which one. */
 export async function insertExpense(e: ExpenseInput): Promise<number> {
-  return insert("expenses", { ...e, dedupe_hash: hash(dedupeKey(e)) });
+  return insert("expenses", { ...e, dedupe_hash: await freeHash(e) });
 }
 
 /**
@@ -125,7 +195,7 @@ export async function insertExpense(e: ExpenseInput): Promise<number> {
  * it. A collision surfaces as errno 1062, which the API already reads as a 409.
  */
 export async function updateExpense(id: number, e: ExpenseInput): Promise<number> {
-  return update("expenses", id, { ...e, dedupe_hash: hash(dedupeKey(e)) });
+  return update("expenses", id, { ...e, dedupe_hash: await freeHash(e, id) });
 }
 
 /**

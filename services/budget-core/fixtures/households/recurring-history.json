@@ -41,7 +41,19 @@
       "active": true
     }
   ],
-  "lumpyItems": [],
+  "lumpyItems": [
+    {
+      "id": 1,
+      "name": "AAA membership",
+      "amount_cents": 18600,
+      "frequency_months": 6,
+      "next_due_date": "2026-02-15",
+      "category_id": 3,
+      "merchant_pattern": "aaa",
+      "merchant_whole_word": true,
+      "active": true
+    }
+  ],
   "savingsGoals": [
     {
       "id": 1,
@@ -56,28 +68,6 @@
   ],
   "expenses": [
     {
-      "id": 1,
-      "txn_date": "2024-04-02",
-      "amount_cents": 118000,
-      "merchant": "GEICO *AUTO 8829",
-      "description": "",
-      "category_id": 3,
-      "source": "import",
-      "import_batch_id": null,
-      "dedupe_hash": "h1"
-    },
-    {
-      "id": 2,
-      "txn_date": "2025-04-02",
-      "amount_cents": 124000,
-      "merchant": "GEICO AUTO PAY 9134",
-      "description": "",
-      "category_id": 3,
-      "source": "import",
-      "import_batch_id": null,
-      "dedupe_hash": "h2"
-    },
-    {
       "id": 3,
       "txn_date": "2024-01-10",
       "amount_cents": 90000,
@@ -89,6 +79,17 @@
       "dedupe_hash": "h3"
     },
     {
+      "id": 1,
+      "txn_date": "2024-04-02",
+      "amount_cents": 118000,
+      "merchant": "GEICO *AUTO 8829",
+      "description": "",
+      "category_id": 3,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h1"
+    },
+    {
       "id": 4,
       "txn_date": "2025-01-10",
       "amount_cents": 92000,
@@ -98,83 +99,6 @@
       "source": "import",
       "import_batch_id": null,
       "dedupe_hash": "h4"
-    },
-    {
-      "id": 5,
-      "txn_date": "2025-03-05",
-      "amount_cents": 21000,
-      "merchant": "MONROE COUNTY WATER",
-      "description": "",
-      "category_id": 2,
-      "source": "import",
-      "import_batch_id": null,
-      "dedupe_hash": "h5"
-    },
-    {
-      "id": 6,
-      "txn_date": "2025-06-04",
-      "amount_cents": 22000,
-      "merchant": "MONROE COUNTY WATER",
-      "description": "",
-      "category_id": 2,
-      "source": "import",
-      "import_batch_id": null,
-      "dedupe_hash": "h6"
-    },
-    {
-      "id": 7,
-      "txn_date": "2025-09-03",
-      "amount_cents": 20500,
-      "merchant": "MONROE COUNTY WATER",
-      "description": "",
-      "category_id": 2,
-      "source": "import",
-      "import_batch_id": null,
-      "dedupe_hash": "h7"
-    },
-    {
-      "id": 8,
-      "txn_date": "2025-12-08",
-      "amount_cents": 21500,
-      "merchant": "MONROE COUNTY WATER",
-      "description": "",
-      "category_id": 2,
-      "source": "import",
-      "import_batch_id": null,
-      "dedupe_hash": "h8"
-    },
-    {
-      "id": 9,
-      "txn_date": "2025-03-20",
-      "amount_cents": 18600,
-      "merchant": "AAA MEMBERSHIP",
-      "description": "",
-      "category_id": null,
-      "source": "import",
-      "import_batch_id": null,
-      "dedupe_hash": "h9"
-    },
-    {
-      "id": 10,
-      "txn_date": "2025-09-18",
-      "amount_cents": 18600,
-      "merchant": "AAA MEMBERSHIP",
-      "description": "",
-      "category_id": null,
-      "source": "import",
-      "import_batch_id": null,
-      "dedupe_hash": "h10"
-    },
-    {
-      "id": 11,
-      "txn_date": "2026-02-19",
-      "amount_cents": 19200,
-      "merchant": "AAA MEMBERSHIP",
-      "description": "",
-      "category_id": null,
-      "source": "import",
-      "import_batch_id": null,
-      "dedupe_hash": "h11"
     },
     {
       "id": 12,
@@ -199,6 +123,17 @@
       "dedupe_hash": "h13"
     },
     {
+      "id": 5,
+      "txn_date": "2025-03-05",
+      "amount_cents": 21000,
+      "merchant": "MONROE COUNTY WATER",
+      "description": "",
+      "category_id": 2,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h5"
+    },
+    {
       "id": 14,
       "txn_date": "2025-03-14",
       "amount_cents": 21000,
@@ -208,6 +143,28 @@
       "source": "import",
       "import_batch_id": null,
       "dedupe_hash": "h14"
+    },
+    {
+      "id": 9,
+      "txn_date": "2025-03-20",
+      "amount_cents": 18600,
+      "merchant": "AAA MEMBERSHIP",
+      "description": "",
+      "category_id": null,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h9"
+    },
+    {
+      "id": 2,
+      "txn_date": "2025-04-02",
+      "amount_cents": 124000,
+      "merchant": "GEICO AUTO PAY 9134",
+      "description": "",
+      "category_id": 3,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h2"
     },
     {
       "id": 15,
@@ -230,6 +187,17 @@
       "source": "import",
       "import_batch_id": null,
       "dedupe_hash": "h16"
+    },
+    {
+      "id": 6,
+      "txn_date": "2025-06-04",
+      "amount_cents": 22000,
+      "merchant": "MONROE COUNTY WATER",
+      "description": "",
+      "category_id": 2,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h6"
     },
     {
       "id": 17,
@@ -265,6 +233,17 @@
       "dedupe_hash": "h19"
     },
     {
+      "id": 7,
+      "txn_date": "2025-09-03",
+      "amount_cents": 20500,
+      "merchant": "MONROE COUNTY WATER",
+      "description": "",
+      "category_id": 2,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h7"
+    },
+    {
       "id": 20,
       "txn_date": "2025-09-14",
       "amount_cents": 21000,
@@ -274,6 +253,17 @@
       "source": "import",
       "import_batch_id": null,
       "dedupe_hash": "h20"
+    },
+    {
+      "id": 10,
+      "txn_date": "2025-09-18",
+      "amount_cents": 18600,
+      "merchant": "AAA MEMBERSHIP",
+      "description": "",
+      "category_id": null,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h10"
     },
     {
       "id": 21,
@@ -298,6 +288,28 @@
       "dedupe_hash": "h22"
     },
     {
+      "id": 29,
+      "txn_date": "2025-12-04",
+      "amount_cents": 9100,
+      "merchant": "WEGMANS",
+      "description": "",
+      "category_id": 1,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h29"
+    },
+    {
+      "id": 8,
+      "txn_date": "2025-12-08",
+      "amount_cents": 21500,
+      "merchant": "MONROE COUNTY WATER",
+      "description": "",
+      "category_id": 2,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h8"
+    },
+    {
       "id": 23,
       "txn_date": "2025-12-14",
       "amount_cents": 21000,
@@ -307,6 +319,17 @@
       "source": "import",
       "import_batch_id": null,
       "dedupe_hash": "h23"
+    },
+    {
+      "id": 30,
+      "txn_date": "2026-01-06",
+      "amount_cents": 15600,
+      "merchant": "WEGMANS",
+      "description": "",
+      "category_id": 1,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h30"
     },
     {
       "id": 24,
@@ -320,6 +343,17 @@
       "dedupe_hash": "h24"
     },
     {
+      "id": 31,
+      "txn_date": "2026-02-05",
+      "amount_cents": 10300,
+      "merchant": "WEGMANS",
+      "description": "",
+      "category_id": 1,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h31"
+    },
+    {
       "id": 25,
       "txn_date": "2026-02-14",
       "amount_cents": 21500,
@@ -329,6 +363,17 @@
       "source": "import",
       "import_batch_id": null,
       "dedupe_hash": "h25"
+    },
+    {
+      "id": 11,
+      "txn_date": "2026-02-19",
+      "amount_cents": 19200,
+      "merchant": "AAA MEMBERSHIP",
+      "description": "",
+      "category_id": null,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "h11"
     },
     {
       "id": 26,

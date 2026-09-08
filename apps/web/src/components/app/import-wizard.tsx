@@ -33,13 +33,14 @@ export function ImportWizard({ open, onOpenChange }: { open: boolean; onOpenChan
   const [mapping, setMapping] = useState<ImportMapping | null>(null);
   const [profileId, setProfileId] = useState<string>(NONE);
   const [profileName, setProfileName] = useState("");
+  const [cashAccount, setCashAccount] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [done, setDone] = useState<{ inserted: number; skipped: number } | null>(null);
 
   const reset = () => {
     setCsv(null); setMapping(null); setFilename(""); setRawText("");
-    setProfileId(NONE); setProfileName(""); setError(null); setDone(null);
+    setProfileId(NONE); setProfileName(""); setCashAccount(true); setError(null); setDone(null);
   };
 
   const loadFile = async (file: File) => {
@@ -82,8 +83,8 @@ export function ImportWizard({ open, onOpenChange }: { open: boolean; onOpenChan
         // format rather than failing on the unique name or orphaning the batch.
         const existing = (profiles.data ?? []).find((p) => p.name.toLowerCase() === name.toLowerCase());
         const saved = existing
-          ? await eden.api["import-profiles"]({ id: existing.id }).put({ name, mapping })
-          : await eden.api["import-profiles"].post({ name, mapping });
+          ? await eden.api["import-profiles"]({ id: existing.id }).put({ name, mapping, cash_account: cashAccount })
+          : await eden.api["import-profiles"].post({ name, mapping, cash_account: cashAccount });
         if (saved.error) throw ApiError.from(saved.error);
         savedProfileId = saved.data.id;
       }
@@ -324,6 +325,20 @@ export function ImportWizard({ open, onOpenChange }: { open: boolean; onOpenChan
                   placeholder="Chase Sapphire"
                 />
                 <FieldDescription>Then next month's statement from the same bank takes one click.</FieldDescription>
+              </Field>
+            ) : null}
+
+            {profileId === NONE ? (
+              <Field orientation="horizontal">
+                <Switch id="profile-cash" checked={cashAccount} onCheckedChange={setCashAccount} />
+                <div>
+                  <FieldLabel htmlFor="profile-cash">Money leaves the checking account when it posts</FieldLabel>
+                  <FieldDescription>
+                    On for a bank statement. Off for a credit card: those charges are spending on the day
+                    they happen, but they do not leave checking until the card is paid, and the cash
+                    position is the one number that has to know the difference.
+                  </FieldDescription>
+                </div>
               </Field>
             ) : null}
 

@@ -54,6 +54,10 @@ export default function Reports() {
   // "Other" grey rather than cycling a hue onto two visible slices at once.
   const ranking = useApi(["reports-ranking", bucket], () =>
     eden.api.reports.get({ query: { granularity: "month", start: "2020-01-01", end: "2035-12-31", bucket } }));
+  // Anchored on today, not on the period selector: "by the 8th you normally spent
+  // X" is a question about the month in progress and nothing else.
+  const pace = useApi(["category-pace", bucket], () =>
+    eden.api["category-pace"].get({ query: { months: 3, bucket } }));
   const slots = useMemo(() => {
     const ranked = (ranking.data?.breakdown.slices ?? []).filter((s) => s.category_id !== null);
     return new Map(ranked.slice(0, MAX_SERIES).map((s, i) => [s.category_id!, i]));
@@ -102,6 +106,7 @@ export default function Reports() {
     granularity === "month" ? setMonth(addMonths(month, n)) : setWeek(addDays(week, n * 7));
 
   const totals = detail.data?.totals;
+  const paceRows = pace.data?.rows ?? [];
 
   return (
     <>
@@ -260,6 +265,71 @@ export default function Reports() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Only for the month in progress. Paging back to March and asking what is
+          usual "by the 8th" answers a question nobody asked. */}
+      {granularity === "month" && month === monthOf(todayISO()) && paceRows.length > 0 ? (
+        <Card className="mt-4">
+          <CardHeader>
+            <CardTitle>This month, by day {pace.data!.through_day}</CardTitle>
+            <CardDescription>
+              Groceries and restaurants have no budgeted number and never will, so the comparison is your
+              own history: the middle of the last{" "}
+              {pace.data!.months_compared.length === 1
+                ? "month"
+                : `${pace.data!.months_compared.length} months`}{" "}
+              cut at the same day of the month. Months with nothing imported are left out.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Category</TableHead>
+                  <TableHead className="text-right">So far</TableHead>
+                  <TableHead className="text-right">Usually by now</TableHead>
+                  <TableHead className="text-right">Difference</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paceRows.map((r) => (
+                  <TableRow key={r.category_id ?? "none"}>
+                    <TableCell className="font-medium">
+                      <span className="flex items-center gap-2">
+                        <span
+                          className="size-2.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: colorOf(r.category_id) }}
+                        />
+                        <CategoryIcon name={iconOf(r.category_id)} />
+                        {r.name}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Money cents={r.month_to_date_cents} />
+                    </TableCell>
+                    <TableCell className="text-right text-muted-foreground">
+                      <Money cents={r.typical_cents} />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <span className={r.delta_cents > 0 ? "text-destructive" : "text-muted-foreground"}>
+                        {r.delta_cents > 0 ? "+" : ""}
+                        {money(r.delta_cents)}
+                        {/* A percentage off nothing is not a percentage. */}
+                        {r.typical_cents !== 0 ? (
+                          <span className="ml-1 text-xs">
+                            ({r.pct_off > 0 ? "+" : ""}
+                            {r.pct_off.toFixed(0)}%)
+                          </span>
+                        ) : null}
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card className="mt-4">
         <CardHeader>

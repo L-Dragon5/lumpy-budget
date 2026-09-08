@@ -264,11 +264,22 @@ export const computed = new Elysia({ prefix: "/api" })
       }).paychecks;
 
     // Bounded at today: money dated ahead of itself has not left the account.
-    const since = await store.expensesBetween(asOf, today);
+    const [since, cardBatches] = await Promise.all([
+      store.expensesBetween(asOf, today),
+      store.nonCashBatchIds(),
+    ]);
     const byId = core.categoryIndex(cats);
     // Every bucket, not just discretionary. A mortgage payment is reconciliation
     // in the budget and a withdrawal in the account, and this is the account.
-    const spent = since.filter((e) => core.bucketOf(e, byId) !== "transfer");
+    //
+    // Everything except a charge imported from a credit card statement, which is
+    // money owed rather than money gone: it leaves checking on the day the card
+    // is paid, and that payment is its own row on the bank statement.
+    const spent = since.filter(
+      (e) =>
+        core.bucketOf(e, byId) !== "transfer" &&
+        !(e.import_batch_id !== null && cardBatches.has(e.import_batch_id)),
+    );
 
     return {
       set_at: row?.updated_at ?? null,
@@ -282,6 +293,63 @@ export const computed = new Elysia({ prefix: "/api" })
       }),
     };
   })
+
+  /**
+   * Lumpy bills the statements show as already paid, waiting to be recorded.
+   *
+   * The fund's schedule heals itself and its balance cannot, so the day the
+   * insurance is actually paid the app still believes the money is sitting there.
+   * The evidence is already imported; this finds it. Nothing is written from
+   * here -- the page offers the roll-forward and the new balance and a person
+   * presses it, which is what lets the match be a pattern rather than a proof.
+   */
+  .get(
+    "/lumpy-paid",
+    async ({ query }) => {
+      const today = core.todayISO();
+      const windowDays = clamp(query.window_days, 45, 1, 180);
+      const [items, balance] = await Promise.all([
+        store.lumpyItems(),
+        store.setting("lumpy_opening_balance_cents", "0"),
+      ]);
+      // A cycle back plus the window covers the oldest due date worth matching,
+      // and no more: this reads the expenses table, which is the big one.
+      const longest = Math.max(1, ...items.map((i) => i.frequency_months));
+      const start = core.addDays(core.addMonthsToDate(today, -longest), -windowDays);
+      const expenses = await store.expensesBetween(start, today);
+      const balanceCents = Number(balance) || 0;
+      return {
+        today,
+        window_days: windowDays,
+        balance_cents: balanceCents,
+        rows: core.lumpyPayments(items, expenses, { today, windowDays }).map((p) => ({
+          ...p,
+          // What the fund is left holding once this payment is taken off it. The
+          // page writes it back; the arithmetic does not belong in a click handler.
+          balance_after_cents: balanceCents - p.expense.amount_cents,
+        })),
+      };
+    },
+    { query: z.object({ window_days: num }) },
+  )
+
+  /**
+   * Every discretionary category against what it usually costs by this day of
+   * the month. See budget-core/reports.ts: the target is your own history, which
+   * is the only budget for groceries nobody has to maintain.
+   */
+  .get(
+    "/category-pace",
+    async ({ query }) => {
+      const today = core.todayISO();
+      const months = clamp(query.months, 3, 1, 24);
+      const cats = await store.categories();
+      const start = core.monthStart(core.addMonths(core.monthOf(today), -months));
+      const expenses = await store.expensesBetween(start, today);
+      return core.categoryPace(expenses, cats, { today, months, bucket: query.bucket ?? "discretionary" });
+    },
+    { query: z.object({ months: num, bucket: bucketQuery }) },
+  )
 
   /** Budgeted versus what the bills have actually cost. See budget-core/variance.ts. */
   .get(

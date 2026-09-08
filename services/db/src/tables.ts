@@ -35,9 +35,12 @@ export const TABLES = {
     order: "active DESC, due_day ASC, name ASC",
   },
   lumpy_items: {
-    cols: ["id", "name", "amount_cents", "frequency_months", "next_due_date", "category_id", "active"],
+    cols: [
+      "id", "name", "amount_cents", "frequency_months", "next_due_date", "category_id",
+      "merchant_pattern", "merchant_whole_word", "active",
+    ],
     date: ["next_due_date"],
-    bool: ["active"],
+    bool: ["merchant_whole_word", "active"],
     order: "active DESC, next_due_date ASC",
   },
   savings_goals: {
@@ -52,8 +55,9 @@ export const TABLES = {
     order: "priority ASC, id ASC",
   },
   import_profiles: {
-    cols: ["id", "name", "mapping"],
+    cols: ["id", "name", "mapping", "cash_account"],
     json: ["mapping"],
+    bool: ["cash_account"],
     order: "name ASC",
   },
   import_batches: {

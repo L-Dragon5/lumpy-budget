@@ -2,8 +2,9 @@ import { useRef, useState } from "react";
 import {
   CATEGORY_ICONS,
   type Backup, type Bucket, type CategoryIconName, type CategoryInput, type CategoryRuleInput,
+  type ImportProfile,
 } from "@lumpy/contracts";
-import { DownloadIcon, PencilIcon, UploadIcon } from "lucide-react";
+import { CircleHelpIcon, DownloadIcon, PencilIcon, UploadIcon } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -17,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SelectField } from "@/components/app/controls";
 import { CategoryIcon, CategoryLabel } from "@/lib/icons";
 import { cn } from "@/lib/utils";
@@ -44,6 +46,14 @@ export default function Settings() {
     eden.api["category-rules"]({ id: v.id }).put(v.body));
   const removeRule = useMutate((id: number) => eden.api["category-rules"]({ id }).delete());
   const removeProfile = useMutate((id: number) => eden.api["import-profiles"]({ id }).delete());
+  // The one field on a saved format worth changing after the fact: every profile
+  // that predates the column reads as checking, and a card has to be told once.
+  const setCashAccount = useMutate((v: { profile: ImportProfile; cash_account: boolean }) =>
+    eden.api["import-profiles"]({ id: v.profile.id }).put({
+      name: v.profile.name,
+      mapping: v.profile.mapping,
+      cash_account: v.cash_account,
+    }));
 
   const [catDraft, setCatDraft] = useState<{ id: number | null; name: string; bucket: Bucket; icon: CategoryIconName | null } | null>(null);
   const [ruleDraft, setRuleDraft] = useState<
@@ -231,6 +241,24 @@ export default function Settings() {
                       <TableHead>Date column</TableHead>
                       <TableHead>Amount</TableHead>
                       <TableHead>Merchant</TableHead>
+                      <TableHead>
+                        <span className="inline-flex items-center gap-1">
+                          Leaves checking
+                          <Tooltip>
+                            <TooltipTrigger
+                              aria-label="What leaves checking means"
+                              className="text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground"
+                            >
+                              <CircleHelpIcon className="size-3.5" />
+                            </TooltipTrigger>
+                            <TooltipContent className="block max-w-80 py-2">
+                              On for a bank statement, off for a credit card. A card charge is spending on
+                              the day it happens and is not money out of checking until the card is paid,
+                              which only the cash position tile cares about.
+                            </TooltipContent>
+                          </Tooltip>
+                        </span>
+                      </TableHead>
                       <TableHead className="w-12" />
                     </TableRow>
                   </TableHeader>
@@ -246,6 +274,13 @@ export default function Settings() {
                           {p.mapping.flip_sign ? " (flipped)" : ""}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">{p.mapping.merchant_column}</TableCell>
+                        <TableCell>
+                          <Switch
+                            checked={p.cash_account}
+                            onCheckedChange={(v) => setCashAccount.mutate({ profile: p, cash_account: v })}
+                            aria-label={`${p.name} spending leaves the checking account`}
+                          />
+                        </TableCell>
                         <TableCell>
                           <DeleteButton label={p.name} onConfirm={() => removeProfile.mutate(p.id)} />
                         </TableCell>

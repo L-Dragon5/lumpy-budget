@@ -1,4 +1,5 @@
-import type { LumpyItem } from "@lumpy/contracts";
+import { matchesPattern, needleOf } from "@lumpy/contracts";
+import type { Expense, LumpyItem } from "@lumpy/contracts";
 import { divRound, sum, type Cents } from "./money";
 import * as d from "./dates";
 import type { ISODate, ISOMonth } from "./dates";
@@ -166,4 +167,99 @@ export function dueDates(item: LumpyItem, start: ISODate, end: ISODate): ISODate
     cur = d.addMonthsToDate(cur, item.frequency_months);
   }
   return out;
+}
+
+// ------------------------------------------------- payments already imported
+
+export type LumpyPayment = {
+  item: LumpyItem;
+  /** The occurrence this charge answers for: the item's stored next_due_date. */
+  due_date: ISODate;
+  /** What next_due_date becomes once the payment is recorded. */
+  rolls_to: ISODate;
+  expense: { id: number; txn_date: ISODate; merchant: string; amount_cents: Cents };
+  /** Days between the due date and the charge. Negative means it posted early. */
+  days_off: number;
+  /** Charged minus planned. Positive means the bill went up. */
+  delta_cents: Cents;
+};
+
+/** The same haystack the importer matches category_rules against. */
+const hay = (e: Pick<Expense, "merchant" | "description">): string =>
+  `${e.merchant} ${e.description ?? ""}`.toLowerCase();
+
+/**
+ * Lumpy bills the statements show as already paid.
+ *
+ * `next_due_date` in the database is the occurrence nobody has recorded yet --
+ * the engine rolls a passed due date forward when it reads (`nextDueOnOrAfter`),
+ * but the stored column only moves when a person moves it, and the balance never
+ * moves at all. So the day the insurance is actually paid, the fund still claims
+ * the money is sitting there and the recommended contribution quietly drops. This
+ * finds the charge that proves otherwise: a transaction matching the item's
+ * `merchant_pattern`, landing near the stored due date, already imported.
+ *
+ * Nothing is written from here. The page offers the roll-forward and the new
+ * balance, and a person presses it -- the same rule the recurring detector
+ * follows, and what lets both of them match on a pattern rather than on proof.
+ *
+ * The window is capped at half a cycle, so a monthly item cannot be reconciled by
+ * next month's charge. Only charges dated on or before `today` count: money that
+ * has not left the account is not a payment. Refunds and reversals (a negative
+ * amount) are not payments either.
+ */
+export function lumpyPayments(
+  items: LumpyItem[],
+  expenses: Expense[],
+  opts: { today: ISODate; windowDays?: number },
+): LumpyPayment[] {
+  const today = d.assertDate(opts.today);
+  const maxWindow = opts.windowDays ?? 45;
+
+  const out: LumpyPayment[] = [];
+  for (const item of items) {
+    if (!item.active) continue;
+    const pattern = (item.merchant_pattern ?? "").trim();
+    if (pattern.length === 0) continue;
+    const needle = needleOf(pattern);
+    // Half a cycle: past that, the nearer due date is the next one, not this one.
+    const window = Math.min(maxWindow, Math.floor((item.frequency_months * 30) / 2));
+
+    const due = item.next_due_date;
+    const hits = expenses.filter(
+      (e) =>
+        e.amount_cents > 0 &&
+        d.compare(e.txn_date, today) <= 0 &&
+        Math.abs(d.diffDays(due, e.txn_date)) <= window &&
+        matchesPattern(hay(e), needle, item.merchant_whole_word),
+    );
+    if (hits.length === 0) continue;
+
+    // Closest to the due date wins; the later charge breaks a tie, then the id,
+    // so the answer does not depend on the order the rows came back in.
+    const best = hits.reduce((a, b) => {
+      const da = Math.abs(d.diffDays(due, a.txn_date));
+      const db = Math.abs(d.diffDays(due, b.txn_date));
+      if (da !== db) return da < db ? a : b;
+      const byDate = d.compare(b.txn_date, a.txn_date);
+      return byDate !== 0 ? (byDate > 0 ? b : a) : b.id > a.id ? b : a;
+    });
+
+    out.push({
+      item,
+      due_date: due,
+      rolls_to: d.addMonthsToDate(due, item.frequency_months),
+      expense: {
+        id: best.id,
+        txn_date: best.txn_date,
+        merchant: best.merchant,
+        amount_cents: best.amount_cents,
+      },
+      days_off: d.diffDays(due, best.txn_date),
+      delta_cents: best.amount_cents - item.amount_cents,
+    });
+  }
+
+  // Oldest due date first: the one that has been wrong longest is the one to fix.
+  return out.sort((a, b) => d.compare(a.due_date, b.due_date) || a.item.id - b.item.id);
 }

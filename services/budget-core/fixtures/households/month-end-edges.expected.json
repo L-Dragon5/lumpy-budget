@@ -417,5 +417,11 @@
     "short": false
   },
   "recurring": [],
+  "lumpy_paid": [],
+  "category_pace": {
+    "through_day": 10,
+    "months_compared": [],
+    "rows": []
+  },
   "invariants": []
 }

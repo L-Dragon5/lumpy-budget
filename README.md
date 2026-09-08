@@ -193,7 +193,7 @@ services/budget-core/   the engine: pure functions, no DB, no HTTP, no I/O
                         forecast.ts runs the month forward, cash.ts reads the
                         balance against the next bills
 services/db/            Bun.sql client, numbered .sql migrations, seed data
-                        001_init.sql is the whole schema; next migration is 011
+                        001_init.sql is the whole schema; next migration is 013
 services/api/           Elysia routes; exports its own type, which Eden gives the web app
 services/csv-import/    CSV parse / normalize / dedupe; runs in the browser too
 apps/web/               Vite + React + Tailwind v4 + shadcn/ui + React Bits
@@ -231,8 +231,17 @@ count it. Fixed, lumpy and savings transactions are reconciliation, never a
 second subtraction.
 
 **A re-imported statement is a no-op.** Every expense carries a unique hash of
-its date, amount and normalized merchant, so overlapping statements insert only
-what is new. Imports are grouped in batches and an import can be deleted whole.
+its date, amount, normalized merchant, and which occurrence of those it is, so
+overlapping statements insert only what is new. Imports are grouped in batches
+and an import can be deleted whole.
+
+The occurrence index is what makes two $6.50 coffees at one shop on one morning
+two transactions instead of one. They are the same identity and the second used
+to be dropped as a duplicate and counted as "skipped": a silent undercount of
+exactly the discretionary spending this app exists to protect. The index is
+assigned per statement in file order, so re-importing that same file produces the
+same hashes and is still the no-op it always was, and a row typed by hand takes
+the next index nobody is using rather than colliding.
 
 ## How the pieces work
 
@@ -278,6 +287,15 @@ or has to be saved for. Deliberately plan-only -- a month that has not happened
 has no transactions in it -- so an extra-paycheck month shows up as the roomiest
 month in the year rather than as a number you have to work out.
 
+**Which statement a charge came from.** A saved import format says whether
+spending on it leaves the checking account when it posts. On for a bank
+statement; off for a credit card, where a purchase is spending on the day it
+happens but is not money out of checking until the card is paid. Only the cash
+position reads it -- every other number counts a card purchase on the day it
+happened, as it always has. It is one boolean rather than an accounts table on
+purpose: this is one household on one checking account, and the only question
+worth answering is whether a row has left that account yet.
+
 **What is actually in the account.** Everything else in the app is derived from
 a plan; the checking balance is the one number that says whether the account
 survives the next eleven days. It is typed in, like the lumpy fund's, and read
@@ -316,6 +334,20 @@ Only complete months count, the current one is half billed. The average divides
 by months that have a transaction, not by the length of the window: an empty month
 is a statement you have not imported, not a month the gas company forgot to bill.
 
+**Lumpy bills the statements say are already paid.** A lumpy item can name how
+it posts on a statement, the same way a fixed cost can and matched by the same
+code. `next_due_date` in the database is the occurrence nobody has recorded yet:
+the engine rolls a passed due date forward when it reads, but the stored column
+only moves when a person moves it, and the balance never moves at all. So the day
+the insurance is actually paid, the fund still claims the money is sitting there
+and quietly tells you to save less. The page finds the charge that proves
+otherwise -- matching the pattern, landing near the due date, already imported --
+and offers one button that rolls the item to its next occurrence and takes the
+charge off the balance. Nothing is written until it is pressed, which is what
+lets the match be a pattern rather than a proof, and the row shows what was
+actually charged next to what was planned, so a bill that went up is visible in
+the same glance.
+
 **A hand-kept balance says when it went stale.** The lumpy fund's balance is
 typed in by a person, and the schedule heals itself where the balance cannot: a
 passed due date rolls forward on its own, but the day the insurance is actually
@@ -331,6 +363,16 @@ it lands in at the current rate. Without one it is open-ended and the balance is
 the whole story. Balances are kept up to date by hand on the page that reads
 them, not on a settings page two clicks away; the same is true of the lumpy
 fund's balance.
+
+**This month, so far.** Groceries and restaurants have no budgeted number and
+never will, because nobody knows what they should cost until they have seen what
+they do cost. So the target is your own history: every discretionary category
+against the middle of the last three months, both sides cut at today's day of the
+month. A full month's average against five days of spending would say you are 80%
+under budget every month until the 25th, which is worse than saying nothing. The
+median rather than the mean, so one annual car repair booked to Maintenance does
+not become the number the other eleven months are judged against, and a month
+nobody imported is left out rather than averaged in as a month you spent nothing.
 
 **Available to spend**, both ways. Over the whole month, and per paycheck period
 — from the day money lands until the next paycheck arrives, which is how it is

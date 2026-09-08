@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import type { CategoryRule } from "@lumpy/contracts";
 import { parseCsv } from "../src/parse";
-import { applyRules, dedupeKey, guessMapping, normalize, normalizeMerchant } from "../src/normalize";
+import { applyRules, dedupeKey, dedupeKeys, guessMapping, normalize, normalizeMerchant } from "../src/normalize";
 
 const chase = parseCsv(
   "Transaction Date,Post Date,Description,Category,Type,Amount\n" +
@@ -60,6 +60,33 @@ test("the dedupe key ignores the noise banks add and nothing else", () => {
   expect(dedupeKey(base)).not.toBe(dedupeKey({ ...base, txn_date: "2026-03-16" }));
   expect(dedupeKey(base)).not.toBe(dedupeKey({ ...base, merchant: "WEGMANS #124" }));
   expect(normalizeMerchant("Café  Nero*  1234")).toBe("CAFE NERO 1234");
+});
+
+test("occurrence 0 is the key it has always been, so stored hashes stay valid", () => {
+  const base = { txn_date: "2026-03-14", amount_cents: 8421, merchant: "WEGMANS #123" };
+  expect(dedupeKey(base, 0)).toBe(dedupeKey(base));
+  expect(dedupeKey(base, 0)).toBe("2026-03-14|8421|WEGMANS 123");
+  expect(dedupeKey(base, 1)).not.toBe(dedupeKey(base));
+});
+
+test("a file listing one charge twice gets two identities, in file order", () => {
+  const coffee = { txn_date: "2026-03-18", amount_cents: 650, merchant: "CORNER COFFEE #4" };
+  const other = { txn_date: "2026-03-18", amount_cents: 1200, merchant: "CORNER COFFEE #4" };
+  // Two $6.50 coffees at one shop on one day are one identity and two real
+  // transactions. Without the index the second was dropped as a duplicate.
+  const keys = dedupeKeys([coffee, other, coffee, coffee]);
+  expect(new Set(keys).size).toBe(4);
+  expect(keys[0]).toBe(dedupeKey(coffee));
+  expect(keys[2]).toBe(dedupeKey(coffee, 1));
+  expect(keys[3]).toBe(dedupeKey(coffee, 2));
+  // The other amount is a different identity and starts its own count.
+  expect(keys[1]).toBe(dedupeKey(other));
+
+  // Same file in, same keys out: re-importing an overlapping statement is still
+  // a no-op, which is the whole reason the hash is unique.
+  expect(dedupeKeys([coffee, other, coffee, coffee])).toEqual(keys);
+  // And the index is per identity, not per file position.
+  expect(dedupeKeys([other, coffee])).toEqual([dedupeKey(other), dedupeKey(coffee)]);
 });
 
 const rule = (p: Partial<CategoryRule>): CategoryRule =>

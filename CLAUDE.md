@@ -44,9 +44,12 @@ The hook is not installed by cloning: `git config core.hooksPath .githooks`.
 Four places, in this order, or reads silently drop it:
 
 1. a new numbered `services/db/migrations/NNN_*.sql` (forward-only, no rollback).
-   **Start at 011.** 001-010 were squashed into `001_init.sql`; the databases
+   **Start at 013.** 001-010 were squashed into `001_init.sql`; the databases
    that lived through them still record 002-010 in `_migrations`, so reusing a
-   number below 011 reads as history that already ran.
+   number below 011 reads as history that already ran. 011 and 012 are real
+   files, applied on top of `001_init.sql` on a fresh database too -- do not fold
+   their columns back into 001, or a fresh database runs 011 into a duplicate
+   column.
 2. `services/db/src/tables.ts` — `cols` plus the right coercion list
    (`date` / `datetime` / `bool` / `num` / `json`). `rows()` builds its SELECT
    from this spec; a column absent here does not exist as far as the app is concerned.
@@ -129,6 +132,30 @@ Four places, in this order, or reads silently drop it:
   resolve. It writes the spec's columns, not the row's keys, so a column added to
   `tables.ts` without a `contracts/types.ts` entry restores as NULL and fails the
   constraint -- the same four-place checklist, one more reason.
+- **The dedupe hash covers a fourth thing: which occurrence it is.**
+  `dedupeKey(e, n)` appends `|#n` for n > 0 and produces the old string byte for
+  byte at n = 0, which is the only reason every hash already in the database
+  still belongs to its row. `dedupeKeys` numbers a whole statement in file order
+  (so a re-import of the same file is still a no-op) and `freeHash` in
+  `api/src/store.ts` picks the first unused index for a hand-entered row. Two
+  identical coffees on one day are two transactions; refusing the second
+  undercounted the one number this app protects. A manual duplicate is therefore
+  a 201, not the 409 it used to be, and a test pins that.
+- **`lumpy_items.merchant_pattern` is `fixed_costs.merchant_pattern`**, same
+  column, same `matchesPattern`, same whole-word switch. `lumpyPayments` reads
+  the *stored* `next_due_date`, not `nextDueOnOrAfter`: the stored column is the
+  occurrence nobody has recorded yet, which is the whole state the feature runs
+  on. Its window is capped at half a cycle so a monthly item cannot be reconciled
+  by next month's charge, and recording a payment is two ordinary PUTs from the
+  web app (the item, then the balance setting), not a route.
+- **`import_profiles.cash_account` is read by `/cash-position` and nothing
+  else.** A card charge is spending on the day it happened everywhere in the
+  budget; it is not money out of checking until the card is paid. Filter it into
+  another report and you start double-discounting real spending.
+- **`categoryPace` cuts both sides at today's day of the month.** Comparing a
+  full month's history to five days of spending reads as 80% under budget every
+  month until the 25th. It is a median, not a mean, and it skips months with no
+  transactions at all for the same reason `fixedCostVariance` does.
 - **Only discretionary spending subtracts from available.** Fixed / lumpy /
   savings transactions are reconciliation; counting them twice is the bug this
   app exists to avoid.

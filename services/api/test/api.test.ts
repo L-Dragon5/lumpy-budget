@@ -194,30 +194,45 @@ describe("expenses and import", () => {
     expect((await api("/api/expenses?start=2026-03-15")).body).toHaveLength(2);
   });
 
-  test("a manual expense cannot be entered twice by accident", async () => {
-    const body = { txn_date: "2026-03-18", amount_cents: 999, merchant: "Cash", description: "", category_id: null, source: "manual" };
-    expect((await post("/api/expenses", body)).status).toBe(201);
-    const dupe = await post("/api/expenses", body);
-    expect(dupe.status).toBe(409);
-    expect(dupe.body.error).toBe("that record already exists");
+  test("two identical charges on one day are two expenses, not one", async () => {
+    // Two $6.50 coffees at one shop on one morning are one identity and two real
+    // transactions. Refusing the second undercounts exactly the discretionary
+    // spending this app exists to protect, so a hand-entered row takes the next
+    // free occurrence rather than colliding.
+    const body = { txn_date: "2026-03-18", amount_cents: 650, merchant: "Corner Coffee", description: "", category_id: null, source: "manual" };
+    const first = await post("/api/expenses", body);
+    const second = await post("/api/expenses", body);
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
+    expect(second.body.dedupe_hash).not.toBe(first.body.dedupe_hash);
+    expect((await api("/api/expenses")).body).toHaveLength(2);
+    expect((await api("/api/summary?month=2026-03")).body.spent.discretionary).toBe(1300);
   });
 
-  test("editing an expense onto another one is a 409, not a silent duplicate", async () => {
+  test("an edit onto another row is allowed, and keeps both rows reachable", async () => {
     const base = { description: "", category_id: null, source: "manual" };
     const a = await post("/api/expenses", { ...base, txn_date: "2026-03-18", amount_cents: 999, merchant: "Cash" });
     const b = await post("/api/expenses", { ...base, txn_date: "2026-03-19", amount_cents: 500, merchant: "Kiosk" });
     expect(b.status).toBe(201);
 
-    // The dedupe hash covers date, amount and merchant, so an edit that makes B
-    // identical to A has to collide the same way a second entry would.
+    // Correcting B's date onto A's is the same statement as entering it twice:
+    // it says two withdrawals happened, and the second one takes occurrence 1.
     const clash = await put(`/api/expenses/${b.body.id}`, {
       ...base, txn_date: "2026-03-18", amount_cents: 999, merchant: "Cash",
     });
-    expect(clash.status).toBe(409);
+    expect(clash.status).toBe(200);
+    expect(clash.body.dedupe_hash).not.toBe(a.body.dedupe_hash);
     expect((await api("/api/expenses")).body).toHaveLength(2);
 
-    // And an edit that does not collide keeps the row reachable, with a hash
-    // that now describes what the row actually says.
+    // An edit that changes nothing must not renumber the row onto a free index
+    // it does not need: its own hash is not a duplicate of itself.
+    const same = await put(`/api/expenses/${b.body.id}`, {
+      ...base, txn_date: "2026-03-18", amount_cents: 999, merchant: "Cash",
+    });
+    expect(same.body.dedupe_hash).toBe(clash.body.dedupe_hash);
+
+    // And an edit that moves the row away rewrites the hash to describe what the
+    // row now says, so the statement it came from re-imports it.
     const moved = await put(`/api/expenses/${b.body.id}`, {
       ...base, txn_date: "2026-03-19", amount_cents: 500, merchant: "Corner Kiosk",
     });
@@ -225,6 +240,25 @@ describe("expenses and import", () => {
     expect(moved.body.merchant).toBe("Corner Kiosk");
     expect(moved.body.dedupe_hash).not.toBe(b.body.dedupe_hash);
     expect(a.body.dedupe_hash).not.toBe(moved.body.dedupe_hash);
+  });
+
+  test("a statement listing one charge twice imports it twice, and re-imports as a no-op", async () => {
+    const coffee = {
+      txn_date: "2026-03-18", amount_cents: 650, merchant: "CORNER COFFEE #4",
+      description: "", category_id: null, source: "import",
+    };
+    const file = { filename: "chase.csv", profile_id: null, rows: [coffee, coffee, { ...coffee, amount_cents: 1200 }] };
+
+    const first = await post("/api/import", file);
+    expect(first.body.inserted).toBe(3);
+    expect(first.body.skipped).toBe(0);
+
+    // The indices come from the file's own order, so the same file produces the
+    // same three hashes and the second run is the no-op it has always been.
+    const again = await post("/api/import", file);
+    expect(again.body.inserted).toBe(0);
+    expect(again.body.skipped).toBe(3);
+    expect((await api("/api/expenses")).body).toHaveLength(3);
   });
 
   test("re-importing a row whose expense was edited away inserts it again", async () => {
@@ -548,6 +582,36 @@ describe("backup restore", () => {
     expect(created.status).toBe(201);
     const maxBefore = Math.max(...(before.tables.expenses as { id: number }[]).map((e) => e.id));
     expect(created.body.id).toBeGreaterThan(maxBefore);
+  });
+
+  test("a file written before a column existed restores on the column's default", async () => {
+    await household();
+    const before = await dump();
+
+    // Exactly what an older export is: rows with no merchant_pattern and no
+    // cash_account. Both columns are NOT NULL, so the schema's defaults are the
+    // only thing between an old backup and a constraint error -- which is the
+    // fourth place in the add-a-column checklist earning its keep.
+    const strip = (rows: Record<string, unknown>[], keys: string[]) =>
+      rows.map((r) => Object.fromEntries(Object.entries(r).filter(([k]) => !keys.includes(k))));
+
+    const res = await post("/api/restore", {
+      ...before,
+      tables: {
+        ...before.tables,
+        lumpy_items: strip(before.tables.lumpy_items, ["merchant_pattern", "merchant_whole_word"]),
+        import_profiles: strip(before.tables.import_profiles, ["cash_account"]),
+      },
+    });
+    expect(res.status).toBe(200);
+
+    const after = await dump();
+    expect(after.tables.lumpy_items).toHaveLength(before.tables.lumpy_items.length);
+    expect(after.tables.lumpy_items.every((i: { merchant_pattern: unknown }) => i.merchant_pattern === null)).toBe(true);
+    expect(after.tables.lumpy_items.every((i: { merchant_whole_word: unknown }) => i.merchant_whole_word === false)).toBe(true);
+    expect(after.tables.import_profiles).toHaveLength(before.tables.import_profiles.length);
+    expect(after.tables.import_profiles.length).toBeGreaterThan(0);
+    expect(after.tables.import_profiles.every((p: { cash_account: unknown }) => p.cash_account === true)).toBe(true);
   });
 
   test("a partial file is legitimate: what it omits comes back empty", async () => {
@@ -1359,5 +1423,178 @@ describe("budgeted versus actual, through the API", () => {
     expect(fixed.body.amount_cents).toBe(21000);
     const after = await api("/api/fixed-cost-actuals?months=3");
     expect(after.body.rows.find((r: { fixed_cost_id: number | null }) => r.fixed_cost_id === made.body.id).delta_cents).toBe(0);
+  });
+});
+
+describe("a card statement is not the checking account", () => {
+  beforeEach(() => resetDb({ withSeed: true }));
+
+  const today = () => new Date().toISOString().slice(0, 10);
+
+  const statement = async (name: string, cash_account: boolean, amount_cents: number) => {
+    const profile = await post("/api/import-profiles", {
+      name,
+      cash_account,
+      mapping: {
+        date_column: "Date", amount_column: "Amount", debit_column: null, credit_column: null,
+        merchant_column: "Merchant", description_column: null, date_format: "auto",
+        flip_sign: false, skip_rows: 0,
+      },
+    });
+    expect(profile.status).toBe(201);
+    expect(profile.body.cash_account).toBe(cash_account);
+    return post("/api/import", {
+      filename: `${name}.csv`,
+      profile_id: profile.body.id,
+      rows: [{
+        txn_date: today(), amount_cents, merchant: `${name} purchase`,
+        description: "", category_id: null, source: "import",
+      }],
+    });
+  };
+
+  test("a card charge is spending everywhere except the cash tile", async () => {
+    await put("/api/settings", { name: "checking_balance_cents", value: "180000" });
+    await statement("Big Bank", true, 4300);
+    await statement("Airline Card", false, 21000);
+
+    // Both are spending: a card purchase happened on the day it happened, and the
+    // budget has always counted it there.
+    const month = today().slice(0, 7);
+    expect((await api(`/api/summary?month=${month}`)).body.spent.discretionary).toBe(25300);
+
+    // Only the bank charge has left the account. The card is money owed until the
+    // card is paid, and that payment is its own row on the bank statement.
+    const cash = await api("/api/cash-position");
+    expect(cash.body.spent_since_cents).toBe(4300);
+    expect(cash.body.spent_since_count).toBe(1);
+  });
+
+  test("a format saved before the column existed reads as checking", async () => {
+    // Zod defaults it, so a merge from an older backup file cannot arrive without
+    // it and quietly stop counting against the balance.
+    const merged = await post("/api/import-profiles/merge", {
+      version: 1,
+      tables: {
+        import_profiles: [{
+          name: "Old Bank",
+          mapping: {
+            date_column: "Date", amount_column: "Amount", debit_column: null, credit_column: null,
+            merchant_column: "Merchant", description_column: null, date_format: "auto",
+            flip_sign: false, skip_rows: 0,
+          },
+        }],
+      },
+    });
+    expect(merged.body.added).toEqual(["Old Bank"]);
+    const saved = ((await api("/api/import-profiles")).body as { name: string; cash_account: boolean }[])
+      .find((p) => p.name === "Old Bank")!;
+    expect(saved.cash_account).toBe(true);
+  });
+});
+
+describe("lumpy payments the statements already prove", () => {
+  beforeEach(() => resetDb({ withSeed: true }));
+
+  const today = () => new Date().toISOString().slice(0, 10);
+  const inDays = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
+
+  const insurance = (next_due_date: string) => ({
+    name: "Car insurance", amount_cents: 120000, frequency_months: 12,
+    next_due_date, category_id: null, merchant_pattern: "geico",
+    merchant_whole_word: false, active: true,
+  });
+
+  test("recording a payment rolls the item forward and takes it off the fund", async () => {
+    await put("/api/settings", { name: "lumpy_opening_balance_cents", value: "200000" });
+    const item = await post("/api/lumpy-items", insurance(inDays(-3)));
+    expect(item.body.merchant_pattern).toBe("geico");
+    await post("/api/expenses", {
+      txn_date: inDays(-1), amount_cents: 123400, merchant: "GEICO *AUTO 8829",
+      description: "", category_id: null, source: "manual",
+    });
+
+    const found = await api("/api/lumpy-paid");
+    expect(found.status).toBe(200);
+    expect(found.body.rows).toHaveLength(1);
+    const row = found.body.rows[0];
+    expect(row.item.id).toBe(item.body.id);
+    expect(row.due_date).toBe(inDays(-3));
+    expect(row.expense.amount_cents).toBe(123400);
+    expect(row.delta_cents).toBe(3400);
+    expect(row.balance_after_cents).toBe(200000 - 123400);
+
+    // The two writes the button makes. Nothing on the server does them for it:
+    // the roll-forward is the ordinary PUT, and the balance is hand-kept.
+    await put(`/api/lumpy-items/${item.body.id}`, { ...insurance(row.rolls_to) });
+    await put("/api/settings", {
+      name: "lumpy_opening_balance_cents", value: String(row.balance_after_cents),
+    });
+
+    const after = await api("/api/lumpy-paid");
+    expect(after.body.rows).toEqual([]);
+    expect(after.body.balance_cents).toBe(76600);
+    expect((await api(`/api/lumpy-items/${item.body.id}`)).body.next_due_date).toBe(row.rolls_to);
+  });
+
+  test("nothing is suggested without a pattern, or without a charge", async () => {
+    await post("/api/lumpy-items", { ...insurance(inDays(-3)), merchant_pattern: null });
+    await post("/api/expenses", {
+      txn_date: today(), amount_cents: 120000, merchant: "GEICO *AUTO 8829",
+      description: "", category_id: null, source: "manual",
+    });
+    expect((await api("/api/lumpy-paid")).body.rows).toEqual([]);
+
+    // A pattern with nothing matching it is just as quiet.
+    await post("/api/lumpy-items", { ...insurance(inDays(-3)), name: "Property tax", merchant_pattern: "town of" });
+    expect((await api("/api/lumpy-paid")).body.rows).toEqual([]);
+
+    // The control: the same charge, and a pattern that does find it.
+    await post("/api/lumpy-items", { ...insurance(inDays(-3)), name: "Insurance" });
+    const found = (await api("/api/lumpy-paid")).body.rows;
+    expect(found).toHaveLength(1);
+    expect(found[0].item.name).toBe("Insurance");
+  });
+});
+
+describe("this month against what it usually costs", () => {
+  beforeEach(() => resetDb({ withSeed: true }));
+
+  const monthsAgo = (n: number, day: number) => {
+    const now = new Date();
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - n, day));
+    return d.toISOString().slice(0, 10);
+  };
+
+  test("the median of the same stretch of earlier months is the target", async () => {
+    const cats = (await api("/api/categories")).body as { id: number; name: string; bucket: string }[];
+    const groceries = cats.find((c) => c.bucket === "discretionary")!.id;
+    const spend = (txn_date: string, amount_cents: number) =>
+      post("/api/expenses", {
+        txn_date, amount_cents, merchant: "Shop", description: "", category_id: groceries, source: "manual",
+      });
+
+    // The 1st of each month, so the comparison holds whatever day this runs on.
+    await spend(monthsAgo(3, 1), 10000);
+    await spend(monthsAgo(2, 1), 20000);
+    await spend(monthsAgo(1, 1), 30000);
+    await spend(monthsAgo(0, 1), 50000);
+
+    const pace = await api("/api/category-pace?months=3");
+    expect(pace.status).toBe(200);
+    expect(pace.body.months_compared).toHaveLength(3);
+    const row = pace.body.rows.find((r: { category_id: number }) => r.category_id === groceries);
+    expect(row.month_to_date_cents).toBe(50000);
+    expect(row.typical_cents).toBe(20000);
+    expect(row.delta_cents).toBe(30000);
+
+    // Fixed bills are not in a discretionary comparison, and asking for them
+    // gives their own.
+    const fixed = cats.find((c) => c.bucket === "fixed")!.id;
+    await spend(monthsAgo(0, 1), 1);
+    expect(pace.body.rows.every((r: { bucket: string }) => r.bucket === "discretionary")).toBe(true);
+    expect((await api(`/api/category-pace?bucket=fixed`)).body.rows
+      .every((r: { bucket: string }) => r.bucket === "fixed")).toBe(true);
+    expect(fixed).toBeGreaterThan(0);
   });
 });

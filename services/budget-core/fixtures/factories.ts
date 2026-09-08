@@ -43,6 +43,8 @@ export function lumpy(p: Partial<LumpyItem> = {}): LumpyItem {
     frequency_months: 12,
     next_due_date: "2026-04-15",
     category_id: null,
+    merchant_pattern: null,
+    merchant_whole_word: false,
     active: true,
     ...p,
   };

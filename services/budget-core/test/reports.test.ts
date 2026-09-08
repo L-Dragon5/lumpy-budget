@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import { category, expense } from "../fixtures/factories";
-import { breakdown, bucketOf, categoryIndex, series, totalsByBucket, UNCATEGORIZED } from "../src/reports";
+import {
+  breakdown, bucketOf, categoryIndex, categoryPace, median, series, totalsByBucket, UNCATEGORIZED,
+} from "../src/reports";
 
 const groceries = category({ name: "Groceries", bucket: "discretionary", color: "#4f46e5" });
 const rent = category({ name: "Rent", bucket: "fixed" });
@@ -67,4 +69,91 @@ test("monthly series covers every month in the range", () => {
   expect(s.map((p) => p.key)).toEqual(["2026-01", "2026-02", "2026-03"]);
   expect(s.map((p) => p.amount_cents)).toEqual([173000, 5000, 0]);
   expect(s[0]!.end).toBe("2026-01-31");
+});
+
+// ------------------------------------------------------ this month, so far
+
+const dining = category({ name: "Dining", bucket: "discretionary" });
+const fuel = category({ name: "Fuel", bucket: "discretionary" });
+
+/** Three months of groceries, always on the 3rd, plus a late-month top-up. */
+const paceRows = [
+  expense({ txn_date: "2026-01-03", amount_cents: 10000, category_id: groceries.id }),
+  expense({ txn_date: "2026-01-28", amount_cents: 90000, category_id: groceries.id }),
+  expense({ txn_date: "2026-02-03", amount_cents: 20000, category_id: groceries.id }),
+  expense({ txn_date: "2026-02-28", amount_cents: 90000, category_id: groceries.id }),
+  expense({ txn_date: "2026-03-03", amount_cents: 30000, category_id: groceries.id }),
+  expense({ txn_date: "2026-03-28", amount_cents: 90000, category_id: groceries.id }),
+  expense({ txn_date: "2026-04-03", amount_cents: 50000, category_id: groceries.id }),
+];
+
+test("this month is compared against the same stretch of earlier months", () => {
+  const pace = categoryPace(paceRows, [groceries], { today: "2026-04-10", months: 3 });
+  expect(pace.month).toBe("2026-04");
+  expect(pace.through_day).toBe(10);
+  expect(pace.months_compared).toEqual(["2026-01", "2026-02", "2026-03"]);
+
+  const [row] = pace.rows;
+  expect(row!.month_to_date_cents).toBe(50000);
+  // The 28th of each month is past day 10 and is not in the comparison; a full
+  // month's average against ten days of spending would say you are always under.
+  expect(row!.by_month.map((m) => m.amount_cents)).toEqual([10000, 20000, 30000]);
+  expect(row!.typical_cents).toBe(20000);
+  expect(row!.delta_cents).toBe(30000);
+  expect(row!.pct_off).toBe(150);
+});
+
+test("the median, not the mean: one bad month is not the number to live up to", () => {
+  const rows = [
+    expense({ txn_date: "2026-01-05", amount_cents: 10000, category_id: dining.id }),
+    expense({ txn_date: "2026-02-05", amount_cents: 12000, category_id: dining.id }),
+    // A wedding. The mean would be $47k and every future month would read as thrift.
+    expense({ txn_date: "2026-03-05", amount_cents: 120000, category_id: dining.id }),
+    expense({ txn_date: "2026-04-05", amount_cents: 15000, category_id: dining.id }),
+  ];
+  const [row] = categoryPace(rows, [dining], { today: "2026-04-10", months: 3 }).rows;
+  expect(row!.typical_cents).toBe(12000);
+  expect(row!.delta_cents).toBe(3000);
+});
+
+test("a month nobody imported is not a month you spent nothing", () => {
+  const rows = [
+    expense({ txn_date: "2026-01-05", amount_cents: 10000, category_id: fuel.id }),
+    // February has no statement at all, so it is not a zero to average in.
+    expense({ txn_date: "2026-03-05", amount_cents: 12000, category_id: fuel.id }),
+    expense({ txn_date: "2026-04-05", amount_cents: 30000, category_id: fuel.id }),
+  ];
+  const pace = categoryPace(rows, [fuel], { today: "2026-04-10", months: 3 });
+  expect(pace.months_compared).toEqual(["2026-01", "2026-03"]);
+  expect(pace.rows[0]!.typical_cents).toBe(11000);
+
+  // But a month whose statement holds something else is a real zero for fuel.
+  const withRent = [...rows, expense({ txn_date: "2026-02-01", amount_cents: 150000, category_id: rent.id })];
+  const both = categoryPace(withRent, [fuel, rent], { today: "2026-04-10", months: 3 });
+  expect(both.months_compared).toEqual(["2026-01", "2026-02", "2026-03"]);
+  expect(both.rows.find((r) => r.category_id === fuel.id)!.by_month.map((m) => m.amount_cents))
+    .toEqual([10000, 0, 12000]);
+  // Rent is fixed, so it is not in a discretionary comparison at all.
+  expect(both.rows.map((r) => r.name)).toEqual(["Fuel"]);
+});
+
+test("the worst overspend sorts first, and nothing divides by a zero history", () => {
+  const rows = [
+    expense({ txn_date: "2026-03-05", amount_cents: 5000, category_id: dining.id }),
+    expense({ txn_date: "2026-04-05", amount_cents: 9000, category_id: dining.id }),
+    // Nothing in the history at all: new this month.
+    expense({ txn_date: "2026-04-06", amount_cents: 40000, category_id: fuel.id }),
+  ];
+  const pace = categoryPace(rows, [dining, fuel], { today: "2026-04-10", months: 3 });
+  expect(pace.rows.map((r) => r.name)).toEqual(["Fuel", "Dining"]);
+  expect(pace.rows[0]!.typical_cents).toBe(0);
+  expect(pace.rows[0]!.pct_off).toBe(0);
+});
+
+test("the median averages the two middles and rounds away from zero", () => {
+  expect(median([])).toBe(0);
+  expect(median([7])).toBe(7);
+  expect(median([3, 1, 2])).toBe(2);
+  expect(median([1, 2, 3, 5])).toBe(3);
+  expect(median([-3, -2])).toBe(-3);
 });

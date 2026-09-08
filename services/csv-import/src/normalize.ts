@@ -110,12 +110,48 @@ export function normalize(csv: ParsedCsv, mapping: ImportMapping, source = "impo
 export { normalizeMerchant } from "@lumpy/contracts";
 
 /**
- * The identity of a transaction: same day, same amount, same merchant. The API
- * hashes this and stores it unique, so re-importing an overlapping statement
- * inserts nothing.
+ * The identity of a transaction: same day, same amount, same merchant, and which
+ * of those it is. The API hashes this and stores it unique, so re-importing an
+ * overlapping statement inserts nothing.
+ *
+ * `occurrence` is the whole reason this takes a second argument. Two $6.50
+ * coffees at one shop on one day are one identity and two real transactions, and
+ * without the index the second was dropped as a duplicate and counted as
+ * "skipped" -- a silent undercount of exactly the discretionary spending this app
+ * exists to protect. The index is per statement, assigned by `dedupeKeys`, so a
+ * file that lists a charge twice inserts it twice and re-importing that same file
+ * is still a no-op, because the same rows get the same indices both times.
+ *
+ * Occurrence 0 produces the string it always produced, byte for byte, so every
+ * hash already in the database stays the hash of the row it belongs to and no
+ * rehash migration is needed.
+ *
+ * ponytail: identity is still date + amount + merchant, not a bank's own
+ * transaction id, which most CSV exports do not carry. The known ceiling is a
+ * statement split so that one file holds only the *second* of two identical
+ * charges: it arrives as occurrence 0 and reads as already imported. Add the id
+ * column to the identity the day a bank actually exports one.
  */
-export const dedupeKey = (e: Pick<ExpenseInput, "txn_date" | "amount_cents" | "merchant">): string =>
-  `${e.txn_date}|${e.amount_cents}|${normalizeMerchant(e.merchant)}`;
+export const dedupeKey = (
+  e: Pick<ExpenseInput, "txn_date" | "amount_cents" | "merchant">,
+  occurrence = 0,
+): string =>
+  `${e.txn_date}|${e.amount_cents}|${normalizeMerchant(e.merchant)}${occurrence > 0 ? `|#${occurrence}` : ""}`;
+
+/**
+ * One key per row, numbering repeats in the order the file lists them. Kept
+ * beside `dedupeKey` rather than in the API because it is the pure half: same
+ * rows in, same keys out, and the API only hashes what comes back.
+ */
+export function dedupeKeys(rows: Pick<ExpenseInput, "txn_date" | "amount_cents" | "merchant">[]): string[] {
+  const seen = new Map<string, number>();
+  return rows.map((r) => {
+    const base = dedupeKey(r);
+    const n = seen.get(base) ?? 0;
+    seen.set(base, n + 1);
+    return dedupeKey(r, n);
+  });
+}
 
 /**
  * First matching rule by priority wins. Rows that already have a category are

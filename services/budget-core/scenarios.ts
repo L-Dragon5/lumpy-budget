@@ -161,6 +161,27 @@ export function run(h: Household) {
         fixedCosts: h.fixedCosts,
       })
       .map((c) => `${c.key} every ${c.frequency_months}mo ${c.amount_cents} next ${c.next_due_date}`),
+    // Lumpy bills the statements already show as paid, and what recording one
+    // would do: the schedule heals itself and the balance never does.
+    lumpy_paid: core
+      .lumpyPayments(h.lumpyItems, h.expenses, { today })
+      .map(
+        (p) =>
+          `${p.item.name} due ${p.due_date} paid ${p.expense.txn_date} ${p.expense.amount_cents}` +
+          ` (${p.days_off > 0 ? "+" : ""}${p.days_off}d, ${p.delta_cents >= 0 ? "+" : ""}${p.delta_cents})` +
+          ` rolls to ${p.rolls_to}`,
+      ),
+    // Every discretionary category against the same stretch of earlier months.
+    category_pace: (() => {
+      const pace = core.categoryPace(h.expenses, h.categories, { today });
+      return {
+        through_day: pace.through_day,
+        months_compared: pace.months_compared,
+        rows: pace.rows.map(
+          (r) => `${r.name} ${r.month_to_date_cents} vs ${r.typical_cents} (${r.delta_cents >= 0 ? "+" : ""}${r.delta_cents})`,
+        ),
+      };
+    })(),
     // A month's paychecks must add up to the month's income, always.
     invariants: checkInvariants(summary, f),
   };
