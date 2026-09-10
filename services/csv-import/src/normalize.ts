@@ -154,6 +154,24 @@ export function dedupeKeys(rows: Pick<ExpenseInput, "txn_date" | "amount_cents" 
 }
 
 /**
+ * The identity of one part of a split charge, deliberately outside the key space
+ * `dedupeKey` uses.
+ *
+ * A part carries the parent's date and merchant and some fraction of its amount,
+ * so a part hashed the ordinary way would occupy a key a real statement row can
+ * produce. Split a $180 Costco charge into $120 and $60, and a genuine $120
+ * Costco charge on that same day would arrive as occurrence 0, find the hash
+ * taken, and be dropped as a duplicate -- a silent undercount, which is the one
+ * failure this app exists to prevent.
+ *
+ * `(parent, index)` is unique by construction, so unlike `freeHash` this needs no
+ * round trip and cannot race. It is also stable, which is what lets a part be
+ * edited without its identity moving: a part is "the second half of charge 41"
+ * whatever it is later re-apportioned to.
+ */
+export const splitDedupeKey = (parentId: number, index: number): string => `split|${parentId}|#${index}`;
+
+/**
  * First matching rule by priority wins. Rows that already have a category are
  * left alone.
  *

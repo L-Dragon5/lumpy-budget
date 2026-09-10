@@ -1,7 +1,7 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import type { CategoryRule } from "@lumpy/contracts";
 import { parseCsv } from "../src/parse";
-import { applyRules, dedupeKey, dedupeKeys, guessMapping, normalize, normalizeMerchant, suggestRule } from "../src/normalize";
+import { applyRules, dedupeKey, dedupeKeys, guessMapping, normalize, normalizeMerchant, splitDedupeKey, suggestRule } from "../src/normalize";
 
 const chase = parseCsv(
   "Transaction Date,Post Date,Description,Category,Type,Amount\n" +
@@ -197,4 +197,22 @@ test("a head that does not occur in the row falls back to the whole merchant", (
 test("a merchant too short to be a pattern is no offer at all", () => {
   expect(suggestRule({ merchant: "A", description: "" }, [])).toBeNull();
   expect(suggestRule({ merchant: "7", description: "" }, [])).toBeNull();
+});
+
+describe("splitDedupeKey", () => {
+  test("cannot collide with a key any statement row could produce", () => {
+    const key = splitDedupeKey(41, 0);
+    // dedupeKey is `date|amount|MERCHANT` with an optional `|#n`. A key that
+    // starts with a word no date can start with is in a space of its own, so a
+    // real $120 COSTCO charge on the same day as a $120 split part can never be
+    // dropped as a duplicate of it.
+    expect(key.startsWith("split|")).toBe(true);
+    expect(key).not.toContain("|20");
+  });
+
+  test("is one key per part of one charge", () => {
+    expect(splitDedupeKey(41, 0)).not.toBe(splitDedupeKey(41, 1));
+    expect(splitDedupeKey(41, 0)).not.toBe(splitDedupeKey(42, 0));
+    expect(splitDedupeKey(41, 0)).toBe(splitDedupeKey(41, 0));
+  });
 });
