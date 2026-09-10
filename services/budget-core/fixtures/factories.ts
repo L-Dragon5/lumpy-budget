@@ -78,6 +78,7 @@ export function expense(p: Partial<Expense> = {}): Expense {
     category_id: null,
     source: "manual",
     import_batch_id: null,
+    parent_id: null,
     dedupe_hash: `h${seq}`,
     ...p,
   };

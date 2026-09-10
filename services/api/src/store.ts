@@ -342,7 +342,13 @@ export async function restore(tables: BackupTables): Promise<RestoreResult> {
       await tx.unsafe(`DELETE FROM \`${RESTORE_ORDER[i]}\``);
     }
     for (const table of RESTORE_ORDER) {
-      restored[table] = await bulkInsert(table, tables[table] as unknown as Record<string, unknown>[], tx);
+      let incoming = tables[table] as unknown as Record<string, unknown>[];
+      // A split child points at its parent, and `expenses` is exported
+      // txn_date DESC, id DESC -- so the child comes out of the file first and
+      // its foreign key would have nothing to point at yet. A child is always
+      // created after its parent, so ascending id is parents-first, always.
+      if (table === "expenses") incoming = [...incoming].sort((a, b) => Number(a.id) - Number(b.id));
+      restored[table] = await bulkInsert(table, incoming, tx);
     }
     for (const s of tables.settings) {
       await tx.unsafe(

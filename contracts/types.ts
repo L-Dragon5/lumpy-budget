@@ -221,7 +221,19 @@ export const expenseInput = z.object({
   source: z.string().max(80).default("manual"),
 });
 export const expense = z
-  .object({ id, import_batch_id: id.nullable().default(null), dedupe_hash: z.string() })
+  .object({
+    id,
+    import_batch_id: id.nullable().default(null),
+    /**
+     * The charge this row is one part of, or null.
+     *
+     * On the row schema and deliberately not on `expenseInput`: a split is its
+     * own route, because it has to write every part in one transaction and check
+     * that they add up. A field anybody could set would let half a split exist.
+     */
+    parent_id: id.nullable().default(null),
+    dedupe_hash: z.string(),
+  })
   .and(expenseInput);
 export type ExpenseInput = z.infer<typeof expenseInput>;
 export type Expense = z.infer<typeof expense>;

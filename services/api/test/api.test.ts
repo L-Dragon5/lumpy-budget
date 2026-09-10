@@ -1751,3 +1751,43 @@ describe("this month against what it usually costs", () => {
     expect(fixed).toBeGreaterThan(0);
   });
 });
+
+describe("split storage", () => {
+  beforeEach(() => resetDb());
+
+  test("an ordinary expense reports no parent", async () => {
+    const e = await post("/api/expenses", {
+      txn_date: "2026-03-02", amount_cents: 18000, merchant: "COSTCO",
+      description: "", category_id: null, source: "manual",
+    });
+    expect(e.status).toBe(201);
+    // Declared on the row schema, so a column missing from `tables.ts` fails
+    // the response validator here rather than reaching the client as undefined.
+    expect(e.body.parent_id).toBeNull();
+  });
+
+  test("a backup restores a child after the parent it points at", async () => {
+    const parent = await post("/api/expenses", {
+      txn_date: "2026-03-02", amount_cents: 18000, merchant: "COSTCO",
+      description: "", category_id: null, source: "manual",
+    });
+    // Written straight to the table: the split route does not exist until
+    // Task 3, and this test is about the restore ordering, not about splitting.
+    await sql.unsafe(
+      `INSERT INTO expenses (txn_date, amount_cents, merchant, description, category_id, source, parent_id, dedupe_hash)
+       VALUES ('2026-03-02', 12000, 'COSTCO', '', NULL, 'manual', ?, 'child-hash-1')`,
+      [parent.body.id],
+    );
+
+    const file = (await api("/api/export")).body;
+    // The export is ordered txn_date DESC, id DESC, so the child comes out
+    // first and a naive restore would insert it before its parent exists.
+    const restored = await post("/api/restore", file);
+    expect(restored.status).toBe(200);
+    expect(restored.body.restored.expenses).toBe(2);
+
+    const back = (await api("/api/expenses")).body;
+    expect(back.find((e: { dedupe_hash: string }) => e.dedupe_hash === "child-hash-1").parent_id)
+      .toBe(parent.body.id);
+  });
+});
