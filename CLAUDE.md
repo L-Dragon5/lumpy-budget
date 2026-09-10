@@ -197,9 +197,18 @@ Four places, in this order, or reads silently drop it:
   `transfer` now has to name `income` too: `/cash-position` does, and a test
   pins it. `totalsByBucket`, and so `money.spent` in every scenario, carries an
   `income` key.
-- **`depositedInMonth` is the one place a deposit's sign is flipped.** It
-  returns `0 - sum(...)`, not `-sum(...)`: unary minus on an empty month is
-  `-0`, which JSON hides and `toEqual` does not.
+- **`arrived` in `budget-core/src/income.ts` is the one place a credit's sign
+  is flipped.** `depositedInMonth` and `uncategorizedCreditsInMonth` both go
+  through it. It returns `0 - sum(...)`, not `-sum(...)`: unary minus on an
+  empty month is `-0`, which JSON hides and `toBe`/`toEqual` do not. A test
+  fails if it is written the other way.
+- **`/income-calendar` declares `incomeCalendarResult` as its response.** The
+  validator strips a key the schema does not list, so a field the route adds
+  without a matching `contracts/types.ts` entry silently never reaches the page.
+  A test asserts the month's full key list for that reason.
+  `uncategorized_credit_cents` means `category_id` null and a negative amount,
+  the same rows the expenses page counts as uncategorized. It is in neither
+  `deposited_cents` nor `delta_cents`; it only explains a short month.
 
 ## Two lanes
 

@@ -319,7 +319,7 @@ a month you were not paid.
 
 A deposit is stored the way the importer writes it, as a credit, which is a
 negative expense. Its bucket keeps it out of every spending number, and the sign
-is flipped once, in `depositedInMonth`, so the page can say it out loud. A
+is flipped once, in `budget-core/src/income.ts`, so the page can say it out loud. A
 credit nobody has categorized is kept out too: it counts as `transfer`, neutral,
 until somebody says what it is, because read as discretionary a paycheck would
 pay the whole month back into what is available.
@@ -518,5 +518,10 @@ eight the tail folds into one grey "Other" rather than repeating hues.
   category it came out of. Categorize it and it does.
 - The income page counts only deposits in an `income` category. A paycheck
   whose descriptor no rule knows (the seed ships `payroll`, `direct dep` and
-  `dir dep`) sits uncategorized, and until it is categorized that month reads
-  as short by the whole cheque.
+  `dir dep`) sits uncategorized and is not counted as deposited, so its month
+  still reads short. It says why: a short month that holds uncategorized
+  credits shows their total under the gap, with a link to the expenses page to
+  categorize them. The link opens on the current month, because that page keeps
+  its month filter as page state rather than in the URL; the link's tooltip
+  names the month to step back to. The app does not guess which credit is the
+  missing paycheck, for the same reason `bucketOf` holds them neutral.
