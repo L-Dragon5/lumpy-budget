@@ -235,6 +235,40 @@ Four places, in this order, or reads silently drop it:
   `uncategorized_credit_cents` means `category_id` null and a negative amount,
   the same rows the expenses page counts as uncategorized. It is in neither
   `deposited_cents` nor `delta_cents`; it only explains a short month.
+- **A split keeps the parent row and hides it; it does not delete it.** The
+  parent holds the `dedupe_hash`, which is the only reason a re-imported
+  statement is still a no-op, and `NOT_SPLIT_PARENT` in `api/src/store.ts` is
+  what keeps it out of `expensesBetween` and the `/expenses` list -- the two
+  reads every report funnels through. There is no `split` column: a parent is a
+  row that has children, asked directly, so the flag cannot drift. Any query that
+  reads expenses outside those two paths has to carry the predicate itself,
+  written out against its own alias. `cardBalances` (the card-balance plan) is
+  one; it is not on this branch, and the predicate is applied to it at merge
+  time.
+- **The import wizard proposes from `/expenses/merge-candidates`, not from the
+  list.** `MERGE_TARGET` in `api/src/store.ts` (`source = 'manual' AND parent_id
+  IS NULL`) is read by both that route and `absorbManual`, so the proposal and
+  the server's re-check are one definition. A split charge is a candidate even
+  though every other read hides it -- the bank posts the whole charge, and
+  without the merge it lands again beside its parts -- and a part never is. A
+  merged split charge carries the statement's date, merchant, source and batch
+  down to its parts, because the parts are what `nonCashBatchIds` and deleting
+  the import actually see. It is a separate route rather than a flag on
+  `/expenses` so the list every page totals has no way to return a parent.
+- **A split part is hashed with `splitDedupeKey(parentId, index)`, not
+  `dedupeKey`.** A part carries the parent's date and merchant with a fraction of
+  its amount, so an ordinary hash would sit in the key space a statement row can
+  produce and a real charge of that size on that day would be dropped as a
+  duplicate. That is also why `updateExpense` leaves a part's hash alone: a part
+  is "the second half of charge 41" whatever it is re-apportioned to.
+- **`restore()` sorts expenses by ascending id.** `parent_id` is a self
+  foreign key and the export is ordered `txn_date DESC, id DESC`, so the child
+  comes out of the file first. A child is always created after its parent, so
+  ascending id is parents-first.
+- **A part inherits `import_batch_id` from the charge.** `nonCashBatchIds` reads
+  the batch to tell a card charge from money out of checking; batchless parts
+  would be counted against the checking balance forever. Same trap
+  `absorbManual` already documents.
 
 ## Two lanes
 

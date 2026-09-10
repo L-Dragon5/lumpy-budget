@@ -91,9 +91,12 @@ export function ImportWizard({ open, onOpenChange }: { open: boolean; onOpenChan
     return { start: addDays(first, -MATCH_WINDOW_DAYS), end: addDays(last, MATCH_WINDOW_DAYS) };
   }, [result]);
 
+  // Only rows a statement row may absorb: typed by hand, split charges included
+  // (the bank posts the whole charge, and the list hides it), parts never. The
+  // server decides that, and re-checks it on the import.
   const nearby = useApi(
-    ["expenses", "merge-window", span?.start, span?.end],
-    () => eden.api.expenses.get({ query: { start: span!.start, end: span!.end, limit: 5000 } }),
+    ["expenses", "merge-candidates", span?.start, span?.end],
+    () => eden.api.expenses["merge-candidates"].get({ query: { start: span!.start, end: span!.end } }),
     span !== null,
   );
 
@@ -110,7 +113,7 @@ export function ImportWizard({ open, onOpenChange }: { open: boolean; onOpenChan
   );
   const proposals = useMemo(() => {
     if (!result || !nearby.data) return [];
-    return matchManual(nearby.data.filter((e) => e.source === "manual"), result.rows);
+    return matchManual(nearby.data, result.rows);
   }, [result, nearby.data]);
   const merges = proposals.filter((p) => !declined.has(p.manual_id));
 

@@ -305,6 +305,31 @@ The pair is checked again on the server before it is written, because what
 arrives is a request and a merge of two unrelated rows would overwrite one of
 them with nothing left to say so.
 
+**One charge can be more than one category.** Half the Costco run is groceries
+and half is shelving. Split it and the charge gains parts: ordinary transactions
+carrying the date, the merchant and the batch of the charge they came from, each
+with its own category and note. The parts have to add up to the cent, checked
+while you type and again on the server.
+
+The charge itself is kept, not deleted, and simply never read again. It is
+holding the dedupe hash: delete it and next month's overlapping statement
+re-inserts the whole charge beside the halves you already split it into, and the
+month is counted twice. Unsplit and it comes back at the amount the bank actually
+charged.
+
+A part's identity is which part it is, not its date and amount, so a $120 part of
+a $180 charge can never make a genuine $120 charge at that shop that day look
+like a duplicate.
+
+A charge you typed in and split before the statement arrived still merges with
+the row the bank posts, because the importer pairs the statement with the charge
+you typed, not with its parts. The bank posted $180, not $120 and $60. The parts
+take the statement's date, merchant and batch and keep their own amounts and
+categories, so the month counts the charge once and deleting the import takes
+the whole charge with it. A part is never offered as a match and the server
+refuses one: a $60 statement row that happens to match a $60 part is some other
+charge.
+
 ## How the pieces work
 
 **Pay schedules.** Weekly, every two weeks, twice a month, monthly and annual

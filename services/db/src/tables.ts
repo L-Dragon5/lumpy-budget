@@ -66,7 +66,7 @@ export const TABLES = {
     order: "created_at DESC, id DESC",
   },
   expenses: {
-    cols: ["id", "txn_date", "amount_cents", "merchant", "description", "category_id", "source", "import_batch_id", "dedupe_hash"],
+    cols: ["id", "txn_date", "amount_cents", "merchant", "description", "category_id", "source", "import_batch_id", "parent_id", "dedupe_hash"],
     date: ["txn_date"],
     order: "txn_date DESC, id DESC",
   },

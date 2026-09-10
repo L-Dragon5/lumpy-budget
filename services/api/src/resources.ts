@@ -1,6 +1,6 @@
 import { Elysia, status } from "elysia";
 import {
-  category, categoryInput, categoryRule, categoryRuleInput, categoryRuleMergeInput, expenseInput,
+  category, categoryInput, categoryRule, categoryRuleInput, categoryRuleMergeInput, expenseInput, expenseSplitInput,
   fixedCost, fixedCostInput, importProfile, importProfileInput, importProfileMergeInput,
   incomeStream, incomeStreamInput, expense, importBatch, isoDate, lumpyItem, lumpyItemInput,
   mergeResult, ruleMergeResult, savingsGoal, savingsGoalInput,
@@ -35,6 +35,7 @@ const expenses = new Elysia({ name: "expenses" })
       if (query.category_id === "none") where.push("category_id IS NULL");
       else if (query.category_id !== undefined) { where.push("category_id = ?"); params.push(query.category_id); }
       if (query.q) { where.push("(merchant LIKE ? OR description LIKE ?)"); params.push(`%${query.q}%`, `%${query.q}%`); }
+      where.push(store.NOT_SPLIT_PARENT);
       // Clamped rather than rejected: an out-of-range limit is a caller being loose,
       // not a caller being wrong, and that is how it has always behaved.
       const limit = Math.min(5000, Math.max(1, query.limit ?? 500));
@@ -42,6 +43,19 @@ const expenses = new Elysia({ name: "expenses" })
       return found.slice(0, limit);
     },
     { query: expenseQuery, response: z.array(expense) },
+  )
+  /**
+   * What the import wizard may pair a statement row with; see
+   * `store.mergeCandidates` for why this is not a flag on the list above.
+   *
+   * Elysia matches this static segment ahead of the `:id` param wherever it is
+   * registered -- moved below `/expenses/:id`, its test still passes -- so the
+   * placement here is for the reader: it is a list, so it sits by the list.
+   */
+  .get(
+    "/expenses/merge-candidates",
+    ({ query }) => store.mergeCandidates(query.start, query.end),
+    { query: z.object({ start: isoDate, end: isoDate }), response: z.array(expense) },
   )
   .get("/expenses/:id", async ({ params }) => (await byId<Expense>("expenses", params.id)) ?? notFound(), {
     params: idParam,
@@ -65,7 +79,31 @@ const expenses = new Elysia({ name: "expenses" })
   .delete("/expenses/:id", async ({ params }) => ((await remove("expenses", params.id)) ? { deleted: params.id } : notFound()), {
     params: idParam,
     response: { 200: deleted, 404: errorBody },
-  });
+  })
+  /**
+   * One charge, more than one category. The charge stays put and gains parts;
+   * see `store.splitExpense` for why it is not deleted.
+   *
+   * `/expenses/:id/split` cannot be read as an id, so unlike `/merge` it needs
+   * no ordering care -- it is a second segment, not a value in the first.
+   */
+  .post(
+    "/expenses/:id/split",
+    async ({ params, body }) => {
+      const res = await store.splitExpense(params.id, body.parts);
+      return res.ok ? status(201, res.rows) : status(res.status, { error: res.error });
+    },
+    {
+      params: idParam,
+      body: expenseSplitInput,
+      response: { 201: z.array(expense), 404: errorBody, 409: errorBody, 422: errorBody },
+    },
+  )
+  .delete(
+    "/expenses/:id/split",
+    async ({ params }) => ((await store.unsplitExpense(params.id)) > 0 ? { deleted: params.id } : notFound()),
+    { params: idParam, response: { 200: deleted, 404: errorBody } },
+  );
 
 /** Batches are written by the importer, never by a client. Deleting one takes its expenses with it. */
 const importBatches = new Elysia({ name: "import-batches" })

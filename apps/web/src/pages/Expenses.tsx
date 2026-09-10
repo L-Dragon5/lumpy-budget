@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import type { Expense, ExpenseInput } from "@lumpy/contracts";
 import { monthEnd, monthStart } from "@lumpy/budget-core";
 import { applyRules, suggestRule } from "@lumpy/csv-import";
-import { SearchIcon, UploadIcon } from "lucide-react";
+import { SearchIcon, SplitIcon, UploadIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import { SelectField } from "@/components/app/controls";
 import { ImportWizard } from "@/components/app/import-wizard";
 import { Money } from "@/components/app/money";
 import { AddButton, DeleteButton, MoneyField, RecordDialog } from "@/components/app/record-dialog";
+import { SplitDialog } from "@/components/app/split-dialog";
 import { Loading, LoadError, MonthNav, PageHeader } from "@/components/app/page";
 import { CategoryLabel } from "@/lib/icons";
 import { ApiError, eden, errorText, useApi, useMutate } from "@/lib/api";
@@ -49,6 +50,8 @@ export default function Expenses() {
     eden.api.expenses({ id: v.id }).put(v.body));
   const remove = useMutate((id: number) => eden.api.expenses({ id }).delete());
   const removeBatch = useMutate((id: number) => eden.api["import-batches"]({ id }).delete());
+  const [splitting, setSplitting] = useState<Expense | null>(null);
+  const unsplit = useMutate((id: number) => eden.api.expenses({ id }).split.delete());
 
   const [draft, setDraft] = useState<Draft | null>(null);
   const set = (patch: Partial<Draft>) => setDraft((d) => (d ? { ...d, ...patch } : d));
@@ -213,7 +216,7 @@ export default function Expenses() {
                     <TableHead>Merchant</TableHead>
                     <TableHead>Note</TableHead>
                     <TableHead className="w-28 text-right">Amount</TableHead>
-                    <TableHead className="w-12" />
+                    <TableHead className="w-24" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -234,7 +237,13 @@ export default function Expenses() {
                           options={categoryOptions.filter((o) => o.value !== ALL)}
                         />
                       </TableCell>
-                      <TableCell className="font-medium">{e.merchant}</TableCell>
+                      <TableCell className="font-medium">
+                        {e.merchant}
+                        {/* So a $120 row does not read as a $120 charge. */}
+                        {e.parent_id !== null ? (
+                          <Badge variant="secondary" className="ml-2 text-[10px]">part of a split</Badge>
+                        ) : null}
+                      </TableCell>
                       <TableCell>
                         <NoteCell
                           key={`${e.id}-${e.description}`}
@@ -247,7 +256,29 @@ export default function Expenses() {
                         <Money cents={e.amount_cents} className={e.amount_cents < 0 ? "text-[var(--good)]" : undefined} />
                       </TableCell>
                       <TableCell>
-                        <DeleteButton label={e.merchant} onConfirm={() => remove.mutate(e.id)} />
+                        <div className="flex items-center justify-end">
+                          {e.parent_id === null ? (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setSplitting(e)}
+                              aria-label={`Split ${e.merchant}`}
+                            >
+                              <SplitIcon />
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-xs"
+                              onClick={() => unsplit.mutate(e.parent_id!)}
+                              disabled={unsplit.isPending}
+                            >
+                              Unsplit
+                            </Button>
+                          )}
+                          <DeleteButton label={e.merchant} onConfirm={() => remove.mutate(e.id)} />
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -296,6 +327,14 @@ export default function Expenses() {
       ) : null}
 
       <ImportWizard open={importing} onOpenChange={setImporting} />
+
+      {splitting ? (
+        <SplitDialog
+          expense={splitting}
+          categories={categories.data ?? []}
+          onClose={() => setSplitting(null)}
+        />
+      ) : null}
 
       {draft ? (
         <RecordDialog

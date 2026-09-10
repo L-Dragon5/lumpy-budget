@@ -287,7 +287,19 @@ export const expenseInput = z.object({
   source: z.string().max(80).default("manual"),
 });
 export const expense = z
-  .object({ id, import_batch_id: id.nullable().default(null), dedupe_hash: z.string() })
+  .object({
+    id,
+    import_batch_id: id.nullable().default(null),
+    /**
+     * The charge this row is one part of, or null.
+     *
+     * On the row schema and deliberately not on `expenseInput`: a split is its
+     * own route, because it has to write every part in one transaction and check
+     * that they add up. A field anybody could set would let half a split exist.
+     */
+    parent_id: id.nullable().default(null),
+    dedupe_hash: z.string(),
+  })
   .and(expenseInput);
 export type ExpenseInput = z.infer<typeof expenseInput>;
 export type Expense = z.infer<typeof expense>;
@@ -305,6 +317,32 @@ export const absorption = z.object({
   row_index: z.number().int().min(0),
 });
 export type Absorption = z.infer<typeof absorption>;
+
+/**
+ * What `POST /api/expenses/:id/split` accepts.
+ *
+ * Its own route rather than a field on `expenseInput`, because a split is only
+ * valid as a whole: every part is written in one transaction and the parts have
+ * to add up to the charge. A field anybody could set would let half a split
+ * exist, and half a split is a month counted wrong.
+ *
+ * The sum is checked on the server against the charge's own amount, not here:
+ * this schema has never seen the row.
+ */
+export const expenseSplitInput = z.object({
+  parts: z
+    .array(
+      z.object({
+        /** Signed like any amount: splitting a refund splits a negative. */
+        amount_cents: cents,
+        category_id: id.nullable().default(null),
+        description: z.string().max(500).default(""),
+      }),
+    )
+    .min(2)
+    .max(20),
+});
+export type ExpenseSplitInput = z.infer<typeof expenseSplitInput>;
 
 /** What the import wizard posts: expenses plus the batch metadata. */
 export const bulkExpenseInput = z.object({
