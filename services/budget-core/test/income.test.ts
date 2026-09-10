@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
-import { stream } from "../fixtures/factories";
-import { incomeCalendar, monthlyActual, monthlyNormalized, nextPaycheck } from "../src/income";
+import { category, expense, stream } from "../fixtures/factories";
+import {
+  depositedInMonth, incomeCalendar, incomeReconciliation, monthlyActual, monthlyNormalized, nextPaycheck,
+} from "../src/income";
 
 const biweekly = () => stream({ name: "Job", amount_cents: 200000, frequency: "biweekly", anchor_date: "2026-01-02" });
 
@@ -51,4 +53,54 @@ test("a one-off lands in its month but never lifts the monthly average", () => {
   const feb = cal.find((m) => m.month === "2026-02")!;
   expect(feb.surplus_cents).toBe(400000 + 50000 - 433333);
   expect(feb.extra_paycheck).toBe(false);
+});
+
+// ------------------------------------------------- the plan against the bank
+
+const incomeCat = category({ name: "Income", bucket: "income" });
+const groceriesCat = category({ name: "Groceries", bucket: "discretionary" });
+const paidCats = [incomeCat, groceriesCat];
+// $1,200 on the 15th and the last day = $2,400 planned.
+const semimonthly = () =>
+  stream({ name: "Job", amount_cents: 120000, frequency: "semimonthly", day_1: 15, day_2: 0, anchor_date: null });
+
+test("a deposit is stored as a credit and reported as a positive", () => {
+  const rows = [expense({ txn_date: "2026-03-15", amount_cents: -120000, category_id: incomeCat.id })];
+  expect(depositedInMonth(rows, paidCats, "2026-03")).toEqual({ cents: 120000, count: 1 });
+});
+
+test("reconciliation names the gap when a paycheck did not land", () => {
+  const rows = [
+    expense({ txn_date: "2026-03-15", amount_cents: -120000, category_id: incomeCat.id }),
+    expense({ txn_date: "2026-03-04", amount_cents: 8100, category_id: groceriesCat.id }),
+  ];
+  const [march] = incomeReconciliation([semimonthly()], rows, paidCats, ["2026-03"]);
+  expect(march).toMatchObject({
+    month: "2026-03", planned_cents: 240000, deposited_cents: 120000,
+    delta_cents: -120000, count: 1, imported: true,
+  });
+});
+
+test("a month nobody imported is not a month you were not paid", () => {
+  // The same rule fixedCostVariance and categoryPace follow. A red -$2,400 on a
+  // month with no statement in it is a missing import wearing the face of a
+  // missing paycheck, and the two need opposite responses.
+  const [april] = incomeReconciliation([semimonthly()], [], paidCats, ["2026-04"]);
+  expect(april).toMatchObject({ deposited_cents: 0, delta_cents: 0, imported: false });
+});
+
+test("a bonus nobody planned reads as surplus rather than as an error", () => {
+  const rows = [
+    expense({ txn_date: "2026-03-15", amount_cents: -120000, category_id: incomeCat.id }),
+    expense({ txn_date: "2026-03-31", amount_cents: -120000, category_id: incomeCat.id }),
+    expense({ txn_date: "2026-03-20", amount_cents: -50000, category_id: incomeCat.id }),
+  ];
+  const [march] = incomeReconciliation([semimonthly()], rows, paidCats, ["2026-03"]);
+  expect(march!.delta_cents).toBe(50000);
+  expect(march!.count).toBe(3);
+});
+
+test("a deposit outside the month is not that month's income", () => {
+  const rows = [expense({ txn_date: "2026-02-28", amount_cents: -120000, category_id: incomeCat.id })];
+  expect(depositedInMonth(rows, paidCats, "2026-03")).toEqual({ cents: 0, count: 0 });
 });
