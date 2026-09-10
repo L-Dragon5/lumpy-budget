@@ -1809,3 +1809,48 @@ describe("this month against what it usually costs", () => {
     expect(fixed).toBeGreaterThan(0);
   });
 });
+
+describe("planned income against what the bank deposited", () => {
+  beforeEach(() => resetDb());
+
+  test("the income calendar reports what actually landed", async () => {
+    const cat = await post("/api/categories", { name: "Income", bucket: "income", icon: "banknote", color: null });
+    await post("/api/income-streams", {
+      name: "Day job", amount_cents: 120000, frequency: "semimonthly",
+      anchor_date: null, day_1: 15, day_2: 0, day_of_month: null, active: true,
+    });
+    // One of the two March paychecks, plus a charge so March counts as imported.
+    await post("/api/expenses", {
+      txn_date: "2026-03-15", amount_cents: -120000, merchant: "ACME PAYROLL",
+      description: "", category_id: cat.body.id, source: "manual",
+    });
+    await post("/api/expenses", {
+      txn_date: "2026-03-04", amount_cents: 8100, merchant: "WEGMANS",
+      description: "", category_id: null, source: "manual",
+    });
+
+    const cal = await api("/api/income-calendar?year=2026");
+    const march = cal.body.months.find((m: { month: string }) => m.month === "2026-03");
+    expect(march).toMatchObject({
+      total_cents: 240000, deposited_cents: 120000, delta_cents: -120000,
+      deposit_count: 1, imported: true,
+    });
+
+    // April has no statement at all, so it is silent rather than accusing.
+    const april = cal.body.months.find((m: { month: string }) => m.month === "2026-04");
+    expect(april).toMatchObject({ deposited_cents: 0, delta_cents: 0, imported: false });
+  });
+
+  test("a deposit in another year is not this year's income", async () => {
+    // The route reads one calendar year of rows; December's paycheck posting on
+    // January 2nd belongs to the year it landed in, which is the bank's reading.
+    const cat = await post("/api/categories", { name: "Income", bucket: "income", icon: "banknote", color: null });
+    await post("/api/expenses", {
+      txn_date: "2027-01-02", amount_cents: -120000, merchant: "ACME PAYROLL",
+      description: "", category_id: cat.body.id, source: "manual",
+    });
+    const cal = await api("/api/income-calendar?year=2026");
+    expect(cal.body.months.every((m: { imported: boolean; deposited_cents: number }) =>
+      !m.imported && m.deposited_cents === 0)).toBe(true);
+  });
+});

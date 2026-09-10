@@ -36,10 +36,29 @@ export const computed = new Elysia({ prefix: "/api" })
     "/income-calendar",
     async ({ query }) => {
       const year = clamp(query.year, new Date().getFullYear(), 1970, 2999);
-      const streams = await store.streams();
+      const [streams, expenses, cats] = await Promise.all([
+        store.streams(),
+        store.expensesBetween(`${year}-01-01`, `${year}-12-31`),
+        store.categories(),
+      ]);
+      const months = core.incomeCalendar(streams, year);
+      // Zipped rather than merged inside budget-core: `incomeCalendar` is the
+      // plan and `incomeReconciliation` is the bank, and keeping them two
+      // functions is what lets the scenario lane pin the plan without a ledger.
+      const actual = new Map(
+        core
+          .incomeReconciliation(streams, expenses, cats, months.map((m) => m.month))
+          .map((r) => [r.month, r]),
+      );
       return {
         year,
-        months: core.incomeCalendar(streams, year),
+        months: months.map((m) => ({
+          ...m,
+          deposited_cents: actual.get(m.month)?.deposited_cents ?? 0,
+          delta_cents: actual.get(m.month)?.delta_cents ?? 0,
+          deposit_count: actual.get(m.month)?.count ?? 0,
+          imported: actual.get(m.month)?.imported ?? false,
+        })),
         streams: streams.map((x) => ({
           id: x.id,
           name: x.name,
