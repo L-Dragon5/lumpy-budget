@@ -179,6 +179,27 @@ Four places, in this order, or reads silently drop it:
 - **Only discretionary spending subtracts from available.** Fixed / lumpy /
   savings transactions are reconciliation; counting them twice is the bug this
   app exists to avoid.
+- **`bucketOf` reads the amount, not just the category.** An uncategorized
+  charge is discretionary because over-reporting spending is the safe error; an
+  uncategorized *credit* inverts that argument, so it is `transfer` and neutral.
+  Counted as discretionary, a paycheck imported off a checking statement paid
+  back the entire month: available went up, the `categoryPace` median was taken
+  over a category nobody spends in, and `cash-position` netted it out of
+  spent-since. Its parameter is `Pick<Expense, "category_id" | "amount_cents">`,
+  so a caller that builds a literal has to say which way the money moved.
+  Pinned in `reports.test.ts` and end to end through `/summary` and
+  `/cash-position`. `breakdown` labels the Uncategorized slice with
+  `bucketOf` of the slice's net for the same reason.
+- **`income` is a bucket, not the category named "Income".** Migration 013 moved
+  the seeded row and widened the ENUM. Matching on the bucket is what survives
+  somebody renaming the category, which is the whole reason it is not folded
+  into `transfer`. Anything that used to skip deposits by testing for
+  `transfer` now has to name `income` too: `/cash-position` does, and a test
+  pins it. `totalsByBucket`, and so `money.spent` in every scenario, carries an
+  `income` key.
+- **`depositedInMonth` is the one place a deposit's sign is flipped.** It
+  returns `0 - sum(...)`, not `-sum(...)`: unary minus on an empty month is
+  `-0`, which JSON hides and `toEqual` does not.
 
 ## Two lanes
 

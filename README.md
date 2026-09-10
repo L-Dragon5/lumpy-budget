@@ -24,7 +24,7 @@ Needs [Bun](https://bun.com) and a MySQL-compatible server on `127.0.0.1:3306`
 bun install
 cp .env.example .env          # edit DATABASE_URL if yours differs
 bun run migrate               # creates the database and its tables
-bun run seed                  # 24 categories and ~94 merchant rules
+bun run seed                  # 24 categories and ~95 merchant rules
 bun run seed --no-rules       # the categories only, rules left to you
 bun run api                   # http://localhost:3001
 bun run web                   # http://localhost:5173
@@ -69,7 +69,7 @@ opening balance row is inserted by that migration and the reports read it. A
 database whose name ends in `_test` is refused outright: that one belongs to the
 test suite, which truncates it on every test.
 
-`--no-rules` on either command leaves out the ~94 merchant rules and keeps the
+`--no-rules` on either command leaves out the ~95 merchant rules and keeps the
 24 categories. The rules are guesses about which merchant means which category:
 useful on day one, and wrong for anybody whose bank writes different descriptors
 or who would rather build them from what actually shows up on their statements.
@@ -309,6 +309,21 @@ extra-paycheck month; twice-a-month pay never does, whatever the calendar looks
 like. The income page shows each month's actual against the normalized average,
 so the extra paycheck reads as surplus instead of as money you quietly spend.
 
+**Planned income, and what the bank actually deposited.** Every allocation in
+this app rests on pay schedules somebody typed in once. Give a category the
+`income` bucket -- the seeded `Income` category has it -- and the income page
+compares each month's schedule against the deposits that really landed, so a
+raise, a short cheque or a paycheck that never arrived is visible rather than
+assumed. A month with no statement imported is reported as exactly that, not as
+a month you were not paid.
+
+A deposit is stored the way the importer writes it, as a credit, which is a
+negative expense. Its bucket keeps it out of every spending number, and the sign
+is flipped once, in `depositedInMonth`, so the page can say it out loud. A
+credit nobody has categorized is kept out too: it counts as `transfer`, neutral,
+until somebody says what it is, because read as discretionary a paycheck would
+pay the whole month back into what is available.
+
 **Safety first.** Bills are assigned soonest-due first. Each goes to the latest
 paycheck that lands at least `lead_days` before the due date and still has room
 for it. The lumpy and savings transfers are carved out of each paycheck *before*
@@ -498,3 +513,10 @@ eight the tail folds into one grey "Other" rather than repeating hues.
   eating discretionary money. See below.
 - Migrations are forward-only, and DDL in MySQL cannot roll back: a migration
   that fails halfway leaves the database partly changed and needs a manual fix.
+- An uncategorized credit is neutral rather than discretionary. That is the safe
+  reading, but it means a refund nobody has categorized does not yet credit the
+  category it came out of. Categorize it and it does.
+- The income page counts only deposits in an `income` category. A paycheck
+  whose descriptor no rule knows (the seed ships `payroll`, `direct dep` and
+  `dir dep`) sits uncategorized, and until it is categorized that month reads
+  as short by the whole cheque.

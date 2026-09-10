@@ -1153,7 +1153,7 @@ describe("merging category rules", () => {
 
   beforeEach(async () => {
     await resetDb({ withSeed: true });
-    // The seed ships 94 rules; a merge has to work against a populated set, but
+    // The seed ships 95 rules; a merge has to work against a populated set, but
     // starting from empty is what makes each assertion readable.
     await sql.unsafe("DELETE FROM category_rules");
     const cats = (await api("/api/categories")).body as { id: number; name: string }[];

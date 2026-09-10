@@ -82,7 +82,7 @@ const RULES: [pattern: string, category: string, priority?: number][] = [
 /**
  * Categories always; the merchant rules unless you say otherwise.
  *
- * `rules: false` is for a database about to meet real statements. The 94 rules
+ * `rules: false` is for a database about to meet real statements. The 95 rules
  * are guesses about which merchant means which category -- useful on day one,
  * and wrong for anybody whose bank writes different descriptors or who would
  * rather build the rules from what actually shows up. The categories are the
