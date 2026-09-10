@@ -168,10 +168,25 @@ Four places, in this order, or reads silently drop it:
   object and the next thing that slices it reads `undefined`. The one in
   `absorbManual` selects `DATE_FORMAT(txn_date,'%Y-%m-%d')` for that reason, and
   five tests caught it when it did not.
-- **`import_profiles.cash_account` is read by `/cash-position` and nothing
-  else.** A card charge is spending on the day it happened everywhere in the
-  budget; it is not money out of checking until the card is paid. Filter it into
-  another report and you start double-discounting real spending.
+- **`import_profiles.cash_account` is read by `/cash-position` and
+  `/card-balances` and nothing else.** A card charge is spending on the day it
+  happened everywhere in the budget; it is not money out of checking until the
+  card is paid. Filter it into another report and you start double-discounting
+  real spending.
+- **`cardBalances` sums every row under a non-cash profile, sign and all.** A
+  card statement's payment row is a credit, which is why no payment pattern and
+  no billing cycle is needed. It is a raw `sql.unsafe` SELECT, so it says
+  `DATE_FORMAT(MAX(e.txn_date),'%Y-%m-%d')` itself and coerces `SUM()` with
+  `Number()` -- a BIGINT sum arrives as a string on some drivers. The opening
+  balance lives in `settings` under `cardOpeningKey(profileId)`, and that string
+  is built in one place and handed to the client as `opening_key`.
+- **A settings key built from a row id dies with the ids.** TRUNCATE restarts
+  AUTO_INCREMENT, so `card_opening_balance_cents:1` survives a wipe and becomes
+  the opening balance of the next card created. `wipe()` in `scripts/reset.ts`,
+  `restore()` in `store.ts` and `resetDb()` in the API test setup each delete
+  every key under `CARD_OPENING_PREFIX`; add another id-keyed setting and it
+  needs the same three lines. They match with `LEFT(name, CHAR_LENGTH(?)) = ?`,
+  not `LIKE`, because `_` in a LIKE pattern is a wildcard.
 - **`categoryPace` cuts both sides at today's day of the month.** Comparing a
   full month's history to five days of spending reads as 80% under budget every
   month until the 25th. It is a median, not a mean, and it skips months with no
