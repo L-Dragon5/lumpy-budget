@@ -79,9 +79,13 @@ Four places, in this order, or reads silently drop it:
 - **`/api/import` is the CSV statement importer; `/api/restore` is the backup
   loader.** One adds rows, the other replaces every table. The names collide in
   conversation, not in the router; do not rename either into the other.
-- **The `/merge` routes are registered before their `crud()` blocks** in
-  `resources.ts`. After them, `/import-profiles/:id` and `/category-rules/:id`
-  would try to read "merge" as an id on any verb the two share.
+- **`/merge`, `/shadowed` and `/merge-candidates` sit beside `/:id` routes, and
+  the order they are registered in does not matter.** Elysia 1.4.30's router
+  prefers a static segment to a param whichever is registered first (checked
+  both ways, GET and POST). They are grouped ahead of their `crud()` blocks for
+  reading, not for correctness. What does matter is pinned by tests: that
+  "merge" and "shadowed" are never read as an id. If an Elysia upgrade changes
+  the precedence, those tests are what say so.
 - **A merged rule is keyed on `pattern.toLowerCase().trim()`**, the same needle
   `applyRules` matches on (`csv-import/src/normalize.ts:122`). Change one and
   change the other, or a merge starts writing rules that can never fire.
@@ -242,9 +246,10 @@ Four places, in this order, or reads silently drop it:
   reads every report funnels through. There is no `split` column: a parent is a
   row that has children, asked directly, so the flag cannot drift. Any query that
   reads expenses outside those two paths has to carry the predicate itself,
-  written out against its own alias. `cardBalances` (the card-balance plan) is
-  one; it is not on this branch, and the predicate is applied to it at merge
-  time.
+  written out against its own alias. `cardBalances` is one: its `LEFT JOIN` on
+  expenses carries `NOT EXISTS (... c.parent_id = e.id)`, because a part
+  inherits the batch and summing parent and parts would say the card is owed
+  twice the charge. "a split card charge is counted once" pins it.
 - **The import wizard proposes from `/expenses/merge-candidates`, not from the
   list.** `MERGE_TARGET` in `api/src/store.ts` (`source = 'manual' AND parent_id
   IS NULL`) is read by both that route and `absorbManual`, so the proposal and

@@ -144,6 +144,10 @@ export async function cardBalances(): Promise<CardBalance[]> {
        FROM import_profiles p
        LEFT JOIN import_batches b ON b.profile_id = p.id
        LEFT JOIN expenses e       ON e.import_batch_id = b.id
+                                 -- a split parent: its parts carry the batch too.
+                                 -- Spelled out, not NOT_SPLIT_PARENT, which names
+                                 -- the outer table \`expenses\`, not the alias.
+                                 AND NOT EXISTS (SELECT 1 FROM expenses c WHERE c.parent_id = e.id)
       WHERE p.cash_account = FALSE
       GROUP BY p.id, p.name
       ORDER BY p.name ASC`,

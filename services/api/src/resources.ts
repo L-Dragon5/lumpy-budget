@@ -84,8 +84,8 @@ const expenses = new Elysia({ name: "expenses" })
    * One charge, more than one category. The charge stays put and gains parts;
    * see `store.splitExpense` for why it is not deleted.
    *
-   * `/expenses/:id/split` cannot be read as an id, so unlike `/merge` it needs
-   * no ordering care -- it is a second segment, not a value in the first.
+   * `/expenses/:id/split` cannot be read as an id -- it is a second segment,
+   * not a value in the first.
    */
   .post(
     "/expenses/:id/split",

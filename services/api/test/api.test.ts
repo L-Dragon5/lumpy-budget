@@ -2037,6 +2037,27 @@ describe("card balances", () => {
     );
     expect(byName).toEqual({ "Airline Card": 12300, "Store Card": 0 });
   });
+
+  test("a split card charge is counted once, not twice", async () => {
+    const card = await post("/api/import-profiles", { name: "Airline Card", mapping, cash_account: false });
+    await post("/api/import", {
+      filename: "card.csv", profile_id: card.body.id,
+      rows: [{ txn_date: "2026-03-02", amount_cents: 18000, merchant: "COSTCO", description: "", category_id: null, source: "import" }],
+    });
+    const charge = (await api("/api/expenses")).body[0];
+    expect((await post(`/api/expenses/${charge.id}/split`, {
+      parts: [
+        { amount_cents: 12000, category_id: null, description: "" },
+        { amount_cents: 6000, category_id: null, description: "" },
+      ],
+    })).status).toBe(201);
+
+    // The parent and both parts are all in the table. Summing all three would
+    // say the card is owed $360 for a $180 charge.
+    const [row] = (await api("/api/card-balances")).body;
+    expect(row.net_cents).toBe(18000);
+    expect(row.txn_count).toBe(2);
+  });
 });
 
 describe("split storage", () => {
