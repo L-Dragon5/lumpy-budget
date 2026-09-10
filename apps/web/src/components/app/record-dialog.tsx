@@ -26,6 +26,7 @@ export function RecordDialog({
   description,
   onSubmit,
   pending,
+  submitDisabled,
   error,
   children,
   submitLabel = "Save",
@@ -36,6 +37,8 @@ export function RecordDialog({
   description?: string;
   onSubmit: () => void;
   pending?: boolean;
+  /** Disabled for a reason that is not "a request is in flight". */
+  submitDisabled?: boolean;
   error?: unknown;
   children: ReactNode;
   submitLabel?: string;
@@ -58,7 +61,7 @@ export function RecordDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={pending}>
+            <Button type="submit" disabled={pending || submitDisabled}>
               {submitLabel}
             </Button>
           </DialogFooter>
