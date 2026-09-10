@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { SingleToggle } from "@/components/app/controls";
 import { Money } from "@/components/app/money";
 import { BalanceTile } from "@/components/app/balance-tile";
+import { CardBalances } from "@/components/app/card-balances";
 import { StatTile } from "@/components/app/stat-tile";
 import { Loading, LoadError, MonthNav, PageHeader } from "@/components/app/page";
 import AnimatedContent from "@/components/AnimatedContent";
@@ -306,6 +307,11 @@ export default function Dashboard() {
           }
           editCaption="Whatever the account says right now. The bills due before your next paycheck come off it."
         />
+
+        {/* The money owed, directly under the money you have: the tile above
+            leaves a card charge out until the card is paid, and this says what
+            that payment is going to be. */}
+        <CardBalances />
 
         <Card>
           <CardHeader>
