@@ -5,9 +5,26 @@ import type { ISODate, ISOMonth } from "./dates";
 
 export const UNCATEGORIZED = "Uncategorized";
 
-/** Anything without a category counts as discretionary: it is safer to over-report spending. */
-export function bucketOf(e: Pick<Expense, "category_id">, byId: Map<number, Category>): Bucket {
-  return (e.category_id !== null ? byId.get(e.category_id)?.bucket : undefined) ?? "discretionary";
+/**
+ * A row's bucket, and what to do with one nobody has placed.
+ *
+ * An uncategorized *charge* is discretionary, because over-reporting spending is
+ * the safe error. An uncategorized *credit* inverts that argument exactly: read
+ * as discretionary it pays money back into what is available, and a paycheck
+ * imported off a checking statement pays back the whole month. So a credit is
+ * neutral until somebody says what it is, and it waits in the review queue on
+ * the expenses page like every other unplaced row.
+ *
+ * This only ever applies to rows with no category at all. A refund somebody
+ * categorized is a fact, and it goes on crediting the category it came out of.
+ */
+export function bucketOf(
+  e: Pick<Expense, "category_id" | "amount_cents">,
+  byId: Map<number, Category>,
+): Bucket {
+  const named = e.category_id !== null ? byId.get(e.category_id)?.bucket : undefined;
+  if (named !== undefined) return named;
+  return e.amount_cents < 0 ? "transfer" : "discretionary";
 }
 
 export const categoryIndex = (categories: Category[]): Map<number, Category> =>
@@ -75,6 +92,12 @@ export function breakdown(
     slice.txn_count += 1;
     acc.set(k, slice);
   }
+  // The unplaced rows are labelled the way bucketOf counted them, read off the
+  // slice's net: exact in a one-bucket view, where every row in it shares a
+  // bucket, and never the "Discretionary" beside a credit the Transfers filter
+  // just selected.
+  const unplaced = acc.get("none");
+  if (unplaced) unplaced.bucket = bucketOf({ category_id: null, amount_cents: unplaced.amount_cents }, byId);
 
   const total = sum([...acc.values()].map((s) => s.amount_cents));
   const slices = [...acc.values()].sort((a, b) => b.amount_cents - a.amount_cents);

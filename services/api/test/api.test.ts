@@ -494,6 +494,27 @@ describe("computed endpoints", () => {
     expect(id("Housing")).toBeGreaterThan(0);
   });
 
+  test("a paycheck off a checking statement does not raise what is available", async () => {
+    // The live undercount this app existed to avoid. A checking statement writes
+    // every deposit as a credit; before the income bucket, the one the rules
+    // could not place counted as $3,000 of negative discretionary spending.
+    await post("/api/import", {
+      filename: "checking.csv", profile_id: null,
+      rows: [
+        { txn_date: "2026-03-10", amount_cents: 25000, merchant: "WEGMANS", description: "", category_id: null, source: "import" },
+        // Matches the seeded `payroll` rule, so it lands in Income.
+        { txn_date: "2026-03-15", amount_cents: -300000, merchant: "ACME PAYROLL", description: "", category_id: null, source: "import" },
+        // Matches nothing. Neutral until somebody says what it is.
+        { txn_date: "2026-03-31", amount_cents: -300000, merchant: "ACME CORP", description: "", category_id: null, source: "import" },
+      ],
+    });
+    const res = await api("/api/summary?month=2026-03");
+    expect(res.body.spent.discretionary).toBe(25000);
+    expect(res.body.spent.income).toBe(-300000);
+    expect(res.body.spent.transfer).toBe(-300000);
+    expect(res.body.available_cents).toBe(562000 - 25000);
+  });
+
   test("the allocation names which paycheck holds which bill", async () => {
     const res = await api("/api/allocation?month=2026-03");
     const held = res.body.paychecks.flatMap((p: { date: string; holds: { name: string }[] }) =>
@@ -1549,6 +1570,8 @@ describe("cash position", () => {
       });
     await row(4300, groceries);
     await row(-240000, income.id);
+    // And one nobody has placed yet, which bucketOf reads as neutral too.
+    await row(-50000, null);
 
     const res = await api("/api/cash-position");
     expect(res.body.spent_since_cents).toBe(4300);

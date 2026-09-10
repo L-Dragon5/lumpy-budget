@@ -18,9 +18,11 @@ const rows = [
 
 test("an uncategorized expense counts as discretionary, which is the safe direction", () => {
   const byId = categoryIndex(cats);
-  expect(bucketOf({ category_id: null }, byId)).toBe("discretionary");
-  expect(bucketOf({ category_id: rent.id }, byId)).toBe("fixed");
-  expect(bucketOf({ category_id: 99999 }, byId)).toBe("discretionary");
+  expect(bucketOf({ category_id: null, amount_cents: 3000 }, byId)).toBe("discretionary");
+  expect(bucketOf({ category_id: rent.id, amount_cents: 150000 }, byId)).toBe("fixed");
+  // A category that no longer exists is no category at all, sign rule included.
+  expect(bucketOf({ category_id: 99999, amount_cents: 3000 }, byId)).toBe("discretionary");
+  expect(bucketOf({ category_id: 99999, amount_cents: -3000 }, byId)).toBe("transfer");
 });
 
 test("bucket totals separate real spending from bills being paid", () => {
@@ -156,4 +158,54 @@ test("the median averages the two middles and rounds away from zero", () => {
   expect(median([3, 1, 2])).toBe(2);
   expect(median([1, 2, 3, 5])).toBe(3);
   expect(median([-3, -2])).toBe(-3);
+});
+
+const income = category({ name: "Income", bucket: "income" });
+
+test("an uncategorized credit is neutral rather than discretionary", () => {
+  // A paycheck the importer could not place. Counted as discretionary it pays
+  // $2,400 back into what you can spend, which is the one direction this app
+  // must never guess in.
+  const deposit = expense({ amount_cents: -240000, category_id: null });
+  expect(bucketOf(deposit, categoryIndex(cats))).toBe("transfer");
+});
+
+test("an uncategorized charge is still discretionary", () => {
+  expect(bucketOf(expense({ amount_cents: 4200, category_id: null }), categoryIndex(cats))).toBe("discretionary");
+});
+
+test("a categorized refund still credits the category it came out of", () => {
+  // The rule is about rows nobody has placed. A refund somebody categorized is
+  // a fact, and it belongs against its own category.
+  const refund = expense({ amount_cents: -1500, category_id: groceries.id });
+  expect(bucketOf(refund, categoryIndex(cats))).toBe("discretionary");
+});
+
+test("an uncategorized credit does not inflate what is available to spend", () => {
+  const totals = totalsByBucket(
+    [expense({ amount_cents: 4200, category_id: groceries.id }), expense({ amount_cents: -240000, category_id: null })],
+    cats,
+  );
+  expect(totals.discretionary).toBe(4200);
+  expect(totals.transfer).toBe(-240000);
+  expect(totals.income).toBe(0);
+});
+
+test("a deposit in an income category lands in the income bucket", () => {
+  const deposit = expense({ amount_cents: -240000, category_id: income.id });
+  expect(bucketOf(deposit, categoryIndex([...cats, income]))).toBe("income");
+});
+
+test("the uncategorized slice is labelled with the bucket its rows were counted in", () => {
+  // bucketOf puts an unplaced credit in `transfer`; a table that then labels
+  // the same slice "Discretionary" contradicts the filter that selected it.
+  const unplaced = [
+    expense({ txn_date: "2026-03-15", amount_cents: -240000, category_id: null }),
+    expense({ txn_date: "2026-03-20", amount_cents: 4200, category_id: null }),
+  ];
+  const window = { start: "2026-03-01", end: "2026-03-31" };
+  const transfers = breakdown(unplaced, cats, { ...window, bucket: "transfer" });
+  expect(transfers.slices).toMatchObject([{ name: UNCATEGORIZED, bucket: "transfer", amount_cents: -240000 }]);
+  const discretionary = breakdown(unplaced, cats, { ...window, bucket: "discretionary" });
+  expect(discretionary.slices).toMatchObject([{ name: UNCATEGORIZED, bucket: "discretionary", amount_cents: 4200 }]);
 });
