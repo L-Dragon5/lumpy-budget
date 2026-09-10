@@ -260,17 +260,13 @@ export default function Income() {
                       short only on paper: the cheque came in under a descriptor
                       no rule knew. Said here so the gap reads as a job on the
                       expenses page, not as a paycheck that never came. The link
-                      cannot carry the month: the expenses page keeps its month
-                      and category filters as component state, not in the URL,
-                      so it opens on the current month and the title names the
-                      one to step back to. */}
+                      opens that page on this month's uncategorized rows. */}
                   {m.imported && m.delta_cents < 0 && m.uncategorized_credit_cents > 0 ? (
                     <span className="col-start-2 flex items-center justify-end gap-1 text-xs font-normal text-muted-foreground">
                       <Money cents={m.uncategorized_credit_cents} className="text-xs" /> uncategorized:
                       <Link
                         className="underline underline-offset-2 hover:text-foreground"
-                        to="/expenses"
-                        title={`On Expenses, go to ${monthLabel(m.month)} and filter to uncategorized`}
+                        to={`/expenses?month=${m.month}&category=none`}
                       >
                         categorize {m.uncategorized_credit_count === 1 ? "it" : "them"}
                       </Link>

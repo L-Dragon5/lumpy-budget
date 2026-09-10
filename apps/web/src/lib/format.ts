@@ -42,6 +42,9 @@ export const dateLabelFull = (d: string): string =>
   `${MONTH_NAMES[Number(d.slice(5, 7)) - 1]?.slice(0, 3)} ${Number(d.slice(8, 10))}, ${d.slice(0, 4)}`;
 
 export const thisMonth = (): string => monthOf(todayISO());
+/** A `?month=` off a link, or null unless it is a real YYYY-MM: a bad one would 422 the page. */
+export const monthParam = (s: string | null): string | null =>
+  s !== null && /^\d{4}-(0[1-9]|1[0-2])$/.test(s) ? s : null;
 export const shiftMonth = (m: string, n: number): string => addMonths(m, n);
 
 export const ordinal = (day: number): string => {

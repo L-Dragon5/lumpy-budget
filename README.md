@@ -315,7 +315,8 @@ The charge itself is kept, not deleted, and simply never read again. It is
 holding the dedupe hash: delete it and next month's overlapping statement
 re-inserts the whole charge beside the halves you already split it into, and the
 month is counted twice. Unsplit and it comes back at the amount the bank actually
-charged.
+charged. Unsplit asks first, because the parts' categories and notes go with
+them.
 
 A part's identity is which part it is, not its date and amount, so a $120 part of
 a $180 charge can never make a genuine $120 charge at that shop that day look
@@ -570,9 +571,8 @@ eight the tail folds into one grey "Other" rather than repeating hues.
   `dir dep`) sits uncategorized and is not counted as deposited, so its month
   still reads short. It says why: a short month that holds uncategorized
   credits shows their total under the gap, with a link to the expenses page to
-  categorize them. The link opens on the current month, because that page keeps
-  its month filter as page state rather than in the URL; the link's tooltip
-  names the month to step back to. The app does not guess which credit is the
+  categorize them, which opens that page on the short month's uncategorized
+  rows (`/expenses?month=YYYY-MM&category=none`). The app does not guess which credit is the
   missing paycheck, for the same reason `bucketOf` holds them neutral.
 - A card balance is derived from the statements imported under that card format.
   Import the checking statement and not the card's, and the payment is visible

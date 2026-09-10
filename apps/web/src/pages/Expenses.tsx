@@ -1,9 +1,14 @@
 import { useRef, useState } from "react";
+import { useSearchParams } from "react-router";
 import type { Expense, ExpenseInput } from "@lumpy/contracts";
 import { monthEnd, monthStart } from "@lumpy/budget-core";
 import { applyRules, suggestRule } from "@lumpy/csv-import";
 import { SearchIcon, SplitIcon, UploadIcon } from "lucide-react";
 import { toast } from "sonner";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,7 +25,7 @@ import { SplitDialog } from "@/components/app/split-dialog";
 import { Loading, LoadError, MonthNav, PageHeader } from "@/components/app/page";
 import { CategoryLabel } from "@/lib/icons";
 import { ApiError, eden, errorText, useApi, useMutate } from "@/lib/api";
-import { dateLabelFull, thisMonth } from "@/lib/format";
+import { dateLabelFull, monthParam, thisMonth } from "@/lib/format";
 
 const ALL = "__all__";
 const UNCATEGORIZED = "none";
@@ -28,8 +33,12 @@ const UNCATEGORIZED = "none";
 type Draft = { txn_date: string; amount_cents: number | null; merchant: string; description: string; category_id: string };
 
 export default function Expenses() {
-  const [month, setMonth] = useState(thisMonth());
-  const [category, setCategory] = useState(ALL);
+  // Read once, on arrival: a link can open the page on a month and on the
+  // uncategorized queue (the income page sends a short month here). After that
+  // the controls own both.
+  const [params] = useSearchParams();
+  const [month, setMonth] = useState(() => monthParam(params.get("month")) ?? thisMonth());
+  const [category, setCategory] = useState(() => (params.get("category") === UNCATEGORIZED ? UNCATEGORIZED : ALL));
   const [search, setSearch] = useState("");
   const [importing, setImporting] = useState(false);
 
@@ -267,15 +276,11 @@ export default function Expenses() {
                               <SplitIcon />
                             </Button>
                           ) : (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-xs"
-                              onClick={() => unsplit.mutate(e.parent_id!)}
+                            <UnsplitButton
+                              merchant={e.merchant}
                               disabled={unsplit.isPending}
-                            >
-                              Unsplit
-                            </Button>
+                              onConfirm={() => unsplit.mutate(e.parent_id!)}
+                            />
                           )}
                           <DeleteButton label={e.merchant} onConfirm={() => remove.mutate(e.id)} />
                         </div>
@@ -446,5 +451,35 @@ function NoteCell({
         }
       }}
     />
+  );
+}
+
+/**
+ * Unsplit throws away every part's category and note, which nothing can bring
+ * back, so it asks first -- the same way deleting a row does.
+ */
+function UnsplitButton({ merchant, disabled, onConfirm }: { merchant: string; disabled: boolean; onConfirm: () => void }) {
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger
+        render={
+          <Button variant="ghost" size="sm" className="text-xs" disabled={disabled}>
+            Unsplit
+          </Button>
+        }
+      />
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Unsplit {merchant}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            The charge goes back to being one row. Every part is removed, along with the category and note you gave it.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm}>Unsplit</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
