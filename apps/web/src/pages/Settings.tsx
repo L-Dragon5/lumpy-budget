@@ -35,6 +35,8 @@ const BUCKETS: { value: Bucket; label: string }[] = BUCKET_ORDER.map((value) => 
 export default function Settings() {
   const categories = useApi(["categories"], () => eden.api.categories.get());
   const rules = useApi(["category-rules"], () => eden.api["category-rules"].get());
+  // Kept fresh by the invalidate-everything every rule write already does.
+  const shadowed = useApi(["category-rules-shadowed"], () => eden.api["category-rules"].shadowed.get());
   const profiles = useApi(["import-profiles"], () => eden.api["import-profiles"].get());
 
   const createCategory = useMutate((body: CategoryInput) => eden.api.categories.post(body));
@@ -145,6 +147,56 @@ export default function Settings() {
         </TabsContent>
 
         <TabsContent value="rules">
+          {(shadowed.data ?? []).length > 0 ? (
+            <Card className="mb-4">
+              <CardHeader>
+                <CardTitle>Rules that can never fire</CardTitle>
+                <CardDescription>
+                  A rule is tried lowest priority number first, and the first match wins. These rules sit behind
+                  one that already catches everything they would have. Give one a lower priority number than the
+                  rule named beside it, or delete it.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Never fires</TableHead>
+                      <TableHead>Because of</TableHead>
+                      <TableHead className="text-right">Effect</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(shadowed.data ?? []).map((s) => (
+                      <TableRow key={s.id}>
+                        <TableCell>
+                          <span className="font-mono text-xs">{s.pattern}</span>{" "}
+                          <span className="text-xs text-muted-foreground">
+                            · {s.priority} · {catName(s.category_id)}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <span className="font-mono text-xs">{s.shadowed_by.pattern}</span>{" "}
+                          <span className="text-xs text-muted-foreground">
+                            · {s.shadowed_by.priority} · {catName(s.shadowed_by.category_id)}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {/* A shadow inside one category still lands in the
+                              right place. It is clutter, not a wrong number,
+                              and saying so is what keeps the real findings
+                              worth looking at. */}
+                          <Badge variant={s.same_category ? "secondary" : "default"}>
+                            {s.same_category ? "same category" : "different category"}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          ) : null}
           <Card>
             <CardHeader>
               <CardTitle>Categorization rules</CardTitle>
