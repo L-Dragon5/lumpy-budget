@@ -7,7 +7,8 @@ import { expect, test } from "bun:test";
 import { resetDb, sql } from "../services/api/test/setup";
 import { TABLES } from "@lumpy/db/tables";
 
-const { counts, refusesDatabase, wipe, wipeOrder, ZEROED_SETTINGS } = await import("./reset");
+const { counts, DELETED_SETTING_PREFIXES, refusesDatabase, wipe, wipeOrder, ZEROED_SETTINGS } = await import("./reset");
+const { CARD_OPENING_PREFIX, cardOpeningKey } = await import("../services/api/src/store");
 
 const rowCount = async (t: string) =>
   Number(((await sql.unsafe(`SELECT COUNT(*) AS n FROM \`${t}\``)) as { n: number }[])[0]!.n);
@@ -60,4 +61,25 @@ test("a wipe empties the ledger, keeps the schema, and zeroes what was typed", a
   for (const name of ZEROED_SETTINGS) {
     expect(settings.find((s) => s.name === name)?.value).toBe("0");
   }
+});
+
+test("a wipe forgets every card's opening balance, because the ids start over", async () => {
+  await resetDb();
+  // The string is kept in two places, so this is the test that holds them together.
+  expect(DELETED_SETTING_PREFIXES).toContain(CARD_OPENING_PREFIX);
+
+  await sql.unsafe(
+    "INSERT INTO import_profiles (name, mapping, cash_account) VALUES ('Airline Card', '{}', FALSE)",
+  );
+  await sql.unsafe("INSERT INTO settings (name, value) VALUES (?, '45000')", [cardOpeningKey(1)]);
+
+  await wipe();
+
+  // TRUNCATE hands id 1 out again, so a surviving key would be the opening
+  // balance of whichever card is created first after the reset.
+  const left = (await sql.unsafe("SELECT name FROM settings WHERE name = ?", [cardOpeningKey(1)])) as unknown[];
+  expect(left).toEqual([]);
+  // The migration-owned rows stay; they are zeroed by the test above, not deleted.
+  const kept = (await sql.unsafe("SELECT name FROM settings WHERE name IN (?, ?)", ZEROED_SETTINGS)) as unknown[];
+  expect(kept.length).toBeGreaterThan(0);
 });

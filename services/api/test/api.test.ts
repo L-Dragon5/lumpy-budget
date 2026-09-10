@@ -1956,3 +1956,84 @@ describe("planned income against what the bank deposited", () => {
     });
   });
 });
+
+describe("card balances", () => {
+  beforeEach(() => resetDb());
+
+  const mapping = {
+    date_column: "Date", amount_column: "Amount", debit_column: null, credit_column: null,
+    merchant_column: "Description", description_column: null, date_format: "auto" as const,
+    flip_sign: false, skip_rows: 0,
+  };
+
+  test("the running sum of a card statement is what the card will ask for", async () => {
+    const card = await post("/api/import-profiles", { name: "Airline Card", mapping, cash_account: false });
+    await post("/api/import", {
+      filename: "card-march.csv", profile_id: card.body.id,
+      rows: [
+        { txn_date: "2026-03-02", amount_cents: 12000, merchant: "WEGMANS", description: "", category_id: null, source: "import" },
+        { txn_date: "2026-03-09", amount_cents: 4500, merchant: "SHELL", description: "", category_id: null, source: "import" },
+        // The payment posts on the card statement as a credit, so the running
+        // sum needs no rule to know a payment happened.
+        { txn_date: "2026-03-20", amount_cents: -10000, merchant: "PAYMENT THANK YOU", description: "", category_id: null, source: "import" },
+      ],
+    });
+
+    const [row] = (await api("/api/card-balances")).body;
+    expect(row).toMatchObject({
+      name: "Airline Card", opening_cents: 0, net_cents: 6500, balance_cents: 6500,
+      txn_count: 3, last_txn_date: "2026-03-20",
+      opening_key: `card_opening_balance_cents:${card.body.id}`,
+    });
+  });
+
+  test("an opening balance carries the statements you never imported", async () => {
+    const card = await post("/api/import-profiles", { name: "Store Card", mapping, cash_account: false });
+    await put("/api/settings", { name: `card_opening_balance_cents:${card.body.id}`, value: "45000" });
+    await post("/api/import", {
+      filename: "store-march.csv", profile_id: card.body.id,
+      rows: [{ txn_date: "2026-03-02", amount_cents: 3000, merchant: "HOME DEPOT", description: "", category_id: null, source: "import" }],
+    });
+
+    const [row] = (await api("/api/card-balances")).body;
+    expect(row).toMatchObject({ opening_cents: 45000, net_cents: 3000, balance_cents: 48000 });
+  });
+
+  test("a checking statement is not a card and a card with no imports is still a card", async () => {
+    await post("/api/import-profiles", { name: "Big Bank", mapping, cash_account: true });
+    const fresh = await post("/api/import-profiles", { name: "New Card", mapping, cash_account: false });
+    await post("/api/import", {
+      filename: "bank.csv", profile_id: null,
+      rows: [{ txn_date: "2026-03-02", amount_cents: 9900, merchant: "RENT", description: "", category_id: null, source: "import" }],
+    });
+
+    const body = (await api("/api/card-balances")).body;
+    expect(body).toHaveLength(1);
+    // Zero, not absent: a card you have set up and not imported yet is a card
+    // whose balance you have not been told, and saying nothing hides it.
+    expect(body[0]).toMatchObject({
+      name: "New Card", profile_id: fresh.body.id, net_cents: 0, balance_cents: 0,
+      txn_count: 0, last_txn_date: null,
+    });
+  });
+
+  test("a restore takes the card openings with the cards they belong to", async () => {
+    const kept = await post("/api/import-profiles", { name: "Airline Card", mapping, cash_account: false });
+    const other = await post("/api/import-profiles", { name: "Store Card", mapping, cash_account: false });
+    await put("/api/settings", { name: `card_opening_balance_cents:${kept.body.id}`, value: "12300" });
+    const file = (await api("/api/export")).body;
+
+    // Typed after the backup was taken, so the file knows nothing about it. The
+    // restore puts profile ids back exactly as they were exported, and a key
+    // left behind here would be read as the opening balance of whichever card
+    // the file says owns that id.
+    await put("/api/settings", { name: `card_opening_balance_cents:${other.body.id}`, value: "45000" });
+    expect((await post("/api/restore", file)).status).toBe(200);
+
+    const byName = Object.fromEntries(
+      ((await api("/api/card-balances")).body as { name: string; opening_cents: number }[])
+        .map((c) => [c.name, c.opening_cents]),
+    );
+    expect(byName).toEqual({ "Airline Card": 12300, "Store Card": 0 });
+  });
+});

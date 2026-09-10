@@ -325,6 +325,16 @@ export const computed = new Elysia({ prefix: "/api" })
   })
 
   /**
+   * What each card will ask for, beside the cash position it qualifies.
+   *
+   * The cash position deliberately leaves a card charge out: it is spending on
+   * the day it happened and it is not money out of checking until the card is
+   * paid. That is right, and on its own it is half an answer -- the money is
+   * still owed. This is the other half.
+   */
+  .get("/card-balances", () => store.cardBalances())
+
+  /**
    * Lumpy bills the statements show as already paid, waiting to be recorded.
    *
    * The fund's schedule heals itself and its balance cannot, so the day the

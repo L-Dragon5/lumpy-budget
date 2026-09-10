@@ -14,6 +14,7 @@ const { sql } = await import("@lumpy/db");
 /** For the handful of tests that need a starting state no route can produce. */
 export { sql };
 const { seed } = await import("@lumpy/db/seed");
+const { CARD_OPENING_PREFIX } = await import("../src/store");
 
 const TABLES = [
   "expenses", "import_batches", "import_profiles", "category_rules", "categories",
@@ -30,6 +31,10 @@ export async function resetDb({ withSeed = false } = {}) {
   await sql.unsafe(
     "UPDATE settings SET value = '0' WHERE name IN ('lumpy_opening_balance_cents', 'checking_balance_cents')",
   );
+  // Deleted, not zeroed: a card's opening balance is keyed by profile id, and
+  // TRUNCATE just started those ids over, so a key left here is read as the
+  // opening balance of the next test's first card.
+  await sql.unsafe("DELETE FROM settings WHERE LEFT(name, CHAR_LENGTH(?)) = ?", [CARD_OPENING_PREFIX, CARD_OPENING_PREFIX]);
   if (withSeed) await seed();
 }
 
