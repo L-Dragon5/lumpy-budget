@@ -179,6 +179,28 @@ Four places, in this order, or reads silently drop it:
 - **Only discretionary spending subtracts from available.** Fixed / lumpy /
   savings transactions are reconciliation; counting them twice is the bug this
   app exists to avoid.
+- **A split keeps the parent row and hides it; it does not delete it.** The
+  parent holds the `dedupe_hash`, which is the only reason a re-imported
+  statement is still a no-op, and `NOT_SPLIT_PARENT` in `api/src/store.ts` is
+  what keeps it out of `expensesBetween` and the `/expenses` list -- the two
+  reads every report funnels through. There is no `split` column: a parent is a
+  row that has children, asked directly, so the flag cannot drift. `cardBalances`
+  is the one query that does not go through either read path and carries the
+  predicate written out against its own alias.
+- **A split part is hashed with `splitDedupeKey(parentId, index)`, not
+  `dedupeKey`.** A part carries the parent's date and merchant with a fraction of
+  its amount, so an ordinary hash would sit in the key space a statement row can
+  produce and a real charge of that size on that day would be dropped as a
+  duplicate. That is also why `updateExpense` leaves a part's hash alone: a part
+  is "the second half of charge 41" whatever it is re-apportioned to.
+- **`restore()` sorts expenses by ascending id.** `parent_id` is a self
+  foreign key and the export is ordered `txn_date DESC, id DESC`, so the child
+  comes out of the file first. A child is always created after its parent, so
+  ascending id is parents-first.
+- **A part inherits `import_batch_id` from the charge.** `nonCashBatchIds` reads
+  the batch to tell a card charge from money out of checking; batchless parts
+  would be counted against the checking balance forever. Same trap
+  `absorbManual` already documents.
 
 ## Two lanes
 
