@@ -209,6 +209,19 @@ export const categoryRule = z.object({ id }).and(categoryRuleInput);
 export type CategoryRuleInput = z.infer<typeof categoryRuleInput>;
 export type CategoryRule = z.infer<typeof categoryRule>;
 
+const ruleRef = z.object({ id, pattern: z.string(), category_id: id, priority: z.number().int() });
+/**
+ * A rule the importer can never reach, and the earlier rule that takes
+ * everything it would have matched: one line of `GET /api/category-rules/shadowed`.
+ * `shadowedRules` in csv-import decides it; this is only its shape on the wire.
+ */
+export const shadowedRuleRow = ruleRef.extend({
+  /** Both rules point at one category, so the row still lands right: dead weight, not a wrong number. */
+  same_category: z.boolean(),
+  shadowed_by: ruleRef,
+});
+export type ShadowedRuleRow = z.infer<typeof shadowedRuleRow>;
+
 // ---------------------------------------------------------------- expenses
 
 export const expenseInput = z.object({
