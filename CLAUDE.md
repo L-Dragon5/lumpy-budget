@@ -117,6 +117,17 @@ Four places, in this order, or reads silently drop it:
   009 turns it on for `bp` and `amc` alone, which is what their trailing space
   in the seed was reaching for. `fixed_costs.merchant_whole_word` (migration
   010) is the same switch for a bill, and 010 turns on nothing.
+- **`shadowedRules` must sort exactly the way `applyRules` does** -- priority
+  ascending, ties by id -- or it reports rules that work and stays quiet about
+  rules that do not. `covers` decides containment on the needles alone, which is
+  sound because `applyRules` matches with `indexOf`: a haystack holding B's
+  needle holds A's too. `whole_word` is the only wrinkle, and an unguaranteed
+  boundary is never called a shadow -- at B's own edge the haystack picks the
+  neighbouring character, and it is allowed to pick a letter. `isLetter` is
+  exported from `contracts` rather than rewritten here, for the same reason
+  `matchesPattern` lives there. The differential test at the bottom of
+  `csv-import/test/shadow.test.ts` runs both functions over 3000 generated rule
+  sets; change either one and that test is what tells you they disagree.
 - **`001_init.sql` is the whole schema and keeps that name deliberately.** An
   existing database already records it as applied, so it skips the file and
   stays where it is; a fresh one gets everything in one pass. Rename it and

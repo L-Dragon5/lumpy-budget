@@ -1308,6 +1308,70 @@ describe("merging category rules", () => {
   });
 });
 
+describe("shadowed rules", () => {
+  beforeEach(() => resetDb());
+
+  test("names the rule that can never fire and the one taking its traffic", async () => {
+    const shopping = await post("/api/categories", { name: "Shopping", bucket: "discretionary", icon: "bag", color: null });
+    const groceries = await post("/api/categories", { name: "Groceries", bucket: "discretionary", icon: "cart", color: null });
+    await post("/api/category-rules", { pattern: "amazon", whole_word: false, category_id: shopping.body.id, priority: 100 });
+    const dead = await post("/api/category-rules", { pattern: "amazon fresh", whole_word: false, category_id: groceries.body.id, priority: 150 });
+
+    const body = (await api("/api/category-rules/shadowed")).body;
+    expect(body).toHaveLength(1);
+    expect(body[0]).toMatchObject({
+      id: dead.body.id, pattern: "amazon fresh", same_category: false,
+      shadowed_by: { pattern: "amazon" },
+    });
+  });
+
+  test("is empty when every rule can fire", async () => {
+    const c = await post("/api/categories", { name: "Groceries", bucket: "discretionary", icon: "cart", color: null });
+    await post("/api/category-rules", { pattern: "amazon fresh", whole_word: false, category_id: c.body.id, priority: 100 });
+    await post("/api/category-rules", { pattern: "amazon", whole_word: false, category_id: c.body.id, priority: 150 });
+    expect((await api("/api/category-rules/shadowed")).body).toEqual([]);
+  });
+
+  test("the route is not read as a rule id", async () => {
+    // Before the route existed, `/category-rules/:id` answered this with a 422
+    // for an id that is not a number. Elysia ranks the static segment first
+    // whatever the registration order, so this pins the behaviour, not the order.
+    expect((await api("/api/category-rules/shadowed")).status).toBe(200);
+    // And the other way round: an id still reaches the crud route.
+    const c = await post("/api/categories", { name: "Groceries", bucket: "discretionary", icon: "cart", color: null });
+    const made = await post("/api/category-rules", { pattern: "wegmans", category_id: c.body.id, priority: 100 });
+    expect((await api(`/api/category-rules/${made.body.id}`)).body).toMatchObject({ pattern: "wegmans" });
+  });
+
+  test("a shadow inside one category is reported below one that crosses categories", async () => {
+    const a = await post("/api/categories", { name: "Travel", bucket: "discretionary", icon: "plane", color: null });
+    const b = await post("/api/categories", { name: "Dining", bucket: "discretionary", icon: "utensils", color: null });
+    await post("/api/category-rules", { pattern: "uber", whole_word: false, category_id: a.body.id, priority: 100 });
+    await post("/api/category-rules", { pattern: "uber pool", whole_word: false, category_id: a.body.id, priority: 150 });
+    await post("/api/category-rules", { pattern: "uber eats", whole_word: false, category_id: b.body.id, priority: 160 });
+
+    const body = (await api("/api/category-rules/shadowed")).body;
+    expect(body.map((r: { pattern: string }) => r.pattern)).toEqual(["uber eats", "uber pool"]);
+  });
+
+  test("the whole-word switch is read back from the column, not assumed", async () => {
+    // `bp` whole-word does not fire on ABP FUEL, so a plain `bp fuel` behind it
+    // is alive. Make `bp fuel` whole-word too and it promises the boundary `bp`
+    // needs, so it is dead. Only the stored flag tells those two apart.
+    const gas = await post("/api/categories", { name: "Gas & Fuel", bucket: "discretionary", icon: "fuel", color: null });
+    await post("/api/category-rules", { pattern: "bp", whole_word: true, category_id: gas.body.id, priority: 100 });
+    const bpFuel = await post("/api/category-rules", { pattern: "bp fuel", whole_word: false, category_id: gas.body.id, priority: 150 });
+    expect((await api("/api/category-rules/shadowed")).body).toEqual([]);
+
+    await put(`/api/category-rules/${bpFuel.body.id}`, { pattern: "bp fuel", whole_word: true, category_id: gas.body.id, priority: 150 });
+    const body = (await api("/api/category-rules/shadowed")).body;
+    expect(body).toEqual([{
+      id: bpFuel.body.id, pattern: "bp fuel", category_id: gas.body.id, priority: 150, same_category: true,
+      shadowed_by: { id: expect.any(Number), pattern: "bp", category_id: gas.body.id, priority: 100 },
+    }]);
+  });
+});
+
 describe("lumpy fund drift", () => {
   let lumpyCategory: number;
 

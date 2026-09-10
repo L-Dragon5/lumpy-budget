@@ -262,6 +262,19 @@ export const categoryRule = z.object({ id }).and(categoryRuleInput);
 export type CategoryRuleInput = z.infer<typeof categoryRuleInput>;
 export type CategoryRule = z.infer<typeof categoryRule>;
 
+const ruleRef = z.object({ id, pattern: z.string(), category_id: id, priority: z.number().int() });
+/**
+ * A rule the importer can never reach, and the earlier rule that takes
+ * everything it would have matched: one line of `GET /api/category-rules/shadowed`.
+ * `shadowedRules` in csv-import decides it; this is only its shape on the wire.
+ */
+export const shadowedRuleRow = ruleRef.extend({
+  /** Both rules point at one category, so the row still lands right: dead weight, not a wrong number. */
+  same_category: z.boolean(),
+  shadowed_by: ruleRef,
+});
+export type ShadowedRuleRow = z.infer<typeof shadowedRuleRow>;
+
 // ---------------------------------------------------------------- expenses
 
 export const expenseInput = z.object({
@@ -455,7 +468,16 @@ export type RestoreResult = z.infer<typeof restoreResult>;
  */
 export const needleOf = (pattern: string): string => pattern.toLowerCase().trim();
 
-const isLetter = (c: string | undefined): boolean => c !== undefined && /\p{L}/u.test(c);
+/**
+ * What `whole_word` means by "the end of a word": a letter, not a word
+ * character, because a merchant descriptor glues its store number straight onto
+ * the name and `bp` has to keep finding BP1234.
+ *
+ * Exported because the shadowed-rule report has to agree with `matchesPattern`
+ * about this exactly. Two definitions of a boundary is two answers to whether a
+ * rule can fire.
+ */
+export const isLetter = (c: string | undefined): boolean => c !== undefined && /\p{L}/u.test(c);
 
 /**
  * Does a lowercased "merchant description" contain this needle?

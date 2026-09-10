@@ -4,8 +4,10 @@ import {
   fixedCost, fixedCostInput, importProfile, importProfileInput, importProfileMergeInput,
   incomeStream, incomeStreamInput, expense, importBatch, isoDate, lumpyItem, lumpyItemInput,
   mergeResult, ruleMergeResult, savingsGoal, savingsGoalInput,
+  shadowedRuleRow,
 } from "@lumpy/contracts";
 import type { Expense, ImportBatch } from "@lumpy/contracts";
+import { shadowedRules } from "@lumpy/csv-import";
 import { byId, remove, rows } from "@lumpy/db";
 import { z } from "zod";
 import { crud, deleted, errorBody, idParam, notFound } from "./crud";
@@ -111,6 +113,45 @@ const categoryRuleMerge = new Elysia({ name: "category-rule-merge" })
     { body: categoryRuleMergeInput, response: ruleMergeResult },
   );
 
+/**
+ * Rules that can never fire, because something ahead of them takes everything
+ * they would have matched.
+ *
+ * Registered beside `/merge`, ahead of the crud block, to match it. The order
+ * is convention, not correctness: Elysia's router ranks a static segment above
+ * `/category-rules/:id` whichever was registered first (checked on 1.4.30: moved
+ * after the crud block, every test still passes). What the test pins is the
+ * behaviour, that "shadowed" is never read as an id.
+ *
+ * Cross-category shadows first. Those are the ones that put money in the wrong
+ * place; a rule shadowed inside its own category is dead weight and nothing
+ * more, and burying it below the real findings is the difference between a
+ * report people read and one they learn to close. `Array.prototype.sort` is
+ * stable, so within each group the order `shadowedRules` gave (the order
+ * `applyRules` tries them) survives.
+ */
+const categoryRuleShadows = new Elysia({ name: "category-rule-shadows" })
+  .get(
+    "/category-rules/shadowed",
+    async () =>
+      shadowedRules(await store.categoryRules())
+        .map((s) => ({
+          id: s.rule.id,
+          pattern: s.rule.pattern,
+          category_id: s.rule.category_id,
+          priority: s.rule.priority,
+          same_category: s.same_category,
+          shadowed_by: {
+            id: s.shadowed_by.id,
+            pattern: s.shadowed_by.pattern,
+            category_id: s.shadowed_by.category_id,
+            priority: s.shadowed_by.priority,
+          },
+        }))
+        .sort((a, b) => Number(a.same_category) - Number(b.same_category)),
+    { response: z.array(shadowedRuleRow) },
+  );
+
 export const resources = new Elysia({ prefix: "/api" })
   .use(crud("income-streams", "income_streams", incomeStreamInput, incomeStream))
   .use(crud("fixed-costs", "fixed_costs", fixedCostInput, fixedCost))
@@ -120,6 +161,7 @@ export const resources = new Elysia({ prefix: "/api" })
   // Before its crud block, like the merge below: `/category-rules/:id` would
   // otherwise try to read "merge" as an id.
   .use(categoryRuleMerge)
+  .use(categoryRuleShadows)
   .use(crud("category-rules", "category_rules", categoryRuleInput, categoryRule))
   // Before the crud block: `/import-profiles/:id` would otherwise try to read
   // "merge" as an id on any verb they share.
