@@ -36,6 +36,89 @@ export async function nonCashBatchIds(): Promise<Set<number>> {
   return new Set(out.map((r) => Number(r.id)));
 }
 
+/**
+ * Where a card's opening balance is kept. One `settings` row per card, keyed by
+ * profile id, so adding a card adds no schema and deleting one leaves a row
+ * nothing reads rather than a dangling foreign key.
+ *
+ * Exported and handed to the client in the response, so the string format is
+ * written once and the web app never builds it.
+ */
+export const CARD_OPENING_PREFIX = "card_opening_balance_cents:";
+export const cardOpeningKey = (profileId: number): string => `${CARD_OPENING_PREFIX}${profileId}`;
+
+export type CardBalance = {
+  profile_id: number;
+  name: string;
+  opening_key: string;
+  /** What the card owed before the first statement you imported. Typed in once. */
+  opening_cents: number;
+  /** Everything imported under this card since: charges positive, payments negative. */
+  net_cents: number;
+  balance_cents: number;
+  txn_count: number;
+  /** The last row imported under this card, which is how stale the number is. */
+  last_txn_date: string | null;
+};
+
+/**
+ * What each credit card is about to ask for.
+ *
+ * A card statement writes a purchase as a charge and the payment as a credit, so
+ * the running sum of every row imported under that format is exactly the change
+ * in the balance -- no payment rule, no cycle, no due date to keep in step. Add
+ * the balance the card carried before the first statement anybody imported and
+ * you have the number.
+ *
+ * The known ceiling is the same one the whole app runs on: this is only as
+ * current as the last card statement imported, which is why `last_txn_date`
+ * comes back with it. A month of charges nobody has imported is a month this
+ * number does not know about, and the tile says so rather than implying the
+ * card is quiet.
+ *
+ * `LEFT JOIN` twice so a card with no imports is a row of zeroes rather than
+ * missing: a card you set up and have not imported is a card whose balance you
+ * have not been told, and saying nothing about it hides it.
+ */
+export async function cardBalances(): Promise<CardBalance[]> {
+  const found = (await sql.unsafe(
+    // DATE_FORMAT because this is a raw statement: `rows()` is what coerces a
+    // DATE into a YYYY-MM-DD string and nothing here goes through it.
+    `SELECT p.id                                        AS profile_id,
+            p.name                                      AS name,
+            COALESCE(SUM(e.amount_cents), 0)            AS net_cents,
+            COUNT(e.id)                                 AS txn_count,
+            DATE_FORMAT(MAX(e.txn_date), '%Y-%m-%d')    AS last_txn_date
+       FROM import_profiles p
+       LEFT JOIN import_batches b ON b.profile_id = p.id
+       LEFT JOIN expenses e       ON e.import_batch_id = b.id
+      WHERE p.cash_account = FALSE
+      GROUP BY p.id, p.name
+      ORDER BY p.name ASC`,
+  )) as { profile_id: number; name: string; net_cents: string | number; txn_count: string | number; last_txn_date: string | null }[];
+
+  return Promise.all(
+    found.map(async (r) => {
+      const profile_id = Number(r.profile_id);
+      // SUM over BIGINT comes back as a string on some drivers. Every other
+      // money value in this app is an integer number of cents and this one is
+      // not allowed to be the exception.
+      const net = Number(r.net_cents) || 0;
+      const opening = Number(await setting(cardOpeningKey(profile_id), "0")) || 0;
+      return {
+        profile_id,
+        name: r.name,
+        opening_key: cardOpeningKey(profile_id),
+        opening_cents: opening,
+        net_cents: net,
+        balance_cents: opening + net,
+        txn_count: Number(r.txn_count) || 0,
+        last_txn_date: r.last_txn_date,
+      };
+    }),
+  );
+}
+
 export async function setting(name: string, fallback = "0"): Promise<string> {
   const out = (await sql.unsafe("SELECT value FROM settings WHERE name = ?", [name])) as { value: string }[];
   return out[0]?.value ?? fallback;
