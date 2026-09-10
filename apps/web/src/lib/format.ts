@@ -66,6 +66,7 @@ export const BUCKET_LABEL: Record<string, string> = {
   lumpy: "Lumpy",
   savings: "Savings",
   transfer: "Transfer",
+  income: "Income",
 };
 
 /** What each bucket means, in the reader's words. Written to follow the label: "Fixed — a bill that arrives every month". */
@@ -75,9 +76,11 @@ export const BUCKET_HINT: Record<string, string> = {
   lumpy: "paid out of the lumpy fund",
   savings: "money moved into a goal, not spent",
   transfer: "card payments and moving money between accounts",
+  income: "money arriving, never counted as spending",
 };
 
-export const BUCKET_ORDER = ["discretionary", "fixed", "lumpy", "savings", "transfer"] as const;
+/** Income last: it is the only bucket that is not an outflow. */
+export const BUCKET_ORDER = ["discretionary", "fixed", "lumpy", "savings", "transfer", "income"] as const;
 
 export const CYCLE_LABEL = (months: number): string =>
   months === 1 ? "Monthly" :

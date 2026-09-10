@@ -115,6 +115,9 @@ export default function Income() {
   const months = calendar.data?.months ?? [];
   const normalized = months[0]?.normalized_cents ?? 0;
   const extras = months.filter((m) => m.extra_paycheck);
+  // The surplus column only holds its width in a year that has one to show; a
+  // semimonthly year never does, and the deposited column needs the room.
+  const anySurplus = months.some((m) => m.surplus_cents > 0);
 
   return (
     <>
@@ -208,6 +211,9 @@ export default function Income() {
               ) : (
                 "No extra-paycheck months this year. Only weekly and every-2-weeks pay can produce one."
               )}
+              {" "}Each month also shows what the statements actually deposited,
+              and the gap. A month with no statement imported says so instead of
+              reporting a paycheck as missing.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -215,23 +221,38 @@ export default function Income() {
               {months.map((m) => (
                 <li
                   key={m.month}
-                  className={`flex items-center justify-between rounded-md px-2 py-1.5 text-sm ${
+                  className={`grid grid-cols-[auto_1fr] items-center gap-x-3 rounded-md px-2 py-1.5 text-sm ${
                     m.extra_paycheck ? "bg-accent font-medium" : ""
                   }`}
                 >
-                  <span className="flex items-center gap-2">
+                  <span className="flex items-center gap-2 whitespace-nowrap">
                     {monthLabel(m.month, true)}
                     {m.extra_paycheck ? <Badge variant="secondary">extra</Badge> : null}
                   </span>
-                  <span className="flex items-center gap-3">
+                  <span className="flex items-center justify-end gap-3">
                     <Money cents={m.total_cents} className="text-sm" />
                     {/* Only the surplus is worth calling out: every other month
                         is just the average, and a red minus on nine of twelve
                         months reads as a problem when nothing is wrong. */}
                     {m.surplus_cents > 0 ? (
                       <Money cents={m.surplus_cents} sign tone className="w-24 text-right text-xs" />
-                    ) : (
+                    ) : anySurplus ? (
                       <span className="w-24" />
+                    ) : null}
+                  </span>
+                  {/* What the bank says, against what the schedules assumed, on a
+                      line of its own so a phone-width card never has to fit four
+                      amounts across. A month nobody imported is silent: a red
+                      -$2,400 there is a missing statement wearing the face of a
+                      missing paycheck, and the two need opposite responses. */}
+                  <span className="col-start-2 flex items-center justify-end gap-2 text-xs font-normal text-muted-foreground">
+                    {m.imported ? (
+                      <>
+                        deposited <Money cents={m.deposited_cents} className="text-xs" />
+                        {m.delta_cents !== 0 ? <Money cents={m.delta_cents} sign tone className="text-xs" /> : null}
+                      </>
+                    ) : (
+                      "not imported"
                     )}
                   </span>
                 </li>
