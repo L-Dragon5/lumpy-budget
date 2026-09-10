@@ -1853,4 +1853,42 @@ describe("planned income against what the bank deposited", () => {
     expect(cal.body.months.every((m: { imported: boolean; deposited_cents: number }) =>
       !m.imported && m.deposited_cents === 0)).toBe(true);
   });
+
+  test("a short month names the credits still waiting to be categorized", async () => {
+    // Through the declared response schema: a key the contract does not list is
+    // stripped on the way out, so this also proves the contract carries it.
+    const cat = await post("/api/categories", { name: "Income", bucket: "income", icon: "banknote", color: null });
+    await post("/api/income-streams", {
+      name: "Day job", amount_cents: 120000, frequency: "semimonthly",
+      anchor_date: null, day_1: 15, day_2: 0, day_of_month: null, active: true,
+    });
+    const row = (txn_date: string, amount_cents: number, merchant: string, category_id: number | null) =>
+      post("/api/expenses", { txn_date, amount_cents, merchant, description: "", category_id, source: "manual" });
+    await row("2026-03-15", -120000, "ACME PAYROLL", cat.body.id);
+    // The second cheque, under a descriptor no rule knows.
+    await row("2026-03-31", -120000, "ACME CORP PPD", null);
+    await row("2026-04-15", -120000, "ACME PAYROLL", cat.body.id);
+    await row("2026-04-30", -120000, "ACME PAYROLL", cat.body.id);
+
+    const cal = await api("/api/income-calendar?year=2026");
+    expect(cal.status).toBe(200);
+    const byMonth = (m: string) => cal.body.months.find((x: { month: string }) => x.month === m);
+    expect(byMonth("2026-03")).toMatchObject({
+      deposited_cents: 120000, delta_cents: -120000,
+      uncategorized_credit_cents: 120000, uncategorized_credit_count: 1,
+    });
+    expect(byMonth("2026-04")).toMatchObject({
+      delta_cents: 0, uncategorized_credit_cents: 0, uncategorized_credit_count: 0,
+    });
+    // Everything the page reads survives the response schema, not just the new keys.
+    expect(Object.keys(byMonth("2026-03")).sort()).toEqual([
+      "delta_cents", "deposit_count", "deposited_cents", "extra_paycheck", "imported", "month",
+      "normalized_cents", "occurrences", "surplus_cents", "total_cents",
+      "uncategorized_credit_cents", "uncategorized_credit_count",
+    ]);
+    expect(cal.body.streams[0]).toEqual({
+      id: expect.any(Number), name: "Day job", frequency: "semimonthly", amount_cents: 120000,
+      extra_paycheck_months: [],
+    });
+  });
 });

@@ -1,5 +1,5 @@
 import { Elysia } from "elysia";
-import { backup, bulkExpenseInput, isoDate, isoMonth, restoreResult } from "@lumpy/contracts";
+import { backup, bulkExpenseInput, incomeCalendarResult, isoDate, isoMonth, restoreResult } from "@lumpy/contracts";
 import * as core from "@lumpy/budget-core";
 import { rows, sql, TABLES, type TableName } from "@lumpy/db";
 import { z } from "zod";
@@ -45,20 +45,23 @@ export const computed = new Elysia({ prefix: "/api" })
       // Zipped rather than merged inside budget-core: `incomeCalendar` is the
       // plan and `incomeReconciliation` is the bank, and keeping them two
       // functions is what lets the scenario lane pin the plan without a ledger.
-      const actual = new Map(
-        core
-          .incomeReconciliation(streams, expenses, cats, months.map((m) => m.month))
-          .map((r) => [r.month, r]),
-      );
+      // Asked for exactly these months, so it answers in this order: index i is
+      // month i, and there is no missing entry to default.
+      const actual = core.incomeReconciliation(streams, expenses, cats, months.map((m) => m.month));
       return {
         year,
-        months: months.map((m) => ({
-          ...m,
-          deposited_cents: actual.get(m.month)?.deposited_cents ?? 0,
-          delta_cents: actual.get(m.month)?.delta_cents ?? 0,
-          deposit_count: actual.get(m.month)?.count ?? 0,
-          imported: actual.get(m.month)?.imported ?? false,
-        })),
+        months: months.map((m, i) => {
+          const r = actual[i]!;
+          return {
+            ...m,
+            deposited_cents: r.deposited_cents,
+            delta_cents: r.delta_cents,
+            deposit_count: r.count,
+            imported: r.imported,
+            uncategorized_credit_cents: r.uncategorized_credit_cents,
+            uncategorized_credit_count: r.uncategorized_credit_count,
+          };
+        }),
         streams: streams.map((x) => ({
           id: x.id,
           name: x.name,
@@ -68,7 +71,7 @@ export const computed = new Elysia({ prefix: "/api" })
         })),
       };
     },
-    { query: z.object({ year: num }) },
+    { query: z.object({ year: num }), response: incomeCalendarResult },
   )
 
   .get(

@@ -106,6 +106,48 @@ export const incomeStream = z.object({ id }).and(incomeStreamInput);
 export type IncomeStreamInput = z.infer<typeof incomeStreamInput>;
 export type IncomeStream = z.infer<typeof incomeStream>;
 
+/**
+ * `GET /api/income-calendar`: each month's plan beside what the bank deposited.
+ *
+ * Declared so the response validator covers it. Elysia strips a key this does
+ * not list, so a field added to the route without being added here never
+ * reaches the page -- which is the point: the page reads only what is written
+ * down.
+ */
+export const incomeCalendarMonth = z.object({
+  month: isoMonth,
+  occurrences: z.array(z.object({ stream_id: id, stream_name: z.string(), date: isoDate, amount_cents: cents })),
+  total_cents: cents,
+  normalized_cents: cents,
+  surplus_cents: cents,
+  extra_paycheck: z.boolean(),
+  /** Income-bucket rows, as the positive amount that arrived. */
+  deposited_cents: cents,
+  /** Deposited minus planned; zero in a month with no statement at all. */
+  delta_cents: cents,
+  deposit_count: z.number().int().min(0),
+  imported: z.boolean(),
+  /**
+   * Credits nobody has categorized, as a positive number. In neither deposited
+   * nor the delta; beside a short month it says the gap may be a paycheck that
+   * is only waiting on a category.
+   */
+  uncategorized_credit_cents: positiveCents,
+  uncategorized_credit_count: z.number().int().min(0),
+});
+export const incomeCalendarResult = z.object({
+  year: z.number().int(),
+  months: z.array(incomeCalendarMonth),
+  streams: z.array(z.object({
+    id,
+    name: z.string(),
+    frequency: frequencySchema,
+    amount_cents: cents,
+    extra_paycheck_months: z.array(isoMonth),
+  })),
+});
+export type IncomeCalendarResult = z.infer<typeof incomeCalendarResult>;
+
 // ------------------------------------------------------------ fixed costs
 
 export const fixedCostInput = z.object({

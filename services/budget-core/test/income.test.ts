@@ -104,3 +104,35 @@ test("a deposit outside the month is not that month's income", () => {
   const rows = [expense({ txn_date: "2026-02-28", amount_cents: -120000, category_id: incomeCat.id })];
   expect(depositedInMonth(rows, paidCats, "2026-03")).toEqual({ cents: 0, count: 0 });
 });
+
+test("a short month says when the missing paycheck is sitting uncategorized", () => {
+  // The second March cheque came in under a descriptor no rule knew. The month
+  // is still short -- deposited counts only the income bucket -- but it says
+  // why, so the answer is "categorize it", not "call payroll".
+  const rows = [
+    expense({ txn_date: "2026-03-15", amount_cents: -120000, category_id: incomeCat.id }),
+    expense({ txn_date: "2026-03-31", amount_cents: -120000, category_id: null, merchant: "ACME CORP PPD" }),
+    // An uncategorized charge is not a credit, and a categorized refund is placed.
+    expense({ txn_date: "2026-03-04", amount_cents: 8100, category_id: null }),
+    expense({ txn_date: "2026-03-09", amount_cents: -1500, category_id: groceriesCat.id }),
+  ];
+  const [march] = incomeReconciliation([semimonthly()], rows, paidCats, ["2026-03"]);
+  expect(march).toMatchObject({
+    deposited_cents: 120000, delta_cents: -120000,
+    uncategorized_credit_cents: 120000, uncategorized_credit_count: 1,
+  });
+});
+
+test("a month with no uncategorized credits reports zero, not minus zero", () => {
+  const rows = [
+    expense({ txn_date: "2026-03-15", amount_cents: -120000, category_id: incomeCat.id }),
+    expense({ txn_date: "2026-03-04", amount_cents: 8100, category_id: null }),
+  ];
+  const [march, april] = incomeReconciliation([semimonthly()], rows, paidCats, ["2026-03", "2026-04"]);
+  // toBe is Object.is, so -0 fails here where toEqual on a JSON body would not.
+  expect(march!.uncategorized_credit_cents).toBe(0);
+  expect(march!.uncategorized_credit_count).toBe(0);
+  // And a month nobody imported has none to report either.
+  expect(april!.uncategorized_credit_cents).toBe(0);
+  expect(april!.uncategorized_credit_count).toBe(0);
+});

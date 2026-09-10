@@ -63,24 +63,48 @@ export function nextPaycheck(streams: IncomeStream[], from: string): Occurrence 
 // ------------------------------------------------- the plan against the bank
 
 /**
- * What really landed in `month`, as a positive number.
+ * Credits as the positive amount that arrived, and how many there were.
  *
  * A deposit is stored the way the importer writes it: a credit, so a negative
- * expense. It is reported here the way a person says it out loud, so the sign
- * is flipped exactly once, here, and nowhere else in the stack.
+ * expense. It is reported the way a person says it out loud, so the sign is
+ * flipped exactly once, here, and nowhere else in the stack.
+ *
+ * `0 -`, not unary minus: `-sum([])` is -0, which JSON hides and toEqual does
+ * not, and a month with no deposits has deposited zero, not minus zero.
  */
+const arrived = (rows: Expense[]): { cents: Cents; count: number } => ({
+  cents: 0 - sum(rows.map((e) => e.amount_cents)),
+  count: rows.length,
+});
+
+const inMonth = (expenses: Expense[], month: ISOMonth): Expense[] => {
+  const start = d.monthStart(month);
+  const end = d.monthEnd(month);
+  return expenses.filter((e) => inWindow(e, start, end));
+};
+
+/** What really landed in `month` in an `income` category, as a positive number. */
 export function depositedInMonth(
   expenses: Expense[],
   categories: Category[],
   month: ISOMonth,
 ): { cents: Cents; count: number } {
   const byId = categoryIndex(categories);
-  const start = d.monthStart(month);
-  const end = d.monthEnd(month);
-  const rows = expenses.filter((e) => inWindow(e, start, end) && bucketOf(e, byId) === "income");
-  // `0 -`, not unary minus: `-sum([])` is -0, which JSON hides and toEqual does
-  // not, and a month with no deposits has deposited zero, not minus zero.
-  return { cents: 0 - sum(rows.map((e) => e.amount_cents)), count: rows.length };
+  return arrived(inMonth(expenses, month).filter((e) => bucketOf(e, byId) === "income"));
+}
+
+/**
+ * Credits in `month` nobody has categorized, as a positive number.
+ *
+ * `category_id` null and money in: the same rows the expenses page counts as
+ * uncategorized, so the number on the income page is the number waiting there.
+ * They are not deposits yet -- bucketOf holds them neutral until somebody says
+ * what they are -- but a paycheck under a descriptor no rule knows is exactly
+ * this, and a short month with one sitting here is a categorizing job, not a
+ * missing cheque.
+ */
+export function uncategorizedCreditsInMonth(expenses: Expense[], month: ISOMonth): { cents: Cents; count: number } {
+  return arrived(inMonth(expenses, month).filter((e) => e.category_id === null && e.amount_cents < 0));
 }
 
 export type MonthDeposits = {
@@ -94,6 +118,14 @@ export type MonthDeposits = {
   count: number;
   /** Whether any statement covers this month at all. */
   imported: boolean;
+  /**
+   * Credits nobody has categorized, as a positive number. Not in
+   * `deposited_cents` and not in the delta: a guess about which of them is the
+   * missing paycheck would be exactly the guess bucketOf refuses to make. The
+   * page puts it beside a short month so the gap explains itself.
+   */
+  uncategorized_credit_cents: Cents;
+  uncategorized_credit_count: number;
 };
 
 /**
@@ -124,6 +156,7 @@ export function incomeReconciliation(
     const planned = monthlyActual(streams, month);
     const imported = importedMonths.has(month);
     const { cents, count } = depositedInMonth(expenses, categories, month);
+    const unplaced = uncategorizedCreditsInMonth(expenses, month);
     return {
       month,
       planned_cents: planned,
@@ -131,6 +164,8 @@ export function incomeReconciliation(
       delta_cents: imported ? cents - planned : 0,
       count,
       imported,
+      uncategorized_credit_cents: unplaced.cents,
+      uncategorized_credit_count: unplaced.count,
     };
   });
 }
