@@ -1791,3 +1791,175 @@ describe("split storage", () => {
       .toBe(parent.body.id);
   });
 });
+
+describe("splitting a charge", () => {
+  beforeEach(() => resetDb());
+
+  const costco = {
+    txn_date: "2026-03-02", amount_cents: 18000, merchant: "COSTCO",
+    description: "big run", category_id: null, source: "manual" as const,
+  };
+
+  test("two parts replace the charge in every read", async () => {
+    const groceries = await post("/api/categories", { name: "Groceries", bucket: "discretionary", icon: "cart", color: null });
+    const home = await post("/api/categories", { name: "Home", bucket: "discretionary", icon: "home", color: null });
+    const parent = await post("/api/expenses", costco);
+
+    const split = await post(`/api/expenses/${parent.body.id}/split`, {
+      parts: [
+        { amount_cents: 12000, category_id: groceries.body.id, description: "" },
+        { amount_cents: 6000, category_id: home.body.id, description: "shelving" },
+      ],
+    });
+    expect(split.status).toBe(201);
+    expect(split.body).toHaveLength(2);
+
+    const listed = (await api("/api/expenses")).body;
+    // The parent is gone from the list and the two parts are there instead, so
+    // the total is $180 once rather than $180 twice.
+    expect(listed).toHaveLength(2);
+    expect(listed.map((e: { amount_cents: number }) => e.amount_cents).sort((a: number, b: number) => a - b)).toEqual([6000, 12000]);
+    expect(listed.every((e: { parent_id: number }) => e.parent_id === parent.body.id)).toBe(true);
+
+    // And every derived report agrees, because they all read expensesBetween.
+    const reports = (await api("/api/reports?start=2026-03-01&end=2026-03-31")).body;
+    expect(reports.totals.total).toBe(18000);
+    expect(reports.breakdown.slices.map((s: { name: string }) => s.name).sort()).toEqual(["Groceries", "Home"]);
+  });
+
+  test("a part inherits the batch, so a card charge is still a card charge", async () => {
+    const mapping = {
+      date_column: "Date", amount_column: "Amount", debit_column: null, credit_column: null,
+      merchant_column: "Description", description_column: null, date_format: "auto" as const,
+      flip_sign: false, skip_rows: 0,
+    };
+    const card = await post("/api/import-profiles", { name: "Card", mapping, cash_account: false });
+    await post("/api/import", {
+      filename: "card.csv", profile_id: card.body.id,
+      rows: [{ ...costco, source: "import" }],
+    });
+    const imported = (await api("/api/expenses")).body[0];
+    expect(imported.import_batch_id).not.toBeNull();
+
+    const split = await post(`/api/expenses/${imported.id}/split`, {
+      parts: [
+        { amount_cents: 12000, category_id: null, description: "" },
+        { amount_cents: 6000, category_id: null, description: "" },
+      ],
+    });
+    expect(split.status).toBe(201);
+    const parts = (await api("/api/expenses")).body;
+    // `every` over the unsplit charge would pass on its own, so the rows read
+    // back have to be the two parts before the batch on them means anything.
+    expect(parts.map((e: { parent_id: number | null }) => e.parent_id)).toEqual([imported.id, imported.id]);
+    // Batchless parts would be counted as money out of checking forever, in the
+    // one report that exists to be trusted.
+    expect(parts.every((e: { import_batch_id: number | null }) => e.import_batch_id === imported.import_batch_id)).toBe(true);
+  });
+
+  test("parts that do not add up are a 422 naming both numbers", async () => {
+    const parent = await post("/api/expenses", costco);
+    const bad = await post(`/api/expenses/${parent.body.id}/split`, {
+      parts: [
+        { amount_cents: 12000, category_id: null, description: "" },
+        { amount_cents: 5000, category_id: null, description: "" },
+      ],
+    });
+    expect(bad.status).toBe(422);
+    expect(bad.body.error).toContain("17000");
+    expect(bad.body.error).toContain("18000");
+    expect((await api("/api/expenses")).body).toHaveLength(1);
+  });
+
+  test("splitting a charge twice is a 409, and so is splitting a part", async () => {
+    const parent = await post("/api/expenses", costco);
+    const parts = [
+      { amount_cents: 12000, category_id: null, description: "" },
+      { amount_cents: 6000, category_id: null, description: "" },
+    ];
+    await post(`/api/expenses/${parent.body.id}/split`, { parts });
+    expect((await post(`/api/expenses/${parent.body.id}/split`, { parts })).status).toBe(409);
+
+    const child = (await api("/api/expenses")).body[0];
+    expect((await post(`/api/expenses/${child.id}/split`, {
+      parts: [
+        { amount_cents: 6000, category_id: null, description: "" },
+        { amount_cents: 6000, category_id: null, description: "" },
+      ],
+    })).status).toBe(409);
+  });
+
+  test("unsplitting brings the charge back whole", async () => {
+    const parent = await post("/api/expenses", costco);
+    await post(`/api/expenses/${parent.body.id}/split`, {
+      parts: [
+        { amount_cents: 12000, category_id: null, description: "" },
+        { amount_cents: 6000, category_id: null, description: "" },
+      ],
+    });
+    expect((await del(`/api/expenses/${parent.body.id}/split`)).status).toBe(200);
+
+    const listed = (await api("/api/expenses")).body;
+    expect(listed).toHaveLength(1);
+    expect(listed[0]).toMatchObject({
+      id: parent.body.id, amount_cents: 18000, description: "big run", parent_id: null,
+    });
+  });
+
+  test("re-importing the statement is still a no-op after a split", async () => {
+    // The whole reason the parent is kept rather than deleted: it holds the
+    // hash. Without it the charge comes back whole beside its own halves.
+    const rows = [{ ...costco, source: "import" as const }];
+    await post("/api/import", { filename: "s.csv", profile_id: null, rows });
+    const imported = (await api("/api/expenses")).body[0];
+    await post(`/api/expenses/${imported.id}/split`, {
+      parts: [
+        { amount_cents: 12000, category_id: null, description: "" },
+        { amount_cents: 6000, category_id: null, description: "" },
+      ],
+    });
+
+    const again = await post("/api/import", { filename: "s.csv", profile_id: null, rows });
+    expect(again.body.inserted).toBe(0);
+    expect(again.body.skipped).toBe(1);
+    expect((await api("/api/expenses")).body).toHaveLength(2);
+  });
+
+  test("deleting the charge deletes its parts", async () => {
+    const parent = await post("/api/expenses", costco);
+    const split = await post(`/api/expenses/${parent.body.id}/split`, {
+      parts: [
+        { amount_cents: 12000, category_id: null, description: "" },
+        { amount_cents: 6000, category_id: null, description: "" },
+      ],
+    });
+    // Without a split that landed, deleting the one charge would pass this alone.
+    expect(split.status).toBe(201);
+    expect((await del(`/api/expenses/${parent.body.id}`)).status).toBe(200);
+    expect((await api("/api/expenses")).body).toEqual([]);
+    // The list hides a parent, so ask the table: the parts are gone, not hidden.
+    expect(await sql.unsafe("SELECT id FROM expenses")).toHaveLength(0);
+  });
+
+  test("editing a part keeps the identity that cannot collide with a statement", async () => {
+    const parent = await post("/api/expenses", costco);
+    await post(`/api/expenses/${parent.body.id}/split`, {
+      parts: [
+        { amount_cents: 12000, category_id: null, description: "" },
+        { amount_cents: 6000, category_id: null, description: "" },
+      ],
+    });
+    const child = (await api("/api/expenses")).body[0];
+    const before = child.dedupe_hash;
+
+    const edited = await put(`/api/expenses/${child.id}`, {
+      txn_date: child.txn_date, amount_cents: 9000, merchant: child.merchant,
+      description: "", category_id: null, source: child.source,
+    });
+    expect(edited.status).toBe(200);
+    expect(edited.body.amount_cents).toBe(9000);
+    // A part's identity is "which part of charge N", not date+amount+merchant,
+    // so re-apportioning it must not move it into the statement key space.
+    expect(edited.body.dedupe_hash).toBe(before);
+  });
+});

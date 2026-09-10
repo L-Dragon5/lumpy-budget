@@ -252,6 +252,32 @@ export const absorption = z.object({
 });
 export type Absorption = z.infer<typeof absorption>;
 
+/**
+ * What `POST /api/expenses/:id/split` accepts.
+ *
+ * Its own route rather than a field on `expenseInput`, because a split is only
+ * valid as a whole: every part is written in one transaction and the parts have
+ * to add up to the charge. A field anybody could set would let half a split
+ * exist, and half a split is a month counted wrong.
+ *
+ * The sum is checked on the server against the charge's own amount, not here:
+ * this schema has never seen the row.
+ */
+export const expenseSplitInput = z.object({
+  parts: z
+    .array(
+      z.object({
+        /** Signed like any amount: splitting a refund splits a negative. */
+        amount_cents: cents,
+        category_id: id.nullable().default(null),
+        description: z.string().max(500).default(""),
+      }),
+    )
+    .min(2)
+    .max(20),
+});
+export type ExpenseSplitInput = z.infer<typeof expenseSplitInput>;
+
 /** What the import wizard posts: expenses plus the batch metadata. */
 export const bulkExpenseInput = z.object({
   filename: z.string().max(255).default("import.csv"),
