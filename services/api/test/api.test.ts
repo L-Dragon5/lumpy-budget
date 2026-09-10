@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { allowedOrigin, api, corsHeaders, del, post, put, raw, resetDb, sql } from "./setup";
+import { matchManual } from "@lumpy/csv-import";
 
 const semiMonthly = {
   name: "Day job", amount_cents: 300000, frequency: "semimonthly",
@@ -1961,5 +1962,156 @@ describe("splitting a charge", () => {
     // A part's identity is "which part of charge N", not date+amount+merchant,
     // so re-apportioning it must not move it into the statement key space.
     expect(edited.body.dedupe_hash).toBe(before);
+  });
+});
+
+describe("a split charge and the statement that posts it", () => {
+  beforeEach(() => resetDb());
+
+  const mapping = {
+    date_column: "Date", amount_column: "Amount", debit_column: null, credit_column: null,
+    merchant_column: "Merchant", description_column: null, date_format: "auto" as const,
+    flip_sign: false, skip_rows: 0,
+  };
+
+  /** Typed by hand, then split -- the order a person actually does it in. */
+  const typedAndSplit = async (txn_date: string) => {
+    const groceries = await post("/api/categories", { name: "Groceries", bucket: "discretionary", icon: "cart", color: null });
+    const home = await post("/api/categories", { name: "Home", bucket: "discretionary", icon: "home", color: null });
+    const typed = await post("/api/expenses", {
+      txn_date, amount_cents: 18000, merchant: "Costco", description: "big run", category_id: null, source: "manual",
+    });
+    const split = await post(`/api/expenses/${typed.body.id}/split`, {
+      parts: [
+        { amount_cents: 12000, category_id: groceries.body.id, description: "" },
+        { amount_cents: 6000, category_id: home.body.id, description: "shelving" },
+      ],
+    });
+    expect(split.status).toBe(201);
+    return { typed: typed.body, parts: split.body as { id: number; amount_cents: number; dedupe_hash: string }[], groceries: groceries.body.id, home: home.body.id };
+  };
+
+  test("the wizard is offered the charge you typed, never one of its parts", async () => {
+    const { typed, parts } = await typedAndSplit("2026-03-02");
+    const plain = await post("/api/expenses", {
+      txn_date: "2026-03-04", amount_cents: 650, merchant: "Corner Coffee", description: "", category_id: null, source: "manual",
+    });
+    // Outside the window, and a row a statement already owns: neither is a candidate.
+    await post("/api/expenses", {
+      txn_date: "2026-04-20", amount_cents: 999, merchant: "Later", description: "", category_id: null, source: "manual",
+    });
+    await post("/api/import", {
+      filename: "old.csv", profile_id: null,
+      rows: [{ txn_date: "2026-03-03", amount_cents: 4321, merchant: "IMPORTED", description: "", category_id: null, source: "import" }],
+    });
+
+    const res = await api("/api/expenses/merge-candidates?start=2026-02-26&end=2026-03-08");
+    expect(res.status).toBe(200);
+    const ids = (res.body as { id: number }[]).map((e) => e.id).sort((a, b) => a - b);
+    // The split charge is hidden from every other read, and it is the one row a
+    // statement can actually be: the bank posts $180, not $120 and $60.
+    expect(ids).toEqual([typed.id, plain.body.id].sort((a, b) => a - b));
+    expect(ids).not.toContain(parts[0]!.id);
+    expect(ids).not.toContain(parts[1]!.id);
+  });
+
+  test("a typed charge that was split still merges with the row the bank posts", async () => {
+    const { typed, parts, groceries, home } = await typedAndSplit("2026-03-02");
+    const hashesBefore = parts.map((p) => p.dedupe_hash).sort();
+    const card = await post("/api/import-profiles", { name: "Card", mapping, cash_account: false });
+    const file = {
+      filename: "card.csv", profile_id: card.body.id,
+      rows: [{ txn_date: "2026-03-03", amount_cents: 18000, merchant: "COSTCO WHSE #0123", description: "", category_id: null, source: "import" as const }],
+    };
+
+    // What the wizard does: propose from the candidates read, then post the pair.
+    const candidates = (await api("/api/expenses/merge-candidates?start=2026-02-26&end=2026-03-08")).body;
+    const proposed = matchManual(candidates, file.rows);
+    expect(proposed.map(({ manual_id, row_index }) => ({ manual_id, row_index }))).toEqual([{ manual_id: typed.id, row_index: 0 }]);
+
+    const merged = await post("/api/import", { ...file, absorb: [{ manual_id: typed.id, row_index: 0 }] });
+    expect(merged.body).toMatchObject({ row_count: 1, inserted: 1, absorbed: 1, skipped: 0 });
+
+    // The parts are what every read sees, and they are now the statement's: its
+    // date, its merchant, its batch -- and still their own category and note.
+    const listed = (await api("/api/expenses")).body as Record<string, unknown>[];
+    expect(listed).toHaveLength(2);
+    for (const p of listed) {
+      expect(p).toMatchObject({
+        parent_id: typed.id, txn_date: "2026-03-03", merchant: "COSTCO WHSE #0123",
+        source: "import", import_batch_id: merged.body.batch_id,
+      });
+    }
+    expect(listed.map((p) => [p.amount_cents, p.category_id, p.description]).sort()).toEqual(
+      [[12000, groceries, "big run"], [6000, home, "shelving"]].sort(),
+    );
+
+    // Counted once: the $180 the bank charged, not $180 beside $120 and $60.
+    const total = async () => (await api("/api/reports?start=2026-03-01&end=2026-03-31")).body.totals.total;
+    expect(await total()).toBe(18000);
+
+    // A part's identity did not move, and nothing in the table shares a hash.
+    const stored = (await sql.unsafe("SELECT id, dedupe_hash FROM expenses")) as { id: number; dedupe_hash: string }[];
+    expect(new Set(stored.map((r) => r.dedupe_hash)).size).toBe(3);
+    expect(stored.filter((r) => r.id !== typed.id).map((r) => r.dedupe_hash).sort()).toEqual(hashesBefore);
+
+    // And the parent now holds the statement's hash, so the same file is a no-op.
+    const again = await post("/api/import", file);
+    expect(again.body).toMatchObject({ inserted: 0, absorbed: 0, skipped: 1 });
+    expect((await api("/api/expenses")).body).toHaveLength(2);
+    expect(await total()).toBe(18000);
+  });
+
+  test("deleting the import takes the whole family with it", async () => {
+    const { typed } = await typedAndSplit("2026-03-02");
+    const merged = await post("/api/import", {
+      filename: "s.csv", profile_id: null,
+      rows: [{ txn_date: "2026-03-03", amount_cents: 18000, merchant: "COSTCO WHSE #0123", description: "", category_id: null, source: "import" }],
+      absorb: [{ manual_id: typed.id, row_index: 0 }],
+    });
+    expect(merged.body.absorbed).toBe(1);
+
+    expect((await del(`/api/import-batches/${merged.body.batch_id}`)).status).toBe(200);
+    // Asked of the table, not the list: the list would hide a parent left behind.
+    expect(await sql.unsafe("SELECT id FROM expenses")).toHaveLength(0);
+  });
+
+  test("the parts of a merged card charge are not money out of checking", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    await put("/api/settings", { name: "checking_balance_cents", value: "180000" });
+    const { typed } = await typedAndSplit(today);
+    const card = await post("/api/import-profiles", { name: "Airline Card", mapping, cash_account: false });
+    const merged = await post("/api/import", {
+      filename: "card.csv", profile_id: card.body.id,
+      rows: [{ txn_date: today, amount_cents: 18000, merchant: "COSTCO WHSE #0123", description: "", category_id: null, source: "import" }],
+      absorb: [{ manual_id: typed.id, row_index: 0 }],
+    });
+    expect(merged.body.absorbed).toBe(1);
+
+    // `nonCashBatchIds` reads the batch. Parts left batchless would be charged
+    // against the checking balance -- $180 of card spending read as cash gone.
+    const cash = await api("/api/cash-position");
+    expect(cash.body.spent_since_cents).toBe(0);
+    expect(cash.body.spent_since_count).toBe(0);
+  });
+
+  test("a part is refused as a merge target, and the statement row lands on its own", async () => {
+    const { parts } = await typedAndSplit("2026-03-02");
+    const shelving = parts.find((p) => p.amount_cents === 6000)!;
+    // A $60 charge somewhere else the next day. The amounts match to the cent,
+    // which is all a proposal needs, but a part is a share of a charge the bank
+    // posted whole: it can never be the row a statement is describing.
+    const res = await post("/api/import", {
+      filename: "s.csv", profile_id: null,
+      rows: [{ txn_date: "2026-03-03", amount_cents: 6000, merchant: "IKEA 0042", description: "", category_id: null, source: "import" }],
+      absorb: [{ manual_id: shelving.id, row_index: 0 }],
+    });
+    expect(res.body).toMatchObject({ inserted: 1, absorbed: 0, skipped: 0 });
+
+    const after = (await api(`/api/expenses/${shelving.id}`)).body;
+    expect(after).toMatchObject({
+      merchant: "Costco", txn_date: "2026-03-02", import_batch_id: null, dedupe_hash: shelving.dedupe_hash,
+    });
+    expect((await api("/api/expenses")).body).toHaveLength(3);
   });
 });

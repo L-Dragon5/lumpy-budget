@@ -42,6 +42,19 @@ const expenses = new Elysia({ name: "expenses" })
     },
     { query: expenseQuery, response: z.array(expense) },
   )
+  /**
+   * What the import wizard may pair a statement row with; see
+   * `store.mergeCandidates` for why this is not a flag on the list above.
+   *
+   * Elysia matches this static segment ahead of the `:id` param wherever it is
+   * registered -- moved below `/expenses/:id`, its test still passes -- so the
+   * placement here is for the reader: it is a list, so it sits by the list.
+   */
+  .get(
+    "/expenses/merge-candidates",
+    ({ query }) => store.mergeCandidates(query.start, query.end),
+    { query: z.object({ start: isoDate, end: isoDate }), response: z.array(expense) },
+  )
   .get("/expenses/:id", async ({ params }) => (await byId<Expense>("expenses", params.id)) ?? notFound(), {
     params: idParam,
     response: { 200: expense, 404: errorBody },

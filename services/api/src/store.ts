@@ -29,6 +29,41 @@ export const expensesBetween = (start: string, end: string) =>
   rows<Expense>("expenses", `txn_date BETWEEN ? AND ? AND ${NOT_SPLIT_PARENT}`, [start, end]);
 
 /**
+ * A row a statement row is allowed to absorb: typed by hand, and not a part of
+ * a split.
+ *
+ * A split charge itself qualifies, although every other read hides it. It is
+ * the one row that can be what the bank posts -- the bank charged $180, not $120
+ * and $60 -- and if it could not be merged, a charge typed in and split before
+ * its statement arrived would land a second time beside its own parts.
+ *
+ * A part never qualifies, for the mirror reason: it is a share of a charge the
+ * bank posted whole, so a statement row that matches its amount is some other
+ * charge. Merging one would rewrite the part into that charge and leave the
+ * split no longer adding up.
+ *
+ * One string, read by both halves: `mergeCandidates` proposes with it and
+ * `absorbManual` re-checks with it, so the wizard can never be offered a pair
+ * the server would refuse, or refused one it was offered.
+ */
+const MERGE_TARGET = "source = 'manual' AND parent_id IS NULL";
+
+/**
+ * What the import wizard pairs statement rows against.
+ *
+ * Its own read rather than a flag on the `/expenses` list: that list is what
+ * every page totals, and a parameter that puts a split charge back beside its
+ * parts is the double count this whole feature exists to prevent, one query
+ * string away. This read answers a narrower question and cannot be totalled by
+ * accident.
+ *
+ * ponytail: no limit. It is hand-typed rows inside one statement's dates plus
+ * the match window, which is tens of rows, not thousands.
+ */
+export const mergeCandidates = (start: string, end: string) =>
+  rows<Expense>("expenses", `txn_date BETWEEN ? AND ? AND ${MERGE_TARGET}`, [start, end]);
+
+/**
  * Import batches whose format is not the checking account -- a credit card.
  *
  * The cash position is the only reader. A card purchase is spending on the day it
@@ -124,15 +159,25 @@ export type ImportResult = {
  * against the checking balance every month from then on -- silently, and in the
  * one report that exists to be trusted.
  *
- * A pair naming a row that is gone, one that is not hand-entered, or one the two
- * dates and amounts do not actually allow is dropped, and its statement row
- * inserts normally. Dropping the row instead would short a transaction the bank
+ * A pair naming a row that is gone, one that is not hand-entered, one that is a
+ * part of a split, or one the two dates and amounts do not actually allow is
+ * dropped, and its statement row inserts normally. Dropping the row instead would short a transaction the bank
  * really charged, which is the only outcome here that cannot be noticed later.
  *
  * `matchable` is re-asked here rather than taken on trust. The wizard proposes
  * with it and a person confirms, but what arrives is a request, and a request
  * that merged two unrelated rows would delete one of them with nothing left to
- * say it happened.
+ * say it happened. `MERGE_TARGET` is re-asked for the same reason: a part of a
+ * split is refused however the request names it.
+ *
+ * A charge typed in and split before its statement arrived merges like any
+ * other, and its parts come along: they take the statement's date, merchant,
+ * source and batch, and keep their own amounts, categories, notes and hashes.
+ * The batch is the part that matters. The parts are what every read counts, so
+ * they are what `nonCashBatchIds` has to recognise as a card charge, and what
+ * deleting the import has to take. Their hashes are `splitDedupeKey(parent, i)`,
+ * which does not depend on the date or merchant that just changed, so they stay
+ * unique and a re-import of this file still collides with the parent alone.
  *
  * ponytail: one UPDATE per pair. A month of statements produces a handful, and
  * batching them into a CASE expression would trade a readable statement for
@@ -167,7 +212,7 @@ async function absorbManual(
     // Date and `matchable` would slice a string off an object.
     `SELECT id, DATE_FORMAT(txn_date, '%Y-%m-%d') AS txn_date, amount_cents, description
        FROM expenses
-      WHERE source = 'manual' AND id IN (${ids.map(() => "?").join(", ")})`,
+      WHERE ${MERGE_TARGET} AND id IN (${ids.map(() => "?").join(", ")})`,
     ids,
   )) as { id: number; txn_date: string; amount_cents: number; description: string }[];
   const mine = new Map(found.map((r) => [r.id, r]));
@@ -183,12 +228,19 @@ async function absorbManual(
       `UPDATE expenses
           SET txn_date = ?, amount_cents = ?, merchant = ?, description = ?, source = ?,
               import_batch_id = ?, dedupe_hash = ?, category_id = COALESCE(category_id, ?)
-        WHERE id = ? AND source = 'manual'`,
+        WHERE id = ? AND ${MERGE_TARGET}`,
       // Everything the person put there wins over a blank on the statement, the
       // same way COALESCE keeps the category they chose. A statement's memo
       // column is usually empty, and "flat white, met Sam" is not recoverable.
       [r.txn_date, r.amount_cents, r.merchant, r.description || typed.description, r.source ?? "import",
        batchId, hash(keys[p.row_index]!), r.category_id, p.manual_id],
+    );
+    // Its parts, if it was split; a no-op for the charges that were not. Only
+    // what describes the charge moves: each part's amount, category and note
+    // are the split somebody made, and its hash is which part it is.
+    await tx.unsafe(
+      "UPDATE expenses SET txn_date = ?, merchant = ?, source = ?, import_batch_id = ? WHERE parent_id = ?",
+      [r.txn_date, r.merchant, r.source ?? "import", batchId, p.manual_id],
     );
   }
   return merged;

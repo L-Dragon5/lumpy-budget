@@ -315,6 +315,15 @@ A part's identity is which part it is, not its date and amount, so a $120 part o
 a $180 charge can never make a genuine $120 charge at that shop that day look
 like a duplicate.
 
+A charge you typed in and split before the statement arrived still merges with
+the row the bank posts, because the importer pairs the statement with the charge
+you typed, not with its parts. The bank posted $180, not $120 and $60. The parts
+take the statement's date, merchant and batch and keep their own amounts and
+categories, so the month counts the charge once and deleting the import takes
+the whole charge with it. A part is never offered as a match and the server
+refuses one: a $60 statement row that happens to match a $60 part is some other
+charge.
+
 ## How the pieces work
 
 **Pay schedules.** Weekly, every two weeks, twice a month, monthly and annual

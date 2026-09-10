@@ -184,9 +184,21 @@ Four places, in this order, or reads silently drop it:
   statement is still a no-op, and `NOT_SPLIT_PARENT` in `api/src/store.ts` is
   what keeps it out of `expensesBetween` and the `/expenses` list -- the two
   reads every report funnels through. There is no `split` column: a parent is a
-  row that has children, asked directly, so the flag cannot drift. `cardBalances`
-  is the one query that does not go through either read path and carries the
-  predicate written out against its own alias.
+  row that has children, asked directly, so the flag cannot drift. Any query that
+  reads expenses outside those two paths has to carry the predicate itself,
+  written out against its own alias. `cardBalances` (the card-balance plan) is
+  one; it is not on this branch, and the predicate is applied to it at merge
+  time.
+- **The import wizard proposes from `/expenses/merge-candidates`, not from the
+  list.** `MERGE_TARGET` in `api/src/store.ts` (`source = 'manual' AND parent_id
+  IS NULL`) is read by both that route and `absorbManual`, so the proposal and
+  the server's re-check are one definition. A split charge is a candidate even
+  though every other read hides it -- the bank posts the whole charge, and
+  without the merge it lands again beside its parts -- and a part never is. A
+  merged split charge carries the statement's date, merchant, source and batch
+  down to its parts, because the parts are what `nonCashBatchIds` and deleting
+  the import actually see. It is a separate route rather than a flag on
+  `/expenses` so the list every page totals has no way to return a parent.
 - **A split part is hashed with `splitDedupeKey(parentId, index)`, not
   `dedupeKey`.** A part carries the parent's date and merchant with a fraction of
   its amount, so an ordinary hash would sit in the key space a statement row can
