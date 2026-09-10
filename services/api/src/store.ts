@@ -43,6 +43,12 @@ export async function nonCashBatchIds(): Promise<Set<number>> {
  *
  * Exported and handed to the client in the response, so the string format is
  * written once and the web app never builds it.
+ *
+ * The id is only a safe key while ids are never handed out twice, and two
+ * things do hand them out twice: `bun run reset` TRUNCATEs `import_profiles`,
+ * which starts the counter over, and `restore()` replaces every profile with the
+ * file's. Both forget every key under this prefix on the way past, or the first
+ * card created afterwards opens with a balance somebody typed for another card.
  */
 export const CARD_OPENING_PREFIX = "card_opening_balance_cents:";
 export const cardOpeningKey = (profileId: number): string => `${CARD_OPENING_PREFIX}${profileId}`;
@@ -416,11 +422,16 @@ const RESTORE_ORDER = [
  *
  * `settings` is upserted rather than replaced: it is a key/value table shared
  * with future migrations, and its `updated_at` only moves when a value really
- * changes -- which is what the lumpy-drift window reads.
+ * changes -- which is what the lumpy-drift window reads. The one exception is a
+ * card's opening balance, which is keyed by a profile id: every profile is
+ * about to be replaced, so every key naming one goes with it, and the file's
+ * own keys come back in the upsert below.
  */
 export async function restore(tables: BackupTables): Promise<RestoreResult> {
   const restored: Record<string, number> = {};
   await sql.begin(async (tx: Executor) => {
+    // LEFT rather than LIKE: an underscore in a LIKE pattern is a wildcard.
+    await tx.unsafe("DELETE FROM settings WHERE LEFT(name, CHAR_LENGTH(?)) = ?", [CARD_OPENING_PREFIX, CARD_OPENING_PREFIX]);
     for (let i = RESTORE_ORDER.length - 1; i >= 0; i--) {
       await tx.unsafe(`DELETE FROM \`${RESTORE_ORDER[i]}\``);
     }

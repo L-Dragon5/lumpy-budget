@@ -1811,4 +1811,24 @@ describe("card balances", () => {
       txn_count: 0, last_txn_date: null,
     });
   });
+
+  test("a restore takes the card openings with the cards they belong to", async () => {
+    const kept = await post("/api/import-profiles", { name: "Airline Card", mapping, cash_account: false });
+    const other = await post("/api/import-profiles", { name: "Store Card", mapping, cash_account: false });
+    await put("/api/settings", { name: `card_opening_balance_cents:${kept.body.id}`, value: "12300" });
+    const file = (await api("/api/export")).body;
+
+    // Typed after the backup was taken, so the file knows nothing about it. The
+    // restore puts profile ids back exactly as they were exported, and a key
+    // left behind here would be read as the opening balance of whichever card
+    // the file says owns that id.
+    await put("/api/settings", { name: `card_opening_balance_cents:${other.body.id}`, value: "45000" });
+    expect((await post("/api/restore", file)).status).toBe(200);
+
+    const byName = Object.fromEntries(
+      ((await api("/api/card-balances")).body as { name: string; opening_cents: number }[])
+        .map((c) => [c.name, c.opening_cents]),
+    );
+    expect(byName).toEqual({ "Airline Card": 12300, "Store Card": 0 });
+  });
 });

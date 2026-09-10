@@ -34,6 +34,16 @@ export const wipeOrder = (): string[] => Object.keys(TABLES);
 export const ZEROED_SETTINGS = ["lumpy_opening_balance_cents", "checking_balance_cents"];
 
 /**
+ * Settings keyed by a row id, deleted rather than zeroed. A card's opening
+ * balance is `card_opening_balance_cents:<profile id>` (`cardOpeningKey` in
+ * services/api/src/store.ts), and the TRUNCATE below starts those ids over: a key
+ * left behind would be read as the opening balance of the first card created
+ * after the reset, a number nobody typed for it. reset.test.ts holds this string
+ * to the store's.
+ */
+export const DELETED_SETTING_PREFIXES = ["card_opening_balance_cents:"];
+
+/**
  * Refuses any database whose name ends in `_test`. The API suite migrates and
  * truncates `lumpy_budget_test` on every test, so a `--yes` typed against the
  * wrong DATABASE_URL would race a running suite rather than do anything useful.
@@ -69,6 +79,10 @@ export async function wipe(): Promise<void> {
     `UPDATE settings SET value = '0' WHERE name IN (${ZEROED_SETTINGS.map(() => "?").join(", ")})`,
     ZEROED_SETTINGS,
   );
+  // LEFT rather than LIKE: an underscore in a LIKE pattern is a wildcard.
+  for (const prefix of DELETED_SETTING_PREFIXES) {
+    await sql.unsafe("DELETE FROM settings WHERE LEFT(name, CHAR_LENGTH(?)) = ?", [prefix, prefix]);
+  }
 }
 
 if (import.meta.main) {
@@ -114,6 +128,6 @@ if (import.meta.main) {
       ? `re-seeded ${after.categories} categories and ${after.category_rules} merchant rules`
       : `re-seeded ${after.categories} categories, no rules (--no-rules)`,
   );
-  console.log("hand-kept balances zeroed; everything else is empty");
+  console.log("hand-kept balances zeroed, card opening balances deleted; everything else is empty");
   await sql.end();
 }
