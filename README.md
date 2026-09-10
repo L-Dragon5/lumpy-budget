@@ -451,6 +451,13 @@ bank is one click. Categorization runs on merchant keyword rules, lowest
 priority number first; anything unmatched lands in a review queue on the
 expenses page.
 
+Because the first match wins, a broad rule in front of a specific one makes the
+specific one dead code, and nothing used to say so: `amazon` at priority 100
+means `amazon fresh` at 150 never runs, and every grocery order lands in
+Shopping. Settings -> Rules names every rule that can never fire and the rule
+taking its traffic. A shadow inside one category is listed too and marked as
+such: the answer is still right, the row is just never used.
+
 A rule is a case-insensitive substring by default. Turn on **match as a whole
 word** and it needs a non-letter on each side, so `bp` finds `BP #4021` and
 `BP1234` and passes over `BPOST`. A letter boundary rather than a word boundary
