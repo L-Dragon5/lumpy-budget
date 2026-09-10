@@ -33,6 +33,18 @@ export const categoryIndex = (categories: Category[]): Map<number, Category> =>
 export const inWindow = (e: { txn_date: ISODate }, start: ISODate, end: ISODate): boolean =>
   d.compare(e.txn_date, start) >= 0 && d.compare(e.txn_date, end) <= 0;
 
+/**
+ * The buckets that are spending. `transfer` is money moving between your own
+ * accounts -- a card payment is one, and the charges it pays are already
+ * counted where they happened -- and `income` is money arriving. Neither is
+ * spending, so neither is in a total or in the report's "all".
+ */
+export const SPENDING: readonly Bucket[] = ["discretionary", "fixed", "lumpy", "savings"];
+
+/** A named bucket is that bucket; "all" is every spending bucket. */
+const inBucket = (want: Bucket | "all", b: Bucket): boolean =>
+  want === "all" ? SPENDING.includes(b) : b === want;
+
 export type BucketTotals = Record<Bucket, Cents> & { total: Cents };
 
 export function totalsByBucket(expenses: Expense[], categories: Category[]): BucketTotals {
@@ -47,8 +59,9 @@ export function totalsByBucket(expenses: Expense[], categories: Category[]): Buc
     total: 0,
   };
   for (const e of expenses) {
-    out[bucketOf(e, byId)] += e.amount_cents;
-    out.total += e.amount_cents;
+    const b = bucketOf(e, byId);
+    out[b] += e.amount_cents;
+    if (SPENDING.includes(b)) out.total += e.amount_cents;
   }
   return out;
 }
@@ -72,7 +85,7 @@ export function breakdown(
   const byId = categoryIndex(categories);
   const want = opts.bucket ?? "all";
   const rows = expenses.filter(
-    (e) => inWindow(e, opts.start, opts.end) && (want === "all" || bucketOf(e, byId) === want),
+    (e) => inWindow(e, opts.start, opts.end) && inBucket(want, bucketOf(e, byId)),
   );
 
   const acc = new Map<string, CategorySlice>();
@@ -123,7 +136,7 @@ export function series(
   const byId = categoryIndex(categories);
   const want = opts.bucket ?? "all";
   const rows = expenses.filter(
-    (e) => inWindow(e, opts.start, opts.end) && (want === "all" || bucketOf(e, byId) === want),
+    (e) => inWindow(e, opts.start, opts.end) && inBucket(want, bucketOf(e, byId)),
   );
 
   const points = new Map<string, SeriesPoint>();
@@ -230,7 +243,7 @@ export function categoryPace(
   const byId = categoryIndex(categories);
   const n = Math.max(1, opts.months ?? 3);
 
-  const wanted = expenses.filter((e) => want === "all" || bucketOf(e, byId) === want);
+  const wanted = expenses.filter((e) => inBucket(want, bucketOf(e, byId)));
   // Imported months are decided by every transaction, not only the wanted bucket:
   // a month whose statement holds nothing but rent was still imported.
   const importedMonths = new Set(expenses.map((e) => d.monthOf(e.txn_date)));

@@ -209,6 +209,15 @@ Four places, in this order, or reads silently drop it:
 - **Only discretionary spending subtracts from available.** Fixed / lumpy /
   savings transactions are reconciliation; counting them twice is the bug this
   app exists to avoid.
+- **`total` and the report's `"all"` are `SPENDING`, not every row.**
+  `SPENDING` in `budget-core/src/reports.ts` is discretionary, fixed, lumpy and
+  savings. A `transfer` is money between your own accounts (a card payment's
+  charges are already counted where they happened) and `income` is money
+  arriving, so neither is spending. Summed over every row, a month with a
+  paycheck in it "spent" less than nothing. The buckets still carry every row,
+  so asking for `transfer` or `income` by name still gets them. The scenario
+  lane checks `spent.total` equals the four buckets every run, and `joe.json`
+  carries a paycheck and a card payment so that check can fail.
 - **`bucketOf` reads the amount, not just the category.** An uncategorized
   charge is discretionary because over-reporting spending is the safe error; an
   uncategorized *credit* inverts that argument, so it is `transfer` and neutral.

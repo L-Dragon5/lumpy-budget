@@ -278,6 +278,20 @@
       "bucket": "savings",
       "color": null,
       "icon": "piggy-bank"
+    },
+    {
+      "id": 6,
+      "name": "Income",
+      "bucket": "income",
+      "color": null,
+      "icon": "wallet"
+    },
+    {
+      "id": 7,
+      "name": "Card Payment",
+      "bucket": "transfer",
+      "color": null,
+      "icon": "credit-card"
     }
   ],
   "expenses": [
@@ -379,6 +393,28 @@
       "source": "import",
       "import_batch_id": null,
       "dedupe_hash": "a9"
+    },
+    {
+      "id": 10,
+      "txn_date": "2026-03-13",
+      "amount_cents": -310000,
+      "merchant": "ACME CORP PAYROLL",
+      "description": "",
+      "category_id": 6,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "a10"
+    },
+    {
+      "id": 11,
+      "txn_date": "2026-03-20",
+      "amount_cents": 45000,
+      "merchant": "CHASE CARD AUTOPAY",
+      "description": "",
+      "category_id": 7,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "a11"
     }
   ]
 }

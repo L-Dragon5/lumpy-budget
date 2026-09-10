@@ -22,7 +22,7 @@ import { CategoryIcon } from "@/lib/icons";
 const OTHER = "Other";
 const BUCKETS: { value: Bucket | "all"; label: string }[] = [
   { value: "discretionary", label: "Discretionary" },
-  { value: "all", label: "Everything" },
+  { value: "all", label: "All spending" },
   { value: "fixed", label: "Fixed bills" },
   { value: "lumpy", label: "Lumpy fund" },
   { value: "savings", label: "Savings" },
@@ -157,7 +157,7 @@ export default function Reports() {
             Savings <Money cents={totals.savings} className="font-medium text-foreground" />
           </span>
           <span>
-            Everything <Money cents={totals.total} className="font-medium text-foreground" />
+            All spending <Money cents={totals.total} className="font-medium text-foreground" />
           </span>
         </div>
       ) : null}

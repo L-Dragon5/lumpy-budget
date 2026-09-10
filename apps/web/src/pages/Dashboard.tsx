@@ -152,7 +152,7 @@ export default function Dashboard() {
             }
           />
           <StatTile label="Savings" cents={s.savings_cents} tone="muted" caption={s.savings_breakdown.map((g) => g.name).join(", ") || "No goals yet"} />
-          <StatTile label="Spent so far" cents={s.spent.discretionary} tone="muted" caption={`${money(s.spent.total)} across every category`} />
+          <StatTile label="Spent so far" cents={s.spent.discretionary} tone="muted" caption={`${money(s.spent.total)} across all spending`} />
           <StatTile label="Planned free cash" cents={s.planned_free_cents} tone={s.planned_free_cents < 0 ? "critical" : "neutral"} caption="Before any spending." />
         </div>
       </AnimatedContent>

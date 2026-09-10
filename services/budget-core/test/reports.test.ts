@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { category, expense } from "../fixtures/factories";
 import {
-  breakdown, bucketOf, categoryIndex, categoryPace, median, series, totalsByBucket, UNCATEGORIZED,
+  breakdown, bucketOf, categoryIndex, categoryPace, median, series, SPENDING, totalsByBucket, UNCATEGORIZED,
 } from "../src/reports";
 
 const groceries = category({ name: "Groceries", bucket: "discretionary", color: "#4f46e5" });
@@ -189,6 +189,37 @@ test("an uncategorized credit does not inflate what is available to spend", () =
   expect(totals.discretionary).toBe(4200);
   expect(totals.transfer).toBe(-240000);
   expect(totals.income).toBe(0);
+});
+
+test("the total is spending: a paycheck does not reduce it and a card payment does not add to it", () => {
+  const payment = category({ name: "Card payment", bucket: "transfer" });
+  const all = [...cats, income, payment];
+  const month = [
+    expense({ txn_date: "2026-01-05", amount_cents: 12000, category_id: groceries.id }),
+    expense({ txn_date: "2026-01-01", amount_cents: 150000, category_id: rent.id }),
+    expense({ txn_date: "2026-01-15", amount_cents: -240000, category_id: income.id }),
+    expense({ txn_date: "2026-01-20", amount_cents: 12000, category_id: payment.id }),
+    expense({ txn_date: "2026-01-22", amount_cents: -5000, category_id: null }),
+  ];
+
+  const t = totalsByBucket(month, all);
+  // The buckets still carry every row, so the Transfers view has its numbers...
+  expect(t.income).toBe(-240000);
+  expect(t.transfer).toBe(12000 - 5000);
+  // ...but the total is only what was spent. Summed over every row it read
+  // -$830, a month that "spent" less than nothing because a paycheck landed.
+  expect(t.total).toBe(12000 + 150000);
+  expect(t.total).toBe(SPENDING.reduce((a, b) => a + t[b], 0));
+
+  // "Everything" in the report is the same four buckets, row for row.
+  const b = breakdown(month, all, { start: "2026-01-01", end: "2026-01-31", bucket: "all" });
+  expect(b.total_cents).toBe(t.total);
+  expect(b.slices.map((s) => s.name)).toEqual(["Rent", "Groceries"]);
+  const s = series(month, { granularity: "month", start: "2026-01-01", end: "2026-01-31", bucket: "all" }, all);
+  expect(s[0]!.amount_cents).toBe(t.total);
+
+  // Asking for a bucket by name still gets it.
+  expect(breakdown(month, all, { start: "2026-01-01", end: "2026-01-31", bucket: "income" }).total_cents).toBe(-240000);
 });
 
 test("a deposit in an income category lands in the income bucket", () => {

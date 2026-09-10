@@ -514,6 +514,13 @@ describe("computed endpoints", () => {
     expect(res.body.spent.income).toBe(-300000);
     expect(res.body.spent.transfer).toBe(-300000);
     expect(res.body.available_cents).toBe(562000 - 25000);
+    // Nor does it make the month look like it spent less. The dashboard's "across
+    // all spending" and the report's "All spending" read these; summed over every
+    // row they said -$5,750 for a month that spent $250.
+    expect(res.body.spent.total).toBe(25000);
+    const report = (await api("/api/reports?start=2026-03-01&end=2026-03-31")).body;
+    expect(report.totals.total).toBe(25000);
+    expect(report.breakdown.total_cents).toBe(25000);
   });
 
   test("the allocation names which paycheck holds which bill", async () => {

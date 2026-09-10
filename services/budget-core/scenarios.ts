@@ -215,6 +215,10 @@ function checkInvariants(s: core.MonthSummary, f: core.Forecast): string[] {
   const total = heldOnce.size + s.unfunded.length;
   if (total !== new Set(s.paychecks.flatMap((p) => p.holds.map((h) => h.fixed_cost_id))).size + s.unfunded.length)
     problems.push("a bill was assigned more than once");
+  // "Spent" is the spending buckets and nothing else: a paycheck or a card
+  // payment in the total is money counted as spending that never was.
+  const spending = core.SPENDING.reduce((a, b) => a + s.spent[b], 0);
+  if (s.spent.total !== spending) problems.push(`spent total ${s.spent.total} != spending buckets ${spending}`);
   for (const p of s.periods) {
     const expected = p.planned_free_cents - p.spent_discretionary_cents;
     if (p.available_cents !== expected) problems.push(`period ${p.start} available is inconsistent`);
