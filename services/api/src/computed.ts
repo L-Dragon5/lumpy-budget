@@ -19,7 +19,7 @@ const clamp = (v: number | undefined, fallback: number, lo: number, hi: number) 
   v === undefined || Number.isNaN(v) ? fallback : Math.min(hi, Math.max(lo, v));
 const num = z.coerce.number().int().optional();
 
-const bucketQuery = z.enum(["discretionary", "fixed", "lumpy", "savings", "transfer", "all"]).optional();
+const bucketQuery = z.enum(["discretionary", "fixed", "lumpy", "savings", "transfer", "income", "all"]).optional();
 
 const settingInput = z.object({ name: z.string().min(1).max(60), value: z.string().max(500) });
 
@@ -275,11 +275,19 @@ export const computed = new Elysia({ prefix: "/api" })
     // Everything except a charge imported from a credit card statement, which is
     // money owed rather than money gone: it leaves checking on the day the card
     // is paid, and that payment is its own row on the bank statement.
-    const spent = since.filter(
-      (e) =>
-        core.bucketOf(e, byId) !== "transfer" &&
-        !(e.import_batch_id !== null && cardBatches.has(e.import_batch_id)),
-    );
+    //
+    // And never a deposit. This is money *spent* since, the number that says a
+    // hand-kept balance has gone stale; a paycheck netted into it would hide the
+    // warning on exactly the day the balance moved most. Deposits sat under
+    // `transfer` until migration 013 gave them `income`, so both are named.
+    const spent = since.filter((e) => {
+      const bucket = core.bucketOf(e, byId);
+      return (
+        bucket !== "transfer" &&
+        bucket !== "income" &&
+        !(e.import_batch_id !== null && cardBatches.has(e.import_batch_id))
+      );
+    });
 
     return {
       set_at: row?.updated_at ?? null,

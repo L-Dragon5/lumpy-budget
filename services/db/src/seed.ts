@@ -6,7 +6,7 @@ import { insert, rows, sql } from "./client";
  * Idempotent: re-running only fills in what is missing. Colors stay null so the
  * chart palette owns them until the user picks one.
  */
-type Bucket = "discretionary" | "fixed" | "lumpy" | "savings" | "transfer";
+type Bucket = "discretionary" | "fixed" | "lumpy" | "savings" | "transfer" | "income";
 const CATEGORIES: [name: string, bucket: Bucket, icon: string][] = [
   ["Groceries", "discretionary", "cart"],
   ["Dining", "discretionary", "utensils"],
@@ -31,7 +31,7 @@ const CATEGORIES: [name: string, bucket: Bucket, icon: string][] = [
   ["Taxes & Fees", "lumpy", "landmark"],
   ["Savings Transfer", "savings", "piggy-bank"],
   ["Credit Card Payment", "transfer", "credit-card"],
-  ["Income", "transfer", "banknote"],
+  ["Income", "income", "banknote"],
 ];
 
 /**
@@ -73,7 +73,10 @@ const RULES: [pattern: string, category: string, priority?: number][] = [
   ["at&t", "Internet & Phone"], ["t-mobile", "Internet & Phone"], ["spectrum", "Internet & Phone"],
   ["payment thank you", "Credit Card Payment", 10], ["autopay", "Credit Card Payment", 10],
   ["online transfer to sav", "Savings Transfer", 10],
-  ["payroll", "Income", 10], ["direct dep", "Income", 10],
+  // Deposits. Guesses like every other rule here, and the ones most worth
+  // getting right: an uncategorized credit is the one row that can move a
+  // number in the direction this app must never guess in.
+  ["payroll", "Income", 10], ["direct dep", "Income", 10], ["dir dep", "Income", 10],
 ];
 
 /**

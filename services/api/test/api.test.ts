@@ -125,6 +125,18 @@ describe("crud", () => {
     });
     expect(res.body.percent).toBe(7.5);
   });
+
+  test("a category can be created in the income bucket", async () => {
+    const created = await post("/api/categories", {
+      name: "Paychecks", bucket: "income", icon: "banknote", color: null,
+    });
+    expect(created.status).toBe(201);
+    expect(created.body.bucket).toBe("income");
+
+    // The proof the ENUM migration landed: MySQL rejects an unlisted value, so a
+    // zod schema that allows it and a column that does not would fail right here.
+    expect((await api(`/api/categories/${created.body.id}`)).body.bucket).toBe("income");
+  });
 });
 
 describe("expenses and import", () => {
@@ -1518,6 +1530,29 @@ describe("cash position", () => {
     const res = await api("/api/cash-position");
     expect(res.body.spent_since_cents).toBe(25300);
     expect(res.body.spent_since_count).toBe(2);
+  });
+
+  test("a paycheck landing is not spending recorded since", async () => {
+    // Before migration 013 the seeded Income category was `transfer`, which kept
+    // deposits out of this sum. Moving it to `income` must not let them back in:
+    // a $2,400 credit would net the staleness warning away the day payday lands.
+    await put("/api/settings", { name: "checking_balance_cents", value: "180000" });
+    const cats = (await api("/api/categories")).body as { id: number; name: string; bucket: string }[];
+    const income = cats.find((c) => c.name === "Income")!;
+    expect(income.bucket).toBe("income");
+    const groceries = cats.find((c) => c.bucket === "discretionary")!.id;
+
+    const row = (amount_cents: number, category_id: number | null) =>
+      post("/api/expenses", {
+        txn_date: today(), amount_cents, merchant: "Row", description: "",
+        category_id, source: "manual",
+      });
+    await row(4300, groceries);
+    await row(-240000, income.id);
+
+    const res = await api("/api/cash-position");
+    expect(res.body.spent_since_cents).toBe(4300);
+    expect(res.body.spent_since_count).toBe(1);
   });
 
   test("no balance typed in yet is zero, not a crash", async () => {

@@ -26,6 +26,7 @@ export function totalsByBucket(expenses: Expense[], categories: Category[]): Buc
     lumpy: 0,
     savings: 0,
     transfer: 0,
+    income: 0,
     total: 0,
   };
   for (const e of expenses) {

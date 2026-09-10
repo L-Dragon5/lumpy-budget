@@ -55,7 +55,18 @@ export const CATEGORY_ICONS = [
 export const categoryIconSchema = z.enum(CATEGORY_ICONS);
 export type CategoryIconName = (typeof CATEGORY_ICONS)[number];
 
-export const bucketSchema = z.enum(["discretionary", "fixed", "lumpy", "savings", "transfer"]);
+/**
+ * `income` is money arriving, not money leaving. It exists because an imported
+ * checking statement writes every deposit as a credit -- a negative expense --
+ * and without a bucket of its own a $2,400 paycheck reads as $2,400 of negative
+ * discretionary spending: it inflates what is available, it poisons the
+ * `categoryPace` median, and it quietly credits the checking balance.
+ *
+ * Distinct from `transfer` rather than folded into it. Both are neutral against
+ * what you can spend, but only one is the number `monthlyActual` is predicting,
+ * and matching on a bucket survives somebody renaming the category.
+ */
+export const bucketSchema = z.enum(["discretionary", "fixed", "lumpy", "savings", "transfer", "income"]);
 export type Bucket = z.infer<typeof bucketSchema>;
 
 // ---------------------------------------------------------------- income
