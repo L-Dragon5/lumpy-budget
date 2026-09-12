@@ -18,6 +18,8 @@ const MODE = (v: "steady" | "recommended" | undefined) => v ?? "recommended";
 const clamp = (v: number | undefined, fallback: number, lo: number, hi: number) =>
   v === undefined || Number.isNaN(v) ? fallback : Math.min(hi, Math.max(lo, v));
 const num = z.coerce.number().int().optional();
+/** Same as `num` where the value is a ratio and 1.5 has to survive the trip. */
+const frac = z.coerce.number().optional();
 
 const bucketQuery = z.enum(["discretionary", "fixed", "lumpy", "savings", "transfer", "income", "all"]).optional();
 
@@ -219,13 +221,28 @@ export const computed = new Elysia({ prefix: "/api" })
           today,
           lookbackMonths: months,
           minAmountCents: clamp(query.min_amount_cents, 5000, 0, 100000000),
+          // Defaults reproduce the lumpy question exactly: cycles of two months
+          // and up, amounts within half again of each other. The fixed costs
+          // page asks the other one -- min_cycle_months=1 for bills that arrive
+          // every month, and a looser ratio because a gas and electric bill in
+          // February is nearly double the same bill in June and is still one
+          // bill.
+          minCycleMonths: clamp(query.min_cycle_months, 2, 1, 24),
+          maxAmountRatio: clamp(query.max_amount_ratio, 1.5, 1, 20),
           categories: cats,
           lumpyItems: items,
           fixedCosts: costs,
         }),
       };
     },
-    { query: z.object({ months: num, min_amount_cents: num }) },
+    {
+      query: z.object({
+        months: num,
+        min_amount_cents: num,
+        min_cycle_months: num,
+        max_amount_ratio: frac,
+      }),
+    },
   )
 
   /**

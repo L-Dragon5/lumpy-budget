@@ -58,8 +58,25 @@ export type RecurringOptions = {
   lookbackMonths?: number;
   /** Below this a charge is noise, not a bill worth saving up for. */
   minAmountCents?: Cents;
-  /** Monthly is a fixed cost, not a lumpy item. */
+  /**
+   * Shortest cycle to report. Defaults to 2, because monthly is a fixed cost
+   * and not a lumpy item, and the lumpy page must never propose one.
+   *
+   * Pass 1 to ask the opposite question -- which bills arrive *every* month --
+   * which is what the fixed costs page does. Same grouping, same gap test, one
+   * floor moved.
+   */
   minCycleMonths?: number;
+  /**
+   * How far the amount may swing across the run before the group is read as two
+   * unrelated charges sharing a merchant name. Defaults to 1.5.
+   *
+   * A renewal is the strict case: a premium rises between years, it does not
+   * triple. A monthly utility is the loose one -- gas and electric in February
+   * against gas and electric in June is nearly double, and it is emphatically
+   * one bill. A caller asking for monthly cycles should raise this.
+   */
+  maxAmountRatio?: number;
   categories?: Category[];
   /** Already in the fund: do not suggest what is already tracked. */
   lumpyItems?: LumpyItem[];
@@ -76,7 +93,8 @@ export function recurringCandidates(expenses: Expense[], opts: RecurringOptions)
   const today = d.assertDate(opts.today);
   const lookback = Math.max(1, opts.lookbackMonths ?? 36);
   const minAmount = opts.minAmountCents ?? 5000;
-  const minCycle = Math.max(2, opts.minCycleMonths ?? 2);
+  const minCycle = Math.max(1, opts.minCycleMonths ?? 2);
+  const maxRatio = Math.max(1, opts.maxAmountRatio ?? 1.5);
 
   const start = d.monthStart(d.addMonths(d.monthOf(today), -(lookback - 1)));
   const byId = categoryIndex(opts.categories ?? []);
@@ -140,9 +158,9 @@ export function recurringCandidates(expenses: Expense[], opts: RecurringOptions)
     const amounts = occ.map((o) => o.amount_cents);
     const low = Math.min(...amounts);
     const high = Math.max(...amounts);
-    // A premium can rise between renewals; it does not triple. Beyond half again
-    // it is two unrelated charges wearing one merchant name.
-    if (low <= 0 || high > low * 1.5) continue;
+    // A premium can rise between renewals; it does not triple. Beyond the
+    // caller's tolerance it is two unrelated charges wearing one merchant name.
+    if (low <= 0 || high > low * maxRatio) continue;
 
     const raw = Math.round(mean(gaps));
     const frequency_months = SNAP_TO.find((c) => Math.abs(c - raw) <= 1) ?? raw;

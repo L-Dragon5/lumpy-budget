@@ -83,13 +83,57 @@ test("amounts that disagree are not one recurring bill", () => {
   expect(rows).toHaveLength(0);
 });
 
-test("monthly is a fixed cost, not a lumpy item", () => {
-  const rows = recurringCandidates(
-    ["2025-10-01", "2025-11-01", "2025-12-01", "2026-01-01"].map((txn_date) =>
-      expense({ merchant: "NATIONAL GRID", amount_cents: 21000, txn_date }),
-    ),
-    { today: TODAY },
+const monthly = (merchant: string, amounts: number[]) =>
+  ["2025-10-01", "2025-11-01", "2025-12-01", "2026-01-01"].map((txn_date, i) =>
+    expense({ merchant, amount_cents: amounts[i] ?? amounts[0]!, txn_date }),
   );
+
+test("monthly is a fixed cost, not a lumpy item", () => {
+  const rows = recurringCandidates(monthly("NATIONAL GRID", [21000]), { today: TODAY });
+  expect(rows).toHaveLength(0);
+});
+
+/**
+ * The same grouping asked the other question. The fixed costs page wants the
+ * bills that arrive every month, which is the one shape the default refuses.
+ */
+test("minCycleMonths 1 is how a fixed cost is found", () => {
+  const [row] = recurringCandidates(monthly("NATIONAL GRID", [21000]), {
+    today: TODAY,
+    minCycleMonths: 1,
+  });
+  expect(row?.frequency_months).toBe(1);
+  expect(row?.amount_cents).toBe(21000);
+  // 12 months of it, not a cycle snapped to the nearest quarter.
+  expect(row?.annual_cents).toBe(252000);
+});
+
+/**
+ * A utility is the case the strict ratio was never meant to judge: gas and
+ * electric in February against the same bill in June is nearly double, and it
+ * is one bill. The default still rejects it, so the lumpy page is unchanged.
+ */
+test("a swinging monthly bill needs the ratio raised, and the default still refuses it", () => {
+  const winter = monthly("BALTIMORE GAS AN", [38308, 33000, 25000, 21112]);
+  expect(recurringCandidates(winter, { today: TODAY, minCycleMonths: 1 })).toHaveLength(0);
+
+  const [row] = recurringCandidates(winter, {
+    today: TODAY,
+    minCycleMonths: 1,
+    maxAmountRatio: 3,
+  });
+  expect(row?.name).toBe("BALTIMORE GAS AN");
+  expect(row?.frequency_months).toBe(1);
+  // The most recent charge is what to budget, with the average beside it.
+  expect(row?.amount_cents).toBe(21112);
+  expect(row?.typical_cents).toBe(29355);
+});
+
+test("a raised ratio still separates two charges sharing a merchant name", () => {
+  const rows = recurringCandidates(twice("SOME SHOP", [2000, 90000], ["2024-05-01", "2025-05-01"]), {
+    today: TODAY,
+    maxAmountRatio: 3,
+  });
   expect(rows).toHaveLength(0);
 });
 

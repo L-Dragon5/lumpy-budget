@@ -1555,6 +1555,34 @@ describe("recurring candidates", () => {
     // A twelve-month window cannot hold two sightings of an annual charge.
     expect((await api("/api/recurring-candidates?months=12&min_amount_cents=1000")).body.rows).toHaveLength(0);
   });
+
+  /**
+   * The fixed costs question, which is the same grouping with the two guards
+   * moved: cycles of one month, and an amount allowed to swing the way a gas and
+   * electric bill swings between February and June. Neither default changes, so
+   * the lumpy page keeps seeing exactly what it saw.
+   */
+  test("min_cycle_months finds the monthly bills the default hides", async () => {
+    for (let n = 1; n <= 4; n++) await spend(monthsAgo(n), 39589, "ALLIANT AUTO LOAN");
+    expect((await api("/api/recurring-candidates")).body.rows).toHaveLength(0);
+
+    const rows = (await api("/api/recurring-candidates?min_cycle_months=1")).body.rows;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].frequency_months).toBe(1);
+    expect(rows[0].annual_cents).toBe(475068);
+  });
+
+  test("max_amount_ratio is what lets a utility through, and 1.5 still does not", async () => {
+    const swing = [38308, 33000, 25000, 21112];
+    for (let n = 1; n <= 4; n++) await spend(monthsAgo(n), swing[n - 1]!, "BALTIMORE GAS AN");
+    expect((await api("/api/recurring-candidates?min_cycle_months=1")).body.rows).toHaveLength(0);
+
+    const rows = (await api("/api/recurring-candidates?min_cycle_months=1&max_amount_ratio=3")).body.rows;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].key).toBe("BALTIMORE GAS");
+    // A float has to survive the query string, or the ratio silently reads as 1.
+    expect(rows[0].typical_cents).toBe(29355);
+  });
 });
 
 describe("forecast", () => {
