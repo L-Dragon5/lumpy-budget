@@ -36,10 +36,15 @@ const CATEGORIES: [name: string, bucket: Bucket, icon: string][] = [
 
 /**
  * Rules that must not match a longer name that starts with them: BP #4021 yes,
- * BPOST no. These two used to carry a trailing space reaching for the same
+ * BPOST no. The first two used to carry a trailing space reaching for the same
  * thing, which the matcher trimmed off before it ever looked.
+ *
+ * `rent` and `hoa` joined them after they filed NATIONAL CAR RENTAL under
+ * Housing and PY *PRIMOHOAGIES DMV under Taxes & Fees on real statements;
+ * PARENT, CURRENT and WHOA were waiting behind them. Migration 015 turns the
+ * switch on for the databases that already have those two rules.
  */
-const WHOLE_WORD = new Set(["bp", "amc"]);
+const WHOLE_WORD = new Set(["bp", "amc", "rent", "hoa"]);
 
 const RULES: [pattern: string, category: string, priority?: number][] = [
   ["wegmans", "Groceries"], ["trader joe", "Groceries"], ["whole foods", "Groceries"],

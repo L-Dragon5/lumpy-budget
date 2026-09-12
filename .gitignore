@@ -6,6 +6,7 @@ dist/
 .DS_Store
 bun.lock
 .playwright-mcp/
+statements/
 
 # The global ignore file excludes *.sql, which silently swallowed every migration
 # in this repo: a fresh clone had no schema to migrate. The migrations ARE the

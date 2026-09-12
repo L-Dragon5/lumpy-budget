@@ -1031,10 +1031,22 @@ describe("whole-word rules, end to end", () => {
     expect(((await api("/api/category-rules")).body as { whole_word: boolean }[])[0]!.whole_word).toBe(true);
   });
 
-  test("the seed ships bp and amc strict, which is what their trailing space meant", async () => {
+  /**
+   * bp and amc are here because their trailing space in the old seed meant this.
+   * rent and hoa joined them the day a real statement filed NATIONAL CAR RENTAL
+   * under Housing and PY *PRIMOHOAGIES DMV under Taxes & Fees. The list is
+   * asserted whole rather than by membership: a pattern that is a word other
+   * words contain is a decision, and adding one silently is the bug.
+   */
+  test("the seed ships exactly the patterns that are words, strict", async () => {
     await resetDb({ withSeed: true });
     const rules = (await api("/api/category-rules")).body as { pattern: string; whole_word: boolean }[];
-    expect(rules.filter((r) => r.whole_word).map((r) => r.pattern).sort()).toEqual(["amc", "bp"]);
+    expect(rules.filter((r) => r.whole_word).map((r) => r.pattern).sort()).toEqual([
+      "amc",
+      "bp",
+      "hoa",
+      "rent",
+    ]);
   });
 });
 

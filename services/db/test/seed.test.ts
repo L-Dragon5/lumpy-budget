@@ -6,6 +6,7 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { matchesPattern, needleOf } from "@lumpy/contracts";
 
 process.env.DATABASE_URL =
   process.env.TEST_DATABASE_URL ?? "mysql://root@127.0.0.1:3306/lumpy_budget_test";
@@ -70,6 +71,58 @@ test("a payroll rule points at it", async () => {
       WHERE c.name = 'Income' ORDER BY r.pattern ASC`,
   )) as { pattern: string }[];
   expect(found.map((r) => r.pattern)).toEqual(["dir dep", "direct dep", "payroll"]);
+});
+
+/**
+ * `rent` and `hoa` are the seeded patterns that are whole words longer words are
+ * built out of. Left as plain substrings they filed NATIONAL CAR RENTAL under
+ * Housing and PY *PRIMOHOAGIES DMV under Taxes & Fees on real statements: a
+ * cost appearing out of nowhere and a discretionary charge going missing, in
+ * the same row each time.
+ */
+test.each([
+  ["rent", ["national car rental", "parent teacher assoc"], ["bps*bilt rent", "rent payment march"]],
+  ["hoa", ["py *primohoagies dmv", "whoa cafe"], ["sunridge hoa dues", "hoa - march"]],
+])("the seeded %s rule is a word, not a substring", async (pattern, misses, hits) => {
+  await empty();
+  await seed();
+  const [rule] = (await sql.unsafe(
+    "SELECT pattern, whole_word FROM category_rules WHERE pattern = ?",
+    [pattern],
+  )) as { pattern: string; whole_word: number | boolean }[];
+  expect(rule).toBeDefined();
+  expect(Boolean(rule!.whole_word)).toBe(true);
+
+  // The switch is only worth setting if the matcher reads it the way this claims.
+  const needle = needleOf(rule!.pattern);
+  for (const hay of misses) expect(matchesPattern(hay, needle, true)).toBe(false);
+  for (const hay of hits) expect(matchesPattern(hay, needle, true)).toBe(true);
+});
+
+/** Migration 015 is what turns the switch on for a database seeded before the fix. */
+test("migration 015 turns on both words and leaves a typed pattern alone", async () => {
+  await empty();
+  await sql.unsafe("INSERT INTO categories (name, bucket, icon) VALUES ('Housing', 'fixed', 'building')");
+  const cat = (await sql.unsafe("SELECT id FROM categories WHERE name = 'Housing'")) as { id: number }[];
+  for (const pattern of ["rent", "hoa", "rental car", "hoagie hut"])
+    await sql.unsafe(
+      "INSERT INTO category_rules (pattern, category_id, priority, whole_word) VALUES (?, ?, 100, FALSE)",
+      [pattern, cat[0]!.id],
+    );
+  const body = readFileSync(join(import.meta.dir, "..", "migrations", "015_word_rules.sql"), "utf8");
+  for (const stmt of splitStatements(body)) await sql.unsafe(stmt);
+
+  const after = (await sql.unsafe(
+    "SELECT pattern, whole_word FROM category_rules ORDER BY pattern",
+  )) as { pattern: string; whole_word: number | boolean }[];
+  // Matched exactly: a rule that merely contains one of these words is a
+  // different rule with a different answer, and keeps the setting it had.
+  expect(after.map((r) => [r.pattern, Boolean(r.whole_word)])).toEqual([
+    ["hoa", true],
+    ["hoagie hut", false],
+    ["rent", true],
+    ["rental car", false],
+  ]);
 });
 
 /**
