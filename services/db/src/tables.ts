@@ -21,8 +21,11 @@ export const TABLES = {
     order: "name ASC",
   },
   income_streams: {
-    cols: ["id", "name", "amount_cents", "frequency", "anchor_date", "day_1", "day_2", "day_of_month", "active"],
-    date: ["anchor_date"],
+    cols: [
+      "id", "name", "amount_cents", "frequency", "anchor_date", "starts_on", "ends_on",
+      "day_1", "day_2", "day_of_month", "active",
+    ],
+    date: ["anchor_date", "starts_on", "ends_on"],
     bool: ["active"],
     order: "active DESC, name ASC",
   },

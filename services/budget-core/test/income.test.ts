@@ -55,6 +55,69 @@ test("a one-off lands in its month but never lifts the monthly average", () => {
   expect(feb.extra_paycheck).toBe(false);
 });
 
+test("a month before the stream started is silent, not short a paycheck", () => {
+  // The whole point of the window: hired in June, and January through May used
+  // to report a surplus of minus the entire monthly average.
+  const job = stream({ name: "Job", amount_cents: 200000, frequency: "biweekly", anchor_date: "2026-01-02", starts_on: "2026-06-15" });
+  const cal = incomeCalendar([job], 2026);
+  const may = cal.find((m) => m.month === "2026-05")!;
+  expect(may.total_cents).toBe(0);
+  expect(may.normalized_cents).toBe(0);
+  expect(may.surplus_cents).toBe(0);
+
+  const july = cal.find((m) => m.month === "2026-07")!;
+  expect(july.normalized_cents).toBe(433333);
+  expect(july.total_cents).toBe(600000);
+
+  // The month the job starts counts in full: a half month of a flat average is
+  // a number nobody can check against a payslip.
+  const june = cal.find((m) => m.month === "2026-06")!;
+  expect(june.normalized_cents).toBe(433333);
+  expect(june.total_cents).toBe(200000);
+
+  expect(monthlyNormalized([job], "2026-05")).toBe(0);
+  expect(monthlyNormalized([job], "2026-06")).toBe(433333);
+  // No month asked: what the streams are worth in general, window ignored.
+  expect(monthlyNormalized([job])).toBe(433333);
+});
+
+test("a job change hands the average over in the month it happens", () => {
+  const oldJob = stream({ name: "Old", amount_cents: 180000, frequency: "monthly", anchor_date: null, day_of_month: 1, ends_on: "2026-06-30" });
+  const newJob = stream({ name: "New", amount_cents: 240000, frequency: "monthly", anchor_date: null, day_of_month: 1, starts_on: "2026-07-01" });
+  const cal = incomeCalendar([oldJob, newJob], 2026);
+  expect(cal.find((m) => m.month === "2026-05")!.normalized_cents).toBe(180000);
+  expect(cal.find((m) => m.month === "2026-08")!.normalized_cents).toBe(240000);
+  expect(cal.find((m) => m.month === "2026-08")!.total_cents).toBe(240000);
+  // A clean handover: the old job's last month carries only the old average.
+  expect(cal.find((m) => m.month === "2026-06")!.normalized_cents).toBe(180000);
+  expect(cal.find((m) => m.month === "2026-06")!.total_cents).toBe(180000);
+
+  // An overlapping month carries both, because the window is tested for
+  // overlap and not for containment: a job started on the 15th is income that
+  // month, even though it is not a whole month of it.
+  const overlap = stream({ name: "New", amount_cents: 240000, frequency: "monthly", anchor_date: null, day_of_month: 20, starts_on: "2026-06-15" });
+  const both = incomeCalendar([oldJob, overlap], 2026).find((m) => m.month === "2026-06")!;
+  expect(both.normalized_cents).toBe(420000);
+  expect(both.total_cents).toBe(180000 + 240000);
+});
+
+test("nextPaycheck does not offer a cheque from a job that ended", () => {
+  const s = stream({ frequency: "biweekly", anchor_date: "2026-01-02", ends_on: "2026-01-20" });
+  expect(nextPaycheck([s], "2026-01-03")!.date).toBe("2026-01-16");
+  expect(nextPaycheck([s], "2026-01-17")).toBeNull();
+});
+
+test("a stream that had not started is not a missing deposit", () => {
+  // Statements imported for May, the job starts in June: planned is zero, so
+  // the delta is zero rather than a red alarm nobody can act on.
+  const job = stream({ name: "Job", amount_cents: 200000, frequency: "monthly", anchor_date: null, day_of_month: 1, starts_on: "2026-06-01" });
+  const rows = [expense({ txn_date: "2026-05-04", amount_cents: 4200, category_id: null })];
+  const [may] = incomeReconciliation([job], rows, [], ["2026-05"]);
+  expect(may!.imported).toBe(true);
+  expect(may!.planned_cents).toBe(0);
+  expect(may!.delta_cents).toBe(0);
+});
+
 // ------------------------------------------------- the plan against the bank
 
 const incomeCat = category({ name: "Income", bucket: "income" });

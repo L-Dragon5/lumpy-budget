@@ -82,6 +82,41 @@ describe("crud", () => {
     expect(made.body).toMatchObject({ pattern: "greentree property", whole_word: false, priority: 100 });
   });
 
+  test("an income window keeps the months before the job out of the calendar", async () => {
+    // Anchored in January, started in June. The anchor counts backwards, so
+    // without the window every month of the year reported a paycheck.
+    const job = await post("/api/income-streams", {
+      ...semiMonthly, name: "New job", anchor_date: null,
+      starts_on: "2026-06-16", ends_on: null,
+    });
+    expect(job.status).toBe(201);
+    // DATE in, same string out: the column is coerced like anchor_date.
+    expect(job.body.starts_on).toBe("2026-06-16");
+    expect(job.body.ends_on).toBeNull();
+    expect((await api(`/api/income-streams/${job.body.id}`)).body).toEqual(job.body);
+
+    const cal = await api("/api/income-calendar?year=2026");
+    const byMonth = (m: string) => cal.body.months.find((x: { month: string }) => x.month === m);
+    expect(byMonth("2026-05").total_cents).toBe(0);
+    expect(byMonth("2026-05").normalized_cents).toBe(0);
+    expect(byMonth("2026-05").delta_cents).toBe(0);
+    // It pays on the 15th and the last day; June's 15th is before the start.
+    expect(byMonth("2026-06").total_cents).toBe(300000);
+    expect(byMonth("2026-07").total_cents).toBe(600000);
+    expect(byMonth("2026-07").normalized_cents).toBe(600000);
+
+    // Closing the window stops it again, without hiding what it already paid.
+    const ended = await put(`/api/income-streams/${job.body.id}`, {
+      ...semiMonthly, name: "New job", anchor_date: null,
+      starts_on: "2026-06-16", ends_on: "2026-09-30",
+    });
+    expect(ended.body.ends_on).toBe("2026-09-30");
+    const after = await api("/api/income-calendar?year=2026");
+    const month = (m: string) => after.body.months.find((x: { month: string }) => x.month === m);
+    expect(month("2026-09").total_cents).toBe(600000);
+    expect(month("2026-10").total_cents).toBe(0);
+  });
+
   test("a bad body is a 422 that names the field", async () => {
     const res = await post("/api/income-streams", { ...semiMonthly, frequency: "biweekly", anchor_date: null });
     expect(res.status).toBe(422);
@@ -90,6 +125,13 @@ describe("crud", () => {
     const noDate = await post("/api/income-streams", { ...semiMonthly, frequency: "one_time", day_1: null, day_2: null });
     expect(noDate.status).toBe(422);
     expect(noDate.body.errors[0]!.path).toEqual(["anchor_date"]);
+
+    // A window that closes before it opens is a stream that never pays.
+    const backwards = await post("/api/income-streams", {
+      ...semiMonthly, starts_on: "2026-06-01", ends_on: "2026-02-01",
+    });
+    expect(backwards.status).toBe(422);
+    expect(backwards.body.errors[0]!.path).toEqual(["ends_on"]);
 
     const bad = await post("/api/fixed-costs", { name: "", amount_cents: -5, due_day: 99 });
     expect(bad.status).toBe(422);

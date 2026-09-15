@@ -1,0 +1,117 @@
+{
+  "name": "A job that ends in June and one that starts in July, with the handover inside the forecast",
+  "month": "2026-01",
+  "year": 2026,
+  "lumpyMode": "recommended",
+  "openingBalance": 40000,
+  "streams": [
+    {
+      "id": 1,
+      "name": "Old job",
+      "amount_cents": 300000,
+      "frequency": "semimonthly",
+      "anchor_date": null,
+      "starts_on": null,
+      "ends_on": "2026-06-30",
+      "day_1": 15,
+      "day_2": 0,
+      "day_of_month": null,
+      "active": true
+    },
+    {
+      "id": 2,
+      "name": "New job",
+      "amount_cents": 210000,
+      "frequency": "biweekly",
+      "anchor_date": "2026-07-10",
+      "starts_on": "2026-07-06",
+      "ends_on": null,
+      "day_1": null,
+      "day_2": null,
+      "day_of_month": null,
+      "active": true
+    }
+  ],
+  "fixedCosts": [
+    {
+      "id": 1,
+      "name": "Rent",
+      "amount_cents": 150000,
+      "due_day": 1,
+      "lead_days": 3,
+      "category_id": null,
+      "active": true
+    },
+    {
+      "id": 2,
+      "name": "Internet",
+      "amount_cents": 7500,
+      "due_day": 12,
+      "lead_days": 2,
+      "category_id": null,
+      "active": true
+    }
+  ],
+  "lumpyItems": [
+    {
+      "id": 1,
+      "name": "Car registration",
+      "amount_cents": 32000,
+      "frequency_months": 12,
+      "next_due_date": "2026-09-01",
+      "category_id": null,
+      "active": true
+    }
+  ],
+  "savingsGoals": [
+    {
+      "id": 1,
+      "name": "Emergency fund",
+      "mode": "fixed",
+      "amount_cents": 20000,
+      "percent": null,
+      "active": true,
+      "target_cents": 600000,
+      "balance_cents": 120000
+    }
+  ],
+  "categories": [
+    { "id": 1, "name": "Groceries", "bucket": "discretionary", "color": null, "icon": "cart" },
+    { "id": 2, "name": "Paycheck", "bucket": "income", "color": null, "icon": "banknote" }
+  ],
+  "expenses": [
+    {
+      "id": 1,
+      "txn_date": "2026-01-15",
+      "amount_cents": -300000,
+      "merchant": "OLD JOB PAYROLL",
+      "description": "",
+      "category_id": 2,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "j1"
+    },
+    {
+      "id": 2,
+      "txn_date": "2026-01-06",
+      "amount_cents": 9400,
+      "merchant": "WEGMANS",
+      "description": "",
+      "category_id": 1,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "j2"
+    },
+    {
+      "id": 3,
+      "txn_date": "2026-01-21",
+      "amount_cents": 7600,
+      "merchant": "WEGMANS",
+      "description": "",
+      "category_id": 1,
+      "source": "import",
+      "import_batch_id": null,
+      "dedupe_hash": "j3"
+    }
+  ]
+}

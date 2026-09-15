@@ -12,6 +12,8 @@ export function stream(p: Partial<IncomeStream> = {}): IncomeStream {
     amount_cents: 200000,
     frequency: "biweekly",
     anchor_date: "2026-01-02",
+    starts_on: null,
+    ends_on: null,
     day_1: null,
     day_2: null,
     day_of_month: null,

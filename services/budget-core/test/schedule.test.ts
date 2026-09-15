@@ -79,3 +79,37 @@ test("a one-off pays exactly once, on its date, and never again", () => {
   // Never an "extra paycheck" month: it is surplus by construction.
   expect(extraPaycheckMonths(gift, 2026)).toEqual([]);
 });
+
+// ------------------------------------------------- the stream's own window
+
+test("a stream pays nothing before starts_on or after ends_on", () => {
+  // Anchored in January, hired in June: without the window the anchor walks
+  // backwards and pays every month of the year.
+  const s = stream({ frequency: "biweekly", anchor_date: "2026-01-02", starts_on: "2026-06-15" });
+  expect(occurrences(s, "2026-01-01", "2026-05-31")).toEqual([]);
+  expect(dates(occurrencesInMonth([s], "2026-06"))).toEqual(["2026-06-19"]);
+  expect(occurrences(s, "2026-01-01", "2026-12-31")).toHaveLength(14);
+
+  const ended = stream({ frequency: "monthly", anchor_date: null, day_of_month: 1, ends_on: "2026-03-15" });
+  expect(dates(occurrences(ended, "2026-01-01", "2026-12-31"))).toEqual([
+    "2026-01-01", "2026-02-01", "2026-03-01",
+  ]);
+
+  // Both ends, and the day itself counts on either side.
+  const gig = stream({ frequency: "monthly", anchor_date: null, day_of_month: 10, starts_on: "2026-02-10", ends_on: "2026-04-10" });
+  expect(dates(occurrences(gig, "2026-01-01", "2026-12-31"))).toEqual([
+    "2026-02-10", "2026-03-10", "2026-04-10",
+  ]);
+
+  // A window that closes before it opens pays nothing rather than everything.
+  const never = stream({ frequency: "monthly", anchor_date: null, day_of_month: 1, starts_on: "2026-06-01", ends_on: "2026-02-01" });
+  expect(occurrences(never, "2026-01-01", "2026-12-31")).toEqual([]);
+});
+
+test("a half month is not an extra-paycheck month", () => {
+  // January pays 3 times, but the stream only started on the 20th, so only one
+  // cheque landed and calling it an extra would hand the lumpy fund a surplus
+  // that does not exist.
+  const s = stream({ frequency: "biweekly", anchor_date: "2026-01-02", starts_on: "2026-01-20" });
+  expect(extraPaycheckMonths(s, 2026)).toEqual(["2026-07"]);
+});

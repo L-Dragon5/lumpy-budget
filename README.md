@@ -341,6 +341,17 @@ extra-paycheck month; twice-a-month pay never does, whatever the calendar looks
 like. The income page shows each month's actual against the normalized average,
 so the extra paycheck reads as surplus instead of as money you quietly spend.
 
+**When a stream ran.** A pay schedule counts backwards from its anchor as
+happily as it counts forwards, so a job started in June used to pay all the way
+back through January: every month before the hire date read as a paycheck that
+never landed, with a red delta on the income page and a surplus of minus the
+whole monthly average. `First paid` and `Last paid` are the window, both
+optional, and a stream without them pays forever in both directions the way it
+always did. Use `Last paid` for a job that ended rather than the Active switch,
+which takes its past deposits away with it. The month a stream starts or ends
+counts in full: half a flat average is a number nobody can check against a
+payslip.
+
 **Planned income, and what the bank actually deposited.** Every allocation in
 this app rests on pay schedules somebody typed in once. Give a category the
 `income` bucket -- the seeded `Income` category has it -- and the income page

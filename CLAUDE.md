@@ -104,6 +104,17 @@ Four places, in this order, or reads silently drop it:
   things did".** A month with no transactions at all is excluded from it and
   reported once by `monthsWithoutStatements`. They read the same in a badge and
   mean opposite things: one bill went missing, or one month never got imported.
+- **`occurrences` clamps the stream's own `starts_on`/`ends_on` onto the asked-for
+  window before it walks anything**, which is the single place the app learns
+  that a job pays nothing before it started. Every income number except one
+  comes out of that function, so nothing else needs the check. The one is
+  `monthlyNormalized`, the flat average, which walks no calendar and so takes an
+  optional `month` and filters on `runsIn` instead -- overlap with the month,
+  not containment, so a job starting on the 20th is that month's average in
+  full. Callers that have a month pass it (`monthSummary`, `forecast` per row,
+  `incomeCalendar` per month); a caller asking what the streams are worth in
+  general omits it. `active` is not a substitute for `ends_on`: it is the manual
+  off switch and it deletes the stream's past as well as its future.
 - **`periodPace`, `cashPosition` and `recurringCandidates` all take `today` as an
   argument.** budget-core reads no clock; the web app passes `todayISO()` and the
   scenarios pass a fixed day, which is the only reason a scenario run on the 11th

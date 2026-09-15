@@ -69,10 +69,12 @@ export function forecast(input: ForecastInputs): Forecast {
   // exactly what the dashboard and the lumpy page already show.
   const fund = timeline(input.lumpyItems, input.start, months, opening, mode);
   const fixed = sum(input.fixedCosts.filter((c) => c.active).map((c) => c.amount_cents));
-  const normalized = monthlyNormalized(input.streams);
 
   const rows = fund.rows.map((f): ForecastRow => {
     const income = monthlyActual(input.streams, f.month);
+    // Per row: a stream with an `ends_on` inside the window stops counting
+    // towards the average in the month it stops paying, not at the end.
+    const normalized = monthlyNormalized(input.streams, f.month);
     // Percent goals move with the month's income, so this cannot be hoisted.
     const savings = savingsMonthlyTotal(input.savingsGoals, income);
     const free = income - fixed - f.contribution_cents - savings;

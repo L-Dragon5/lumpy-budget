@@ -22,6 +22,8 @@ type Draft = {
   amount_cents: number | null;
   frequency: Frequency;
   anchor_date: string;
+  starts_on: string;
+  ends_on: string;
   day_1: string;
   day_2: string;
   day_of_month: string;
@@ -33,6 +35,8 @@ const emptyDraft = (): Draft => ({
   amount_cents: null,
   frequency: "biweekly",
   anchor_date: "",
+  starts_on: "",
+  ends_on: "",
   day_1: "15",
   day_2: "0",
   day_of_month: "1",
@@ -44,6 +48,8 @@ const toDraft = (s: IncomeStream): Draft => ({
   amount_cents: s.amount_cents,
   frequency: s.frequency,
   anchor_date: s.anchor_date ?? "",
+  starts_on: s.starts_on ?? "",
+  ends_on: s.ends_on ?? "",
   day_1: s.day_1 === null ? "15" : String(s.day_1),
   day_2: s.day_2 === null ? "0" : String(s.day_2),
   day_of_month: s.day_of_month === null ? "1" : String(s.day_of_month),
@@ -55,14 +61,28 @@ const toBody = (d: Draft) => ({
   amount_cents: d.amount_cents ?? 0,
   frequency: d.frequency,
   anchor_date: d.anchor_date || null,
+  starts_on: d.starts_on || null,
+  ends_on: d.ends_on || null,
   day_1: d.frequency === "semimonthly" ? Number(d.day_1) : null,
   day_2: d.frequency === "semimonthly" ? Number(d.day_2) : null,
   day_of_month: d.frequency === "monthly" ? Number(d.day_of_month) : null,
   active: d.active,
 });
 
+/** "since Jun 2026", "until Aug 2026", or both. Empty when it pays forever. */
+function windowText(s: IncomeStream): string {
+  if (s.starts_on && s.ends_on) return ` (${s.starts_on} to ${s.ends_on})`;
+  if (s.starts_on) return ` (from ${s.starts_on})`;
+  if (s.ends_on) return ` (until ${s.ends_on})`;
+  return "";
+}
+
 /** Plain English for however this stream actually pays. */
 function scheduleText(s: IncomeStream): string {
+  return baseScheduleText(s) + windowText(s);
+}
+
+function baseScheduleText(s: IncomeStream): string {
   switch (s.frequency) {
     case "weekly":
     case "biweekly":
@@ -114,7 +134,9 @@ export default function Income() {
 
   const rows = streams.data ?? [];
   const months = calendar.data?.months ?? [];
-  const normalized = months[0]?.normalized_cents ?? 0;
+  // This month's, not January's: a stream that started in June makes the first
+  // row of the year zero, and "$0 a month on average" is not what it means.
+  const normalized = months.find((m) => m.month === thisMonth())?.normalized_cents ?? 0;
   const extras = months.filter((m) => m.extra_paycheck);
   // The surplus column only holds its width in a year that has one to show; a
   // semimonthly year never does, and the deposited column needs the room.
@@ -361,6 +383,33 @@ export default function Income() {
               <FieldDescription>0 means the last day. The 31st becomes the 30th or 28th in shorter months.</FieldDescription>
             </Field>
           ) : null}
+
+          {/* The window the stream really ran in. Left blank it pays forever,
+              which is what every stream did before these fields existed. */}
+          <div className="grid grid-cols-2 gap-4">
+            <Field>
+              <FieldLabel htmlFor="starts-on">First paid (optional)</FieldLabel>
+              <Input
+                id="starts-on"
+                type="date"
+                value={draft.starts_on}
+                onChange={(e) => set({ starts_on: e.target.value })}
+              />
+              <FieldDescription>Months before this show no income from this stream.</FieldDescription>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="ends-on">Last paid (optional)</FieldLabel>
+              <Input
+                id="ends-on"
+                type="date"
+                value={draft.ends_on}
+                onChange={(e) => set({ ends_on: e.target.value })}
+              />
+              <FieldDescription>
+                For a job that ended. Use this rather than Active, which hides its past deposits too.
+              </FieldDescription>
+            </Field>
+          </div>
 
           <Field orientation="horizontal">
             <Switch id="active" checked={draft.active} onCheckedChange={(v) => set({ active: v })} />

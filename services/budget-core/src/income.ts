@@ -3,7 +3,7 @@ import { PER_YEAR } from "@lumpy/contracts";
 import { divRound, sum, type Cents } from "./money";
 import * as d from "./dates";
 import type { ISOMonth } from "./dates";
-import { occurrences, occurrencesInMonth, extraPaycheckMonths, type Occurrence } from "./schedule";
+import { occurrences, occurrencesInMonth, extraPaycheckMonths, runsIn, type Occurrence } from "./schedule";
 import { bucketOf, categoryIndex, inWindow } from "./reports";
 
 /** What actually lands in the account during `month`. */
@@ -15,11 +15,17 @@ export function monthlyActual(streams: IncomeStream[], month: ISOMonth): Cents {
  * The flat monthly average (biweekly x 26/12, semimonthly x 24/12, ...).
  * Budget against this and the extra-paycheck months become surplus instead of
  * a number you quietly spend.
+ *
+ * `month` narrows it to the streams whose `starts_on`/`ends_on` window reaches
+ * that month. Without it, a month before the job started is compared against
+ * the job's average and reports a surplus of minus a whole paycheck -- which is
+ * the same skew `occurrences` clamps away, arriving by the one route that does
+ * not walk a calendar. Optional because a caller with no month in hand is
+ * asking what the streams are worth in general.
  */
-export function monthlyNormalized(streams: IncomeStream[]): Cents {
-  return sum(
-    streams.filter((s) => s.active).map((s) => divRound(s.amount_cents * PER_YEAR[s.frequency], 12)),
-  );
+export function monthlyNormalized(streams: IncomeStream[], month?: ISOMonth): Cents {
+  const live = streams.filter((s) => (month === undefined ? s.active : runsIn(s, month)));
+  return sum(live.map((s) => divRound(s.amount_cents * PER_YEAR[s.frequency], 12)));
 }
 
 export type MonthIncome = {
@@ -35,10 +41,12 @@ export type MonthIncome = {
 export function incomeCalendar(streams: IncomeStream[], year: number): MonthIncome[] {
   const active = streams.filter((s) => s.active);
   const extras = new Set(active.flatMap((s) => extraPaycheckMonths(s, year)));
-  const normalized = monthlyNormalized(active);
   return d.monthRange(`${year}-01`, 12).map((month) => {
     const occ = occurrencesInMonth(active, month);
     const total = sum(occ.map((o) => o.amount_cents));
+    // Per month, not hoisted: a stream that started in June is not part of
+    // May's average, and a year that spans a job change has two of them.
+    const normalized = monthlyNormalized(active, month);
     return {
       month,
       occurrences: occ,

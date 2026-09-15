@@ -9,9 +9,32 @@ export type Occurrence = {
   amount_cents: number;
 };
 
-/** Every pay date for one stream inside [start, end], inclusive, ascending. */
+/**
+ * Whether the stream's `starts_on`/`ends_on` window touches `month` at all.
+ *
+ * Overlap, not containment: a job that starts on the 20th still pays that
+ * month. The flat monthly average is the only caller -- every other number
+ * comes out of `occurrences`, which clamps the window per day rather than per
+ * month and so needs no help deciding what a half month is worth.
+ */
+export const runsIn = (s: IncomeStream, month: ISOMonth): boolean =>
+  s.active &&
+  (!s.starts_on || d.compare(s.starts_on, d.monthEnd(month)) <= 0) &&
+  (!s.ends_on || d.compare(s.ends_on, d.monthStart(month)) >= 0);
+
+/**
+ * Every pay date for one stream inside [start, end], inclusive, ascending.
+ *
+ * The stream's own window is clamped onto the asked-for one first, which is the
+ * single place the whole app learns that a job pays nothing before it was
+ * started or after it ended. `anchor_date` counts backwards as happily as
+ * forwards, so without this a stream anchored in June pays in January.
+ */
 export function occurrences(s: IncomeStream, start: ISODate, end: ISODate): Occurrence[] {
   if (!s.active) return [];
+  if (s.starts_on && d.compare(s.starts_on, start) > 0) start = s.starts_on;
+  if (s.ends_on && d.compare(s.ends_on, end) < 0) end = s.ends_on;
+  if (d.compare(start, end) > 0) return [];
   const dates: ISODate[] = [];
 
   switch (s.frequency) {

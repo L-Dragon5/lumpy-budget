@@ -68,7 +68,7 @@ export function monthSummary(input: BudgetInputs): MonthSummary {
   const mode = input.lumpyMode ?? "recommended";
 
   const income = monthlyActual(streams, month);
-  const normalized = monthlyNormalized(streams);
+  const normalized = monthlyNormalized(streams, month);
   const lumpy = mode === "steady"
     ? steadyMonthlyTotal(lumpyItems, month)
     : recommendedMonthlyTotal(lumpyItems, month, input.lumpyOpeningBalanceCents ?? 0);

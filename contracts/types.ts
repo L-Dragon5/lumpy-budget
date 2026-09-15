@@ -78,6 +78,17 @@ export const incomeStreamInput = z
     frequency: frequencySchema,
     /** A known pay date. Drives weekly/biweekly/annual/one_time; ignored otherwise. */
     anchor_date: isoDate.nullable().default(null),
+    /**
+     * The window the stream actually ran in. Both null means forever, which is
+     * what every stream did before these columns existed.
+     *
+     * The anchor counts backwards as happily as forwards, so a job started in
+     * June was paying in January and every month before the hire date read as a
+     * missed paycheck. `active` cannot say this: switching an old job off
+     * deletes its past deposits too.
+     */
+    starts_on: isoDate.nullable().default(null),
+    ends_on: isoDate.nullable().default(null),
     /** Semimonthly pay days. 0 in day_2 means "last day of the month". */
     day_1: z.number().int().min(0).max(31).nullable().default(null),
     day_2: z.number().int().min(0).max(31).nullable().default(null),
@@ -100,6 +111,12 @@ export const incomeStreamInput = z
     }
     if (v.frequency === "monthly")
       need("day_of_month", "monthly income needs day_of_month (0 = last day of month)");
+    if (v.starts_on && v.ends_on && v.ends_on < v.starts_on)
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["ends_on"],
+        message: "ends_on is before starts_on, which is a stream that never pays",
+      });
   });
 
 export const incomeStream = z.object({ id }).and(incomeStreamInput);
