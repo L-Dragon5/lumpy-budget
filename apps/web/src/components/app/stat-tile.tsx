@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import SpotlightCard from "@/components/SpotlightCard";
 import { cn } from "@/lib/utils";
-import { AnimatedMoney } from "./money";
+import { WholeDollars } from "./money";
 
 /**
  * A stat tile, not a chart: one number that is the answer, with the arithmetic
@@ -31,7 +31,7 @@ export function StatTile({
       spotlightColor="rgba(120, 160, 255, 0.12)"
     >
       <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
-      <AnimatedMoney
+      <WholeDollars
         cents={cents}
         className={cn(
           "font-semibold",

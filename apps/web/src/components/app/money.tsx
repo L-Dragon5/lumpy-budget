@@ -1,23 +1,15 @@
-import CountUp from "@/components/CountUp";
 import { cn } from "@/lib/utils";
 import { money } from "@/lib/format";
 
 /**
- * Whole dollars, counted up. Tiles round to the dollar on purpose: the cents are
- * in the tables, and an animated cents digit is noise, not information.
- * The sign is rendered as text so a negative never reads as "$-1,234".
+ * Whole dollars. Tiles round to the dollar on purpose: the cents are in the
+ * tables, and a cents digit on a headline number is noise, not information.
  */
-export function AnimatedMoney({ cents, className }: { cents: number; className?: string }) {
-  const dollars = Math.round(Math.abs(cents) / 100);
-  return (
-    <span className={cn("tabular", className)}>
-      {cents < 0 ? "-$" : "$"}
-      <CountUp to={dollars} separator="," />
-    </span>
-  );
+export function WholeDollars({ cents, className }: { cents: number; className?: string }) {
+  return <span className={cn("tabular", className)}>{money(cents, { cents: false })}</span>;
 }
 
-/** Exact money, no animation. Used everywhere a number sits in a column. */
+/** Exact money, cents and all. Used everywhere a number sits in a column. */
 export function Money({
   cents,
   className,
