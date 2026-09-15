@@ -121,10 +121,7 @@ export default function FixedCosts() {
         title="Fixed costs"
         description="The bills that arrive every month, and which paycheck has to hold the money for each one."
         actions={
-          <>
-            <MonthNav month={month} onChange={setMonth} />
-            <AddButton onClick={() => { setEditing(null); setDraft(emptyDraft()); }}>Add cost</AddButton>
-          </>
+          <MonthNav month={month} onChange={setMonth} />
         }
       />
 
@@ -147,6 +144,9 @@ export default function FixedCosts() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            <div className="mb-3">
+              <AddButton onClick={() => { setEditing(null); setDraft(emptyDraft()); }}>Add cost</AddButton>
+            </div>
             {rows.length === 0 ? (
               <Empty>
                 <EmptyHeader>

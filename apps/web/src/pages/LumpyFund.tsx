@@ -177,7 +177,6 @@ export default function LumpyFund() {
               12-month timeline
               <ArrowRightIcon data-icon="inline-end" />
             </Button>
-            <AddButton onClick={() => { setEditing(null); setDraft(emptyDraft()); }}>Add item</AddButton>
           </>
         }
       />
@@ -407,6 +406,9 @@ export default function LumpyFund() {
           <CardTitle>Items</CardTitle>
         </CardHeader>
         <CardContent>
+          <div className="mb-3">
+            <AddButton onClick={() => { setEditing(null); setDraft(emptyDraft()); }}>Add item</AddButton>
+          </div>
           {rows.length === 0 ? (
             <Empty>
               <EmptyHeader>

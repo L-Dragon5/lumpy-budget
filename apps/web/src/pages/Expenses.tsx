@@ -166,13 +166,6 @@ export default function Expenses() {
               <UploadIcon data-icon="inline-start" />
               Import CSV
             </Button>
-            <AddButton
-              onClick={() =>
-                setDraft({ txn_date: `${month}-01`, amount_cents: null, merchant: "", description: "", category_id: UNCATEGORIZED })
-              }
-            >
-              Add expense
-            </AddButton>
           </>
         }
       />
@@ -204,6 +197,15 @@ export default function Expenses() {
 
       <Card>
         <CardContent className="pt-6">
+          <div className="mb-3">
+            <AddButton
+              onClick={() =>
+                setDraft({ txn_date: `${month}-01`, amount_cents: null, merchant: "", description: "", category_id: UNCATEGORIZED })
+              }
+            >
+              Add expense
+            </AddButton>
+          </div>
           {expenses.isLoading ? (
             <Loading rows={5} />
           ) : rows.length === 0 ? (

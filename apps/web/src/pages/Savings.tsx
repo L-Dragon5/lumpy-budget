@@ -102,10 +102,7 @@ export default function Savings() {
         title="Savings"
         description="Each goal has its own balance and its own finish line."
         actions={
-          <>
-            <MonthNav month={month} onChange={setMonth} />
-            <AddButton onClick={() => { setEditing(null); setDraft(emptyDraft()); }}>Add goal</AddButton>
-          </>
+          <MonthNav month={month} onChange={setMonth} />
         }
       />
 
@@ -136,6 +133,9 @@ export default function Savings() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="flex flex-col gap-4">
+          <div>
+            <AddButton onClick={() => { setEditing(null); setDraft(emptyDraft()); }}>Add goal</AddButton>
+          </div>
           {rows.length === 0 ? (
             <Card>
               <CardContent className="pt-6">

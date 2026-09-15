@@ -115,7 +115,7 @@ export function MoneyField({
 
 export function AddButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
   return (
-    <Button onClick={onClick}>
+    <Button size="lg" onClick={onClick}>
       <PlusIcon data-icon="inline-start" />
       {children}
     </Button>

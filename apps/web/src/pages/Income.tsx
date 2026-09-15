@@ -147,7 +147,6 @@ export default function Income() {
       <PageHeader
         title="Income"
         description="Every stream, normalized to a monthly figure, with the months that pay an extra time."
-        actions={<AddButton onClick={openNew}>Add income</AddButton>}
       />
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -159,6 +158,9 @@ export default function Income() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            <div className="mb-3">
+              <AddButton onClick={openNew}>Add income</AddButton>
+            </div>
             {rows.length === 0 ? (
               <Empty>
                 <EmptyHeader>
