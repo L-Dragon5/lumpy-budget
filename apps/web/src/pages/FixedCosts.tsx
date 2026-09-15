@@ -17,7 +17,7 @@ import { Money } from "@/components/app/money";
 import { Loading, LoadError, MonthNav, PageHeader } from "@/components/app/page";
 import { toast } from "sonner";
 import { eden, errorText, useApi, useMutate } from "@/lib/api";
-import { dateLabel, monthLabel, money, ordinal, thisMonth } from "@/lib/format";
+import { monthLabel, money, ordinal, thisMonth } from "@/lib/format";
 
 type Draft = {
   name: string;
@@ -202,69 +202,6 @@ export default function FixedCosts() {
 
         <Card className="lg:col-span-3">
           <CardHeader>
-            <CardTitle>Set aside first — {monthLabel(month)}</CardTitle>
-            <CardDescription>
-              Each paycheck, and what to hold back from it before you spend anything. A bill goes to the last
-              paycheck that arrives in time to pay it and is big enough to cover it.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            {(alloc?.paychecks ?? []).length === 0 ? (
-              <Empty>
-                <EmptyHeader>
-                  <EmptyTitle>No paychecks this month</EmptyTitle>
-                  <EmptyDescription>Add income to see the allocation.</EmptyDescription>
-                </EmptyHeader>
-              </Empty>
-            ) : (
-              alloc?.paychecks.map((p) => (
-                <div key={`${p.date}-${p.stream_id}-${p.holds.length}`} className="rounded-lg border p-3">
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{dateLabel(p.date)}</span>
-                      <span className="text-sm text-muted-foreground">{p.stream_name}</span>
-                      {p.prior_month ? <Badge variant="outline">last month</Badge> : null}
-                      {p.over_committed ? <Badge variant="destructive">over-committed</Badge> : null}
-                    </div>
-                    <Money cents={p.amount_cents} className="font-medium" />
-                  </div>
-
-                  {p.holds.length > 0 ? (
-                    <ul className="mt-2 flex flex-col gap-1 border-t pt-2">
-                      {p.holds.map((h) => (
-                        <li key={h.fixed_cost_id} className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">
-                            {h.name}
-                            <span className="ml-2 text-xs">due {dateLabel(h.due_date)}</span>
-                            {h.late ? <Badge variant="destructive" className="ml-2">late</Badge> : null}
-                          </span>
-                          <Money cents={h.amount_cents} />
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="mt-2 border-t pt-2 text-sm text-muted-foreground">No bills held from this one.</p>
-                  )}
-
-                  <div className="mt-2 flex flex-wrap justify-between gap-x-6 gap-y-1 border-t pt-2 text-sm">
-                    <span className="text-muted-foreground">
-                      Bills <Money cents={p.hold_total_cents} /> · Lumpy <Money cents={p.lumpy_cents} /> · Savings{" "}
-                      <Money cents={p.savings_cents} />
-                    </span>
-                    <span className="font-medium">
-                      Free to spend <Money cents={p.free_cents} tone />
-                    </span>
-                  </div>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {variance.length > 0 ? (
-        <Card className="mt-4">
-          <CardHeader>
             <CardTitle>Budgeted vs actual</CardTitle>
             <CardDescription>
               What these bills have really cost over the last three complete months. A bill entered flat that
@@ -290,6 +227,16 @@ export default function FixedCosts() {
                 </AlertDescription>
               </Alert>
             ) : null}
+            {variance.length === 0 ? (
+              <Empty>
+                <EmptyHeader>
+                  <EmptyTitle>Nothing to compare yet</EmptyTitle>
+                  <EmptyDescription>
+                    Import a statement or two and each bill gets its own line here.
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            ) : (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -372,9 +319,10 @@ export default function FixedCosts() {
                 ))}
               </TableBody>
             </Table>
+            )}
           </CardContent>
         </Card>
-      ) : null}
+      </div>
 
       {draft ? (
         <RecordDialog
