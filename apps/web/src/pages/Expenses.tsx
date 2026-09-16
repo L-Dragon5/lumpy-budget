@@ -218,80 +218,81 @@ export default function Expenses() {
               </EmptyHeader>
             </Empty>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-32">Date</TableHead>
-                    <TableHead className="w-56">Category</TableHead>
-                    <TableHead>Merchant</TableHead>
-                    <TableHead>Note</TableHead>
-                    <TableHead className="w-28 text-right">Amount</TableHead>
-                    <TableHead className="w-24" />
+            // A long month scrolls inside the card; the header stays put, and
+            // its bottom border is painted inside the cell so it does not
+            // scroll away with the first row.
+            <Table containerClassName="max-h-[65vh]">
+              <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-card [&_th]:shadow-[inset_0_-1px_0_var(--border)] [&_tr]:border-b-0">
+                <TableRow>
+                  <TableHead className="w-32">Date</TableHead>
+                  <TableHead className="w-56">Category</TableHead>
+                  <TableHead>Merchant</TableHead>
+                  <TableHead className="w-64">Note</TableHead>
+                  <TableHead className="w-28 text-right">Amount</TableHead>
+                  <TableHead className="w-24" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((e) => (
+                  <TableRow key={e.id}>
+                    <TableCell className="text-sm text-muted-foreground">{dateLabelFull(e.txn_date)}</TableCell>
+                    <TableCell>
+                      <SelectField
+                        value={e.category_id === null ? UNCATEGORIZED : String(e.category_id)}
+                        onChange={(v) => {
+                          const next = v === UNCATEGORIZED ? null : Number(v);
+                          patch(e, { category_id: next });
+                          // Only on the way out of uncategorized: fixing a
+                          // miscategorized row is not a new rule, it is a
+                          // correction, and offering there would nag.
+                          if (next !== null && e.category_id === null) offerRule(e, next);
+                        }}
+                        options={categoryOptions.filter((o) => o.value !== ALL)}
+                      />
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      {e.merchant}
+                      {/* So a $120 row does not read as a $120 charge. */}
+                      {e.parent_id !== null ? (
+                        <Badge variant="secondary" className="ml-2 text-[10px]">part of a split</Badge>
+                      ) : null}
+                    </TableCell>
+                    <TableCell className="max-w-64">
+                      <NoteCell
+                        key={`${e.id}-${e.description}`}
+                        note={e.description}
+                        merchant={e.merchant}
+                        onSave={(description) => patch(e, { description })}
+                      />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Money cents={e.amount_cents} className={e.amount_cents < 0 ? "text-[var(--good)]" : undefined} />
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-end">
+                        {e.parent_id === null ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setSplitting(e)}
+                            aria-label={`Split ${e.merchant}`}
+                          >
+                            <SplitIcon />
+                          </Button>
+                        ) : (
+                          <UnsplitButton
+                            merchant={e.merchant}
+                            disabled={unsplit.isPending}
+                            onConfirm={() => unsplit.mutate(e.parent_id!)}
+                          />
+                        )}
+                        <DeleteButton label={e.merchant} onConfirm={() => remove.mutate(e.id)} />
+                      </div>
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rows.map((e) => (
-                    <TableRow key={e.id}>
-                      <TableCell className="text-sm text-muted-foreground">{dateLabelFull(e.txn_date)}</TableCell>
-                      <TableCell>
-                        <SelectField
-                          value={e.category_id === null ? UNCATEGORIZED : String(e.category_id)}
-                          onChange={(v) => {
-                            const next = v === UNCATEGORIZED ? null : Number(v);
-                            patch(e, { category_id: next });
-                            // Only on the way out of uncategorized: fixing a
-                            // miscategorized row is not a new rule, it is a
-                            // correction, and offering there would nag.
-                            if (next !== null && e.category_id === null) offerRule(e, next);
-                          }}
-                          options={categoryOptions.filter((o) => o.value !== ALL)}
-                        />
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {e.merchant}
-                        {/* So a $120 row does not read as a $120 charge. */}
-                        {e.parent_id !== null ? (
-                          <Badge variant="secondary" className="ml-2 text-[10px]">part of a split</Badge>
-                        ) : null}
-                      </TableCell>
-                      <TableCell>
-                        <NoteCell
-                          key={`${e.id}-${e.description}`}
-                          note={e.description}
-                          merchant={e.merchant}
-                          onSave={(description) => patch(e, { description })}
-                        />
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Money cents={e.amount_cents} className={e.amount_cents < 0 ? "text-[var(--good)]" : undefined} />
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-end">
-                          {e.parent_id === null ? (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setSplitting(e)}
-                              aria-label={`Split ${e.merchant}`}
-                            >
-                              <SplitIcon />
-                            </Button>
-                          ) : (
-                            <UnsplitButton
-                              merchant={e.merchant}
-                              disabled={unsplit.isPending}
-                              onConfirm={() => unsplit.mutate(e.parent_id!)}
-                            />
-                          )}
-                          <DeleteButton label={e.merchant} onConfirm={() => remove.mutate(e.id)} />
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                ))}
+              </TableBody>
+            </Table>
           )}
         </CardContent>
       </Card>
@@ -425,7 +426,10 @@ function NoteCell({
     return (
       <button
         type="button"
-        className="w-full truncate rounded-sm px-1 py-0.5 text-left text-sm hover:bg-accent"
+        // Two lines, then an ellipsis. `whitespace-normal` undoes the
+        // nowrap TableCell puts on every cell, which line-clamp needs.
+        className="line-clamp-2 w-full rounded-sm px-1 py-0.5 text-left text-xs break-words whitespace-normal hover:bg-accent"
+        title={note || undefined}
         aria-label={`Note for ${merchant}`}
         onClick={() => {
           setDraft(note);
