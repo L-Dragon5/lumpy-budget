@@ -202,6 +202,36 @@ export async function settingRow(name: string): Promise<{ value: string; updated
   };
 }
 
+/**
+ * Suggestions a person has said no to, as one `settings` row holding a JSON
+ * array of `merchantKey`s.
+ *
+ * A row rather than a table because `settings` is already backed up, already
+ * restored and already wiped, and a dismissal is a preference, not a record.
+ *
+ * ponytail: `settings.value` is VARCHAR(500), so the list is trimmed oldest-first
+ * to fit -- roughly twenty keys. Past that the oldest dismissal comes back as a
+ * suggestion, which is visible and reversible; a real table is the upgrade if
+ * anyone ever hits it.
+ */
+export const DISMISSED_RECURRING = "dismissed_recurring";
+
+export async function dismissedRecurring(): Promise<string[]> {
+  try {
+    const parsed: unknown = JSON.parse(await setting(DISMISSED_RECURRING, "[]"));
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function dismissRecurring(key: string): Promise<string[]> {
+  const keys = [...(await dismissedRecurring()).filter((k) => k !== key), key];
+  while (JSON.stringify(keys).length > 500) keys.shift();
+  await setSetting(DISMISSED_RECURRING, JSON.stringify(keys));
+  return keys;
+}
+
 export async function setSetting(name: string, value: string): Promise<void> {
   await sql.unsafe("INSERT INTO settings (name, value) VALUES (?, ?) ON DUPLICATE KEY UPDATE value = VALUES(value)", [name, value]);
 }

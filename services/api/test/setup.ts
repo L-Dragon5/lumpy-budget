@@ -3,6 +3,24 @@
  * being tested are the queries that ship. Import this before anything that
  * touches @lumpy/db: the client reads DATABASE_URL once, at module load.
  */
+/**
+ * `bun test` forces TZ=UTC on the process. MySQL dates rows on the machine's
+ * clock (`time_zone` is SYSTEM), so from 8pm local until midnight a JS "today"
+ * and a `DATE()` off the same instant are a day apart, and tests comparing the
+ * two failed every evening with nothing wrong in the app. Put the process back
+ * on the zone the API actually runs in, which is what makes the comparison mean
+ * anything. A machine with no /etc/localtime symlink -- a CI box -- is UTC on
+ * both sides already, so the fallback agrees too.
+ */
+process.env.TZ = (() => {
+  try {
+    const link = require("node:fs").readlinkSync("/etc/localtime") as string;
+    return link.split("zoneinfo/")[1] ?? "UTC";
+  } catch {
+    return "UTC";
+  }
+})();
+
 export const TEST_URL =
   process.env.TEST_DATABASE_URL ?? "mysql://root@127.0.0.1:3306/lumpy_budget_test";
 process.env.DATABASE_URL = TEST_URL;
@@ -14,7 +32,7 @@ const { sql } = await import("@lumpy/db");
 /** For the handful of tests that need a starting state no route can produce. */
 export { sql };
 const { seed } = await import("@lumpy/db/seed");
-const { CARD_OPENING_PREFIX } = await import("../src/store");
+const { CARD_OPENING_PREFIX, DISMISSED_RECURRING } = await import("../src/store");
 
 const TABLES = [
   "expenses", "import_batches", "import_profiles", "category_rules", "categories",
@@ -35,6 +53,8 @@ export async function resetDb({ withSeed = false } = {}) {
   // TRUNCATE just started those ids over, so a key left here is read as the
   // opening balance of the next test's first card.
   await sql.unsafe("DELETE FROM settings WHERE LEFT(name, CHAR_LENGTH(?)) = ?", [CARD_OPENING_PREFIX, CARD_OPENING_PREFIX]);
+  // Same reason: the expenses a dismissal was about were just truncated.
+  await sql.unsafe("DELETE FROM settings WHERE name = ?", [DISMISSED_RECURRING]);
   if (withSeed) await seed();
 }
 

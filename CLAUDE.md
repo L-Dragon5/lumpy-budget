@@ -290,6 +290,21 @@ Four places, in this order, or reads silently drop it:
   foreign key and the export is ordered `txn_date DESC, id DESC`, so the child
   comes out of the file first. A child is always created after its parent, so
   ascending id is parents-first.
+- **A dismissed suggestion is a `settings` row, not a table.**
+  `dismissed_recurring` holds a JSON array of `merchantKey`s and is passed to
+  `recurringCandidates` as `dismissedKeys`, where it joins the set that already
+  suppresses tracked items. `settings.value` is VARCHAR(500), so
+  `dismissRecurring` in `api/src/store.ts` drops the oldest keys to fit rather
+  than failing the write -- an overflow re-proposes an old suggestion, which is
+  visible. It is deleted by `wipe()` (`DELETED_SETTING_PREFIXES`) and by the API
+  test's `resetDb`, because the charges it was about are what those truncate;
+  `restore()` leaves it, since the key means the same merchant whatever ids the
+  file carries.
+- **`bun test` forces `TZ=UTC` while MySQL dates rows on the machine's clock.**
+  `services/api/test/setup.ts` puts the process back on the zone from
+  `/etc/localtime`, which is the zone the API really runs in. Without it, every
+  test comparing a JS date to a `DATE()` off the same instant fails between 8pm
+  local and midnight and passes again in the morning.
 - **A part inherits `import_batch_id` from the charge.** `nonCashBatchIds` reads
   the batch to tell a card charge from money out of checking; batchless parts
   would be counted against the checking balance forever. Same trap

@@ -152,6 +152,14 @@ test("what is already in the fund is not suggested again", () => {
   ).toHaveLength(0);
 });
 
+test("a dismissed key is not suggested again", () => {
+  const charges = twice("STATE FARM INS", [80000, 82000], ["2024-02-01", "2025-02-01"]);
+  const [row] = recurringCandidates(charges, { today: TODAY });
+  expect(row!.key).toBe("STATE FARM");
+  expect(recurringCandidates(charges, { today: TODAY, dismissedKeys: [row!.key] })).toHaveLength(0);
+  expect(recurringCandidates(charges, { today: TODAY, dismissedKeys: ["something else"] })).toHaveLength(1);
+});
+
 test("a bill whose pattern already claims the charge is not suggested", () => {
   const charges = twice("NATIONAL GRID", [21000, 22000], ["2024-07-01", "2025-07-01"]);
   expect(recurringCandidates(charges, { today: TODAY })).toHaveLength(1);

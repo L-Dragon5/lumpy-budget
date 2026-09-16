@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import { expense, lumpy } from "../fixtures/factories";
 import {
-  dueDates, lumpyPayments, nextDueOnOrAfter, plan, recommendedMonthlyTotal, steadyMonthlyTotal, timeline,
+  behindTotal, catchUpTotal, dueDates, lumpyPayments, nextDueOnOrAfter, plan, recommendedMonthlyTotal,
+  steadyMonthlyTotal, timeline,
 } from "../src/lumpy";
 
 test("catch-up is bigger than steady state when the bill arrives before a full cycle", () => {
@@ -170,4 +171,28 @@ test("whole_word here means what it means everywhere else", () => {
   const fuel = expense({ txn_date: "2026-04-16", merchant: "BP1234 FUEL CARD" });
   expect(lumpyPayments([item], [post], { today: "2026-04-30" })).toEqual([]);
   expect(lumpyPayments([item], [fuel], { today: "2026-04-30" })).toHaveLength(1);
+});
+
+test("behind total is the hole, catch-up total is what closes it", () => {
+  // $1,200 due in 3 months: $100/mo flat saves $300 of it, so $900 is missing
+  // and $300/mo extra is what covers it in time.
+  const soon = lumpy({ id: 1, amount_cents: 120000, frequency_months: 12, next_due_date: "2026-04-15" });
+  // A full cycle out: on schedule, so it is in neither number.
+  const later = lumpy({ id: 2, amount_cents: 60000, frequency_months: 12, next_due_date: "2027-01-10" });
+  const plans = plan([soon, later], "2026-01");
+  expect(behindTotal(plans)).toBe(90000);
+  expect(catchUpTotal(plans)).toBe(30000);
+  expect(catchUpTotal(plans)).toBe(recommendedMonthlyTotal([soon, later], "2026-01") - steadyMonthlyTotal([soon, later], "2026-01"));
+});
+
+test("money already in the fund shrinks the hole", () => {
+  const item = lumpy({ amount_cents: 120000, frequency_months: 12, next_due_date: "2026-04-15" });
+  expect(behindTotal(plan([item], "2026-01", 90000))).toBe(0);
+  expect(behindTotal(plan([item], "2026-01", 60000))).toBe(30000);
+});
+
+test("nothing behind is zero on both", () => {
+  const item = lumpy({ amount_cents: 120000, frequency_months: 12, next_due_date: "2027-01-15" });
+  expect(behindTotal(plan([item], "2026-01"))).toBe(0);
+  expect(catchUpTotal(plan([item], "2026-01"))).toBe(0);
 });

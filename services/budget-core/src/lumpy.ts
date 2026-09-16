@@ -65,6 +65,23 @@ export const steadyMonthlyTotal = (items: LumpyItem[], fromMonth: ISOMonth): Cen
 export const recommendedMonthlyTotal = (items: LumpyItem[], fromMonth: ISOMonth, balanceCents: Cents = 0): Cents =>
   sum(plan(items, fromMonth, balanceCents).map((p) => p.recommended_cents));
 
+/**
+ * The hole, as one number: for every item due sooner than a full cycle away,
+ * the part of it the flat monthly amount will not have saved by its due date.
+ *
+ * An item due this month counts whole -- zero months left to save in.
+ */
+export const behindTotal = (plans: LumpyPlan[]): Cents =>
+  sum(
+    plans
+      .filter((p) => p.behind)
+      .map((p) => Math.max(0, p.item.amount_cents - p.already_covered_cents - p.steady_cents * p.months_until_due)),
+  );
+
+/** What to add to the flat monthly amount to close that hole on time. */
+export const catchUpTotal = (plans: LumpyPlan[]): Cents =>
+  sum(plans.map((p) => p.recommended_cents - p.steady_cents));
+
 export type TimelineRow = {
   month: ISOMonth;
   balance_start_cents: Cents;

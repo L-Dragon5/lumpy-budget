@@ -8,7 +8,7 @@ import { resetDb, sql } from "../services/api/test/setup";
 import { TABLES } from "@lumpy/db/tables";
 
 const { counts, DELETED_SETTING_PREFIXES, refusesDatabase, wipe, wipeOrder, ZEROED_SETTINGS } = await import("./reset");
-const { CARD_OPENING_PREFIX, cardOpeningKey } = await import("../services/api/src/store");
+const { CARD_OPENING_PREFIX, DISMISSED_RECURRING, cardOpeningKey } = await import("../services/api/src/store");
 
 const rowCount = async (t: string) =>
   Number(((await sql.unsafe(`SELECT COUNT(*) AS n FROM \`${t}\``)) as { n: number }[])[0]!.n);
@@ -67,11 +67,14 @@ test("a wipe forgets every card's opening balance, because the ids start over", 
   await resetDb();
   // The string is kept in two places, so this is the test that holds them together.
   expect(DELETED_SETTING_PREFIXES).toContain(CARD_OPENING_PREFIX);
+  expect(DELETED_SETTING_PREFIXES).toContain(DISMISSED_RECURRING);
 
   await sql.unsafe(
     "INSERT INTO import_profiles (name, mapping, cash_account) VALUES ('Airline Card', '{}', FALSE)",
   );
   await sql.unsafe("INSERT INTO settings (name, value) VALUES (?, '45000')", [cardOpeningKey(1)]);
+  await sql.unsafe("INSERT INTO settings (name, value) VALUES (?, ?) ON DUPLICATE KEY UPDATE value = VALUES(value)",
+    [DISMISSED_RECURRING, '["CITY TAX"]']);
 
   await wipe();
 
@@ -79,6 +82,9 @@ test("a wipe forgets every card's opening balance, because the ids start over", 
   // balance of whichever card is created first after the reset.
   const left = (await sql.unsafe("SELECT name FROM settings WHERE name = ?", [cardOpeningKey(1)])) as unknown[];
   expect(left).toEqual([]);
+  // And the suggestions somebody ignored, whose charges this wipe just deleted.
+  const ignored = (await sql.unsafe("SELECT name FROM settings WHERE name = ?", [DISMISSED_RECURRING])) as unknown[];
+  expect(ignored).toEqual([]);
   // The migration-owned rows stay; they are zeroed by the test above, not deleted.
   const kept = (await sql.unsafe("SELECT name FROM settings WHERE name IN (?, ?)", ZEROED_SETTINGS)) as unknown[];
   expect(kept.length).toBeGreaterThan(0);

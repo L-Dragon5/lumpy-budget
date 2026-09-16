@@ -41,7 +41,13 @@ export const ZEROED_SETTINGS = ["lumpy_opening_balance_cents", "checking_balance
  * after the reset, a number nobody typed for it. reset.test.ts holds this string
  * to the store's.
  */
-export const DELETED_SETTING_PREFIXES = ["card_opening_balance_cents:"];
+export const DELETED_SETTING_PREFIXES = [
+  "card_opening_balance_cents:",
+  // Not keyed by an id: `dismissed_recurring` is the list of suggestions
+  // somebody said no to, and the charges that produced them are what this wipe
+  // is deleting. An empty database should propose everything again.
+  "dismissed_recurring",
+];
 
 /**
  * Refuses any database whose name ends in `_test`. The API suite migrates and

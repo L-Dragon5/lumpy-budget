@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { allowedOrigin, api, corsHeaders, del, post, put, raw, resetDb, sql } from "./setup";
 import { matchManual } from "@lumpy/csv-import";
+// The local clock, not UTC: the API dates rows with core.todayISO(), and after
+// 8pm local an ISO string sliced off toISOString() is already tomorrow.
+import { addDays, todayISO } from "@lumpy/budget-core";
 
 const semiMonthly = {
   name: "Day job", amount_cents: 300000, frequency: "semimonthly",
@@ -1453,7 +1456,7 @@ describe("lumpy fund drift", () => {
     expect(before.total_cents).toBe(0);
     expect(before.count).toBe(0);
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayISO();
     await spend(today, 120000, lumpyCategory);
     const after = (await api("/api/lumpy-drift")).body;
     expect(after.total_cents).toBe(120000);
@@ -1465,13 +1468,13 @@ describe("lumpy fund drift", () => {
     await put("/api/settings", { name: "lumpy_opening_balance_cents", value: "250000" });
     const cats = (await api("/api/categories")).body as { id: number; bucket: string }[];
     const groceries = cats.find((c) => c.bucket === "discretionary")!.id;
-    await spend(new Date().toISOString().slice(0, 10), 9000, groceries);
+    await spend(todayISO(), 9000, groceries);
     expect((await api("/api/lumpy-drift")).body.total_cents).toBe(0);
   });
 
   test("a transaction dated in the future has not left the account yet", async () => {
     await put("/api/settings", { name: "lumpy_opening_balance_cents", value: "250000" });
-    const later = new Date(Date.now() + 14 * 86_400_000).toISOString().slice(0, 10);
+    const later = addDays(todayISO(), 14);
     await spend(later, 120000, lumpyCategory);
     expect((await api("/api/lumpy-drift")).body.total_cents).toBe(0);
   });
@@ -1482,7 +1485,7 @@ describe("lumpy fund drift", () => {
     await spend("2020-01-15", 120000, lumpyCategory);
     const drift = (await api("/api/lumpy-drift")).body;
     expect(drift.total_cents).toBe(0);
-    expect(drift.since).toBe(new Date().toISOString().slice(0, 10));
+    expect(drift.since).toBe(todayISO());
   });
 });
 
@@ -1614,6 +1617,37 @@ describe("recurring candidates", () => {
     expect(rows[0].annual_cents).toBe(475068);
   });
 
+  test("a dismissed suggestion stays gone, and clearing brings it back", async () => {
+    await spend(monthsAgo(24), 60000, "CITY TAX OFFICE");
+    await spend(monthsAgo(12), 61000, "CITY TAX OFFICE");
+    expect((await api("/api/recurring-candidates")).body.rows).toHaveLength(1);
+
+    const said = await post("/api/recurring-candidates/dismiss", { key: "CITY TAX" });
+    expect(said.status).toBe(200);
+    expect(said.body.dismissed).toEqual(["CITY TAX"]);
+
+    const after = await api("/api/recurring-candidates");
+    expect(after.body.rows).toHaveLength(0);
+    // The page needs the count to offer the undo, so the list rides along.
+    expect(after.body.dismissed).toEqual(["CITY TAX"]);
+
+    // Dismissing twice is not two dismissals.
+    expect((await post("/api/recurring-candidates/dismiss", { key: "CITY TAX" })).body.dismissed)
+      .toEqual(["CITY TAX"]);
+
+    expect((await del("/api/recurring-candidates/dismissed")).status).toBe(200);
+    expect((await api("/api/recurring-candidates")).body.rows).toHaveLength(1);
+  });
+
+  test("the dismissed list is trimmed to what the settings column holds", async () => {
+    // VARCHAR(500): the oldest keys fall off rather than the write failing.
+    for (let n = 0; n < 40; n++) await post("/api/recurring-candidates/dismiss", { key: `MERCHANT NUMBER${n}` });
+    const list = (await api("/api/recurring-candidates")).body.dismissed;
+    expect(JSON.stringify(list).length).toBeLessThanOrEqual(500);
+    expect(list[list.length - 1]).toBe("MERCHANT NUMBER39");
+    expect(list).not.toContain("MERCHANT NUMBER0");
+  });
+
   test("max_amount_ratio is what lets a utility through, and 1.5 still does not", async () => {
     const swing = [38308, 33000, 25000, 21112];
     for (let n = 1; n <= 4; n++) await spend(monthsAgo(n), swing[n - 1]!, "BALTIMORE GAS AN");
@@ -1659,8 +1693,8 @@ describe("forecast", () => {
 describe("cash position", () => {
   beforeEach(() => resetDb({ withSeed: true }));
 
-  const today = () => new Date().toISOString().slice(0, 10);
-  const inDays = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
+  const today = () => todayISO();
+  const inDays = (n: number) => addDays(todayISO(), n);
 
   test("the balance is read with what the plan is about to ask of it", async () => {
     await put("/api/settings", { name: "checking_balance_cents", value: "180000" });
@@ -1794,7 +1828,7 @@ describe("budgeted versus actual, through the API", () => {
 describe("a card statement is not the checking account", () => {
   beforeEach(() => resetDb({ withSeed: true }));
 
-  const today = () => new Date().toISOString().slice(0, 10);
+  const today = () => todayISO();
 
   const statement = async (name: string, cash_account: boolean, amount_cents: number) => {
     const profile = await post("/api/import-profiles", {
@@ -1861,8 +1895,8 @@ describe("a card statement is not the checking account", () => {
 describe("lumpy payments the statements already prove", () => {
   beforeEach(() => resetDb({ withSeed: true }));
 
-  const today = () => new Date().toISOString().slice(0, 10);
-  const inDays = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
+  const today = () => todayISO();
+  const inDays = (n: number) => addDays(todayISO(), n);
 
   const insurance = (next_due_date: string) => ({
     name: "Car insurance", amount_cents: 120000, frequency_months: 12,
@@ -2473,7 +2507,7 @@ describe("a split charge and the statement that posts it", () => {
   });
 
   test("the parts of a merged card charge are not money out of checking", async () => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayISO();
     await put("/api/settings", { name: "checking_balance_cents", value: "180000" });
     const { typed } = await typedAndSplit(today);
     const card = await post("/api/import-profiles", { name: "Airline Card", mapping, cash_account: false });

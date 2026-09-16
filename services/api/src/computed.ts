@@ -207,16 +207,18 @@ export const computed = new Elysia({ prefix: "/api" })
     async ({ query }) => {
       const today = core.todayISO();
       const months = clamp(query.months, 36, 12, 120);
-      const [cats, items, costs] = await Promise.all([
+      const [cats, items, costs, dismissed] = await Promise.all([
         store.categories(),
         store.lumpyItems(),
         store.fixedCosts(),
+        store.dismissedRecurring(),
       ]);
       const start = core.monthStart(core.addMonths(core.monthOf(today), -(months - 1)));
       const expenses = await store.expensesBetween(start, today);
       return {
         today,
         months,
+        dismissed,
         rows: core.recurringCandidates(expenses, {
           today,
           lookbackMonths: months,
@@ -232,6 +234,7 @@ export const computed = new Elysia({ prefix: "/api" })
           categories: cats,
           lumpyItems: items,
           fixedCosts: costs,
+          dismissedKeys: dismissed,
         }),
       };
     },
@@ -244,6 +247,23 @@ export const computed = new Elysia({ prefix: "/api" })
       }),
     },
   )
+
+  /**
+   * "That is not a bill." The key is what the suggestion was grouped on, so
+   * dismissing one silences the whole group the same way tracking it would.
+   * Reversible in one press: DELETE forgets every dismissal at once, which is
+   * the whole undo this needs -- the suggestions come back and nothing was lost.
+   */
+  .post(
+    "/recurring-candidates/dismiss",
+    async ({ body }) => ({ dismissed: await store.dismissRecurring(body.key) }),
+    { body: z.object({ key: z.string().min(1).max(60) }) },
+  )
+
+  .delete("/recurring-candidates/dismissed", async () => {
+    await store.setSetting(store.DISMISSED_RECURRING, "[]");
+    return { dismissed: [] as string[] };
+  })
 
   /**
    * The month summary run forward: what is planned to be free in each of the

@@ -82,6 +82,12 @@ export type RecurringOptions = {
   lumpyItems?: LumpyItem[];
   /** Already a bill: its pattern claims its charges. */
   fixedCosts?: FixedCost[];
+  /**
+   * `merchantKey`s a person has said no to. Suppressed the same way a tracked
+   * item is, because "I already have this" and "this is not a bill" want the
+   * same silence.
+   */
+  dismissedKeys?: string[];
 };
 
 /** The cycles the app has words for. Anything within a month of one reads as that one. */
@@ -105,12 +111,14 @@ export function recurringCandidates(expenses: Expense[], opts: RecurringOptions)
     .filter((c) => c.active && (c.merchant_pattern ?? "").trim().length > 0)
     .map((c) => ({ needle: needleOf(c.merchant_pattern!), wholeWord: c.merchant_whole_word }));
 
-  const alreadyTracked = new Set(
-    [
+  const alreadyTracked = new Set([
+    ...[
       ...(opts.lumpyItems ?? []).filter((i) => i.active).map((i) => i.name),
       ...(opts.fixedCosts ?? []).filter((c) => c.active).map((c) => c.name),
     ].map((n) => merchantKey(n)),
-  );
+    // Already keys -- they were dismissed by the key the suggestion carried.
+    ...(opts.dismissedKeys ?? []),
+  ]);
 
   const groups = new Map<string, RecurringOccurrence[]>();
   for (const e of expenses) {

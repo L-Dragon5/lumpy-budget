@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import type { LumpyItem, LumpyItemInput } from "@lumpy/contracts";
-import { ArrowRightIcon, PencilIcon } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { ArrowRightIcon, PencilIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
@@ -19,6 +18,7 @@ import { StatTile } from "@/components/app/stat-tile";
 import { Loading, LoadError, PageHeader } from "@/components/app/page";
 import { ApiError, eden, errorText, useApi, useInvalidateAll, useMutate } from "@/lib/api";
 import { CYCLE_LABEL, dateLabelFull, merchantTitle, money, monthLabel, thisMonth } from "@/lib/format";
+import * as core from "@lumpy/budget-core";
 
 
 type Draft = {
@@ -76,6 +76,8 @@ export default function LumpyFund() {
   const update = useMutate((v: { id: number; body: LumpyItemInput }) =>
     eden.api["lumpy-items"]({ id: v.id }).put(v.body));
   const remove = useMutate((id: number) => eden.api["lumpy-items"]({ id }).delete());
+  const dismiss = useMutate((key: string) => eden.api["recurring-candidates"].dismiss.post({ key }));
+  const undismiss = useMutate(() => eden.api["recurring-candidates"].dismissed.delete());
 
   const [editing, setEditing] = useState<LumpyItem | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -157,13 +159,14 @@ export default function LumpyFund() {
   const plans = timeline.data?.plan ?? [];
   const planFor = (id: number) => plans.find((p) => p.item.id === id);
   const steady = plans.reduce((a, p) => a + p.steady_cents, 0);
-  const recommended = timeline.data?.monthly_contribution_cents ?? 0;
-  const behind = plans.filter((p) => p.behind);
+  const behindCents = core.behindTotal(plans);
+  const catchUpCents = core.catchUpTotal(plans);
   const yearlyTotal = rows.filter((r) => r.active).reduce((a, r) => a + Math.round((r.amount_cents * 12) / r.frequency_months), 0);
   // rows[0] is the current month, so rows[1] is what the fund has to cover next.
   const nextMonth = timeline.data?.rows[1];
   const drifted = drift.data?.total_cents ?? 0;
   const suggestions = found.data?.rows ?? [];
+  const dismissed = found.data?.dismissed ?? [];
   const payments = paid.data?.rows ?? [];
 
   return (
@@ -184,12 +187,14 @@ export default function LumpyFund() {
       <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile
           label="Save each month"
-          cents={recommended}
+          cents={steady}
           emphasis={false}
-          tone={recommended > steady ? "critical" : "neutral"}
           caption={
-            recommended > steady
-              ? `Includes catch-up. Once you are on schedule it would be ${new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(steady / 100)}.`
+            // The flat long-run number, always. Catch-up is a separate debt with
+            // an end date, and folding it in here made the ordinary monthly cost
+            // look like whatever the worst-timed bill happened to make it.
+            catchUpCents > 0
+              ? `The flat monthly cost. Catching up is ${money(catchUpCents, { cents: false })} a month on top.`
               : "You are on schedule. This is the flat monthly amount."
           }
         />
@@ -226,33 +231,18 @@ export default function LumpyFund() {
         <StatTile label="Cost per year" cents={yearlyTotal} caption="All items, annualized." tone="muted" />
       </div>
 
-      {behind.length > 0 ? (
+      {behindCents > 0 ? (
         <Card className="mb-4">
           <CardHeader>
-            <CardTitle>Behind on {behind.length} item{behind.length === 1 ? "" : "s"}</CardTitle>
+            <CardTitle>
+              Behind by <Money cents={behindCents} />
+            </CardTitle>
             <CardDescription>
-              These come due sooner than a full cycle away, so the monthly number is higher than the long-run cost
-              until they are paid.
+              Some of the fund comes due sooner than a full cycle away, so the flat monthly amount will not
+              have saved it in time. Put <Money cents={catchUpCents} /> a month in on top of the
+              flat amount and every one of them is covered on its due date.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <ul className="flex flex-col gap-1 text-sm">
-              {behind.map((p) => (
-                <li key={p.item.id} className="flex items-center justify-between">
-                  <span>
-                    {p.item.name}
-                    <span className="ml-2 text-muted-foreground">
-                      due in {p.months_until_due} month{p.months_until_due === 1 ? "" : "s"}
-                    </span>
-                  </span>
-                  <span>
-                    <Money cents={p.catch_up_cents} /> <span className="text-muted-foreground">vs</span>{" "}
-                    <Money cents={p.steady_cents} className="text-muted-foreground" />
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
         </Card>
       ) : null}
 
@@ -334,7 +324,7 @@ export default function LumpyFund() {
         </Card>
       ) : null}
 
-      {suggestions.length > 0 ? (
+      {suggestions.length > 0 || dismissed.length > 0 ? (
         <Card className="mb-4">
           <CardHeader>
             <CardTitle>Found in your statements</CardTitle>
@@ -345,6 +335,9 @@ export default function LumpyFund() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {suggestions.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Everything found so far is ignored.</p>
+            ) : (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -353,7 +346,7 @@ export default function LumpyFund() {
                   <TableHead>Cycle</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
                   <TableHead className="text-right">Per year</TableHead>
-                  <TableHead className="w-24" />
+                  <TableHead className="w-32" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -387,9 +380,19 @@ export default function LumpyFund() {
                       <Money cents={c.annual_cents} />
                     </TableCell>
                     <TableCell>
-                      <div className="flex justify-end">
+                      <div className="flex justify-end gap-1">
                         <Button variant="outline" size="sm" onClick={() => applySuggestion(c)}>
                           Add
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Ignore ${merchantTitle(c.name)}`}
+                          title="Not a bill. Hide this suggestion."
+                          disabled={dismiss.isPending}
+                          onClick={() => dismiss.mutate(c.key)}
+                        >
+                          <XIcon />
                         </Button>
                       </div>
                     </TableCell>
@@ -397,6 +400,24 @@ export default function LumpyFund() {
                 ))}
               </TableBody>
             </Table>
+            )}
+            {dismissed.length > 0 ? (
+              <p className="mt-3 text-sm text-muted-foreground">
+                {dismissed.length} ignored.{" "}
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="h-auto p-0"
+                  disabled={undismiss.isPending}
+                  onClick={() => undismiss.mutate()}
+                >
+                  Show them again
+                </Button>
+              </p>
+            ) : null}
+            {dismiss.error || undismiss.error ? (
+              <p className="mt-3 text-sm text-destructive">{errorText(dismiss.error ?? undismiss.error)}</p>
+            ) : null}
           </CardContent>
         </Card>
       ) : null}
@@ -439,18 +460,14 @@ export default function LumpyFund() {
                       <TableCell className="text-sm text-muted-foreground">{CYCLE_LABEL(i.frequency_months)}</TableCell>
                       <TableCell className="text-sm">
                         {dateLabelFull(i.next_due_date)}
-                        {p?.behind ? <Badge variant="destructive" className="ml-2">catching up</Badge> : null}
                       </TableCell>
                       <TableCell className="text-right">
                         <Money cents={i.amount_cents} />
                       </TableCell>
+                      {/* The flat cost, so the column adds up to the tile. What
+                          any one item is behind by is the card above, once. */}
                       <TableCell className="text-right">
-                        <Money cents={p?.recommended_cents ?? 0} />
-                        {p && p.recommended_cents !== p.steady_cents ? (
-                          <div className="text-xs text-muted-foreground">
-                            steady <Money cents={p.steady_cents} />
-                          </div>
-                        ) : null}
+                        <Money cents={p?.steady_cents ?? 0} />
                       </TableCell>
                       <TableCell>
                         <div className="flex justify-end">

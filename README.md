@@ -379,6 +379,12 @@ month, not $100, because you did not start saving for it a year ago. Money
 already in the account is claimed by whatever comes due first. The timeline runs
 12 months and names the first month the fund would run dry.
 
+The page keeps those two apart. "Save each month" is the flat cost and nothing
+else, so it does not swing with whichever bill happens to be badly timed this
+month, and the per-item column adds up to it. Being behind is one card: the
+whole hole in dollars, and the extra per month that closes it. That is a debt
+with an end date, not part of what the fund costs to carry.
+
 **Lumpy items the statements already know about.** The setup is the one job
 this app cannot do for you, except that after an import the evidence is already
 in the expenses table: a charge that arrived last March and again this March,
@@ -392,7 +398,10 @@ bill) where the variance report has to use an exact pattern. Charges a bill
 already claims, items already in the fund, monthly charges, transfers and
 anything under $50 are left out; so are amounts that disagree by more than half
 and spacings that disagree by more than a month, because those are two things
-happening at one merchant rather than one bill.
+happening at one merchant rather than one bill. A suggestion that is simply not
+a bill is dismissed with the x beside Add, which silences that merchant key the
+same way tracking it would; the card then says how many are ignored and one
+press brings all of them back.
 
 **The next twelve months.** The month summary run forward: what each month is
 scheduled to leave free once the bills, the fund and the goals have taken their
