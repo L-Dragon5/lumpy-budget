@@ -37,7 +37,9 @@ export function CardBalances() {
           What each card would take to clear: the balance you last read off it, plus everything imported since.
         </CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-3 sm:grid-cols-2">
+      {/* Stacked, never side by side: half a column is not enough width for the
+          editor's input and its two buttons. */}
+      <CardContent className="flex flex-col gap-3">
         {rows.map((c) => (
           <BalanceTile
             key={c.profile_id}

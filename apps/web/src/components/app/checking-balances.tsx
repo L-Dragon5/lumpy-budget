@@ -81,7 +81,10 @@ export function CheckingBalances() {
             : "What the account holds right now, against what the plan is about to ask of it."}
         </CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-3 sm:grid-cols-2">
+      {/* Stacked, never side by side: half a column is not enough width for the
+          editor's input and its two buttons, and the point of putting the editor
+          where the number is read is that correcting it is one click. */}
+      <CardContent className="flex flex-col gap-3">
         <BalanceTile
           settingKey="checking_balance_cents"
           label={f ? "Everyday account" : "In checking"}
