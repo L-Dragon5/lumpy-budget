@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useSearchParams } from "react-router";
-import type { Expense, ExpenseInput } from "@lumpy/contracts";
-import { SPENDING, bucketOf, categoryIndex, monthEnd, monthStart, totalsByBucket } from "@lumpy/budget-core";
+import type { Bucket, Expense, ExpenseInput } from "@lumpy/contracts";
+import { bucketOf, categoryIndex, monthEnd, monthStart, totalsByBucket } from "@lumpy/budget-core";
 import { applyRules, suggestRule } from "@lumpy/csv-import";
 import { SearchIcon, SplitIcon, UploadIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -28,8 +28,17 @@ import { ApiError, eden, errorText, useApi, useMutate } from "@/lib/api";
 import { dateLabelFull, monthParam, thisMonth } from "@/lib/format";
 
 const ALL = "__all__";
-const NOT_SPENDING =
-  "Card payments, transfers between your own accounts, and income. Not spending, so not in the total.";
+/**
+ * This page answers "what went out", which is a narrower question than what the
+ * reports total. `savings` is in budget-core's SPENDING -- a savings
+ * contribution is spending you planned and the summary counts it -- but the
+ * money is still yours, sitting in your own account, the same way a card payment
+ * and a transfer are. So the page keeps its own list rather than reusing
+ * SPENDING, and everything off it is reported beside the total instead of in it.
+ */
+const OUT: readonly Bucket[] = ["discretionary", "fixed", "lumpy"];
+const NOT_OUT =
+  "Savings, card payments, transfers between your own accounts, and income. Your own money moving, so not in the total.";
 const UNCATEGORIZED = "none";
 
 type Draft = { txn_date: string; amount_cents: number | null; merchant: string; description: string; category_id: string };
@@ -42,7 +51,7 @@ export default function Expenses() {
   const [month, setMonth] = useState(() => monthParam(params.get("month")) ?? thisMonth());
   const [category, setCategory] = useState(() => (params.get("category") === UNCATEGORIZED ? UNCATEGORIZED : ALL));
   const [search, setSearch] = useState("");
-  const [showNonSpending, setShowNonSpending] = useState(false);
+  const [showNotOut, setShowNonSpending] = useState(false);
   const [importing, setImporting] = useState(false);
 
   const query = {
@@ -70,19 +79,17 @@ export default function Expenses() {
 
   const all = expenses.data ?? [];
   const cats = categories.data ?? [];
-  // The same definition every report totals with: a card payment or a transfer
-  // between your own accounts is not spending (the charges it pays were already
-  // counted on the day they happened), and a paycheck is money arriving.
   const totals = totalsByBucket(all, cats);
-  const notSpending = totals.transfer + totals.income;
+  const out = OUT.reduce((a, b) => a + totals[b], 0);
+  const notOut = totals.transfer + totals.income + totals.savings;
   const byId = categoryIndex(cats);
-  const isSpending = (e: Expense) => SPENDING.includes(bucketOf(e, byId));
+  const isOut = (e: Expense) => OUT.includes(bucketOf(e, byId));
   // Those rows are not in the total, so by default they are not in the list
   // either -- a card payment is the biggest number on the page and says
   // nothing about the month. Asking for one category shows that category
   // whatever bucket it is in, which is the only way to look at them.
-  const hiding = category === ALL && !showNonSpending;
-  const rows = hiding ? all.filter(isSpending) : all;
+  const hiding = category === ALL && !showNotOut;
+  const rows = hiding ? all.filter(isOut) : all;
   // Counted over every row: an uncategorized credit is hidden by the line
   // above, and the queue is how you find it.
   const uncategorized = all.filter((e) => e.category_id === null).length;
@@ -207,15 +214,15 @@ export default function Expenses() {
             </Button>
           ) : null}
           <span className="text-muted-foreground">
-            Spent <Money cents={totals.total} className="font-medium text-foreground" />
+            Money out <Money cents={out} className="font-medium text-foreground" />
           </span>
-          {notSpending === 0 ? null : category !== ALL ? (
-            <span className="text-muted-foreground" title={NOT_SPENDING}>
-              <Money cents={notSpending} /> not spending
+          {notOut === 0 ? null : category !== ALL ? (
+            <span className="text-muted-foreground" title={NOT_OUT}>
+              <Money cents={notOut} /> not money out
             </span>
           ) : (
-            <Button variant="ghost" size="sm" title={NOT_SPENDING} onClick={() => setShowNonSpending((v) => !v)}>
-              <Money cents={notSpending} /> not spending{hiding ? ", hidden" : ""}
+            <Button variant="ghost" size="sm" title={NOT_OUT} onClick={() => setShowNonSpending((v) => !v)}>
+              <Money cents={notOut} /> not money out{hiding ? ", hidden" : ""}
             </Button>
           )}
         </div>
