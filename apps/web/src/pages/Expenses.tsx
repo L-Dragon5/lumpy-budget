@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import type { Expense, ExpenseInput } from "@lumpy/contracts";
-import { monthEnd, monthStart } from "@lumpy/budget-core";
+import { monthEnd, monthStart, totalsByBucket } from "@lumpy/budget-core";
 import { applyRules, suggestRule } from "@lumpy/csv-import";
 import { SearchIcon, SplitIcon, UploadIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -67,7 +67,11 @@ export default function Expenses() {
 
   const rows = expenses.data ?? [];
   const cats = categories.data ?? [];
-  const total = rows.reduce((a, e) => a + e.amount_cents, 0);
+  // The same definition every report totals with: a card payment or a transfer
+  // between your own accounts is not spending (the charges it pays were already
+  // counted on the day they happened), and a paycheck is money arriving.
+  const totals = totalsByBucket(rows, cats);
+  const notSpending = totals.transfer + totals.income;
   const uncategorized = rows.filter((e) => e.category_id === null).length;
 
   const categoryOptions = [
@@ -190,8 +194,16 @@ export default function Expenses() {
             </Button>
           ) : null}
           <span className="text-muted-foreground">
-            Total <Money cents={total} className="font-medium text-foreground" />
+            Spent <Money cents={totals.total} className="font-medium text-foreground" />
           </span>
+          {notSpending !== 0 ? (
+            <span
+              className="text-muted-foreground"
+              title="Card payments, transfers between your own accounts, and income. Not spending, so not in the total."
+            >
+              <Money cents={notSpending} /> not spending
+            </span>
+          ) : null}
         </div>
       </div>
 
