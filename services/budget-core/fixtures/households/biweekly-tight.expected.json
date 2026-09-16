@@ -7,10 +7,10 @@
     "surplus_cents": 148333,
     "extra_paycheck": true,
     "fixed_cents": 209800,
-    "lumpy_cents": 72000,
+    "lumpy_cents": 40000,
     "lumpy_steady_cents": 18000,
     "savings_cents": 26700,
-    "planned_free_cents": 225500,
+    "planned_free_cents": 257500,
     "spent": {
       "discretionary": 25650,
       "fixed": 0,
@@ -20,7 +20,7 @@
       "income": 0,
       "total": 25650
     },
-    "available_cents": 199850
+    "available_cents": 231850
   },
   "paychecks": [
     {
@@ -46,9 +46,9 @@
         "Car payment 39500"
       ],
       "hold_total_cents": 39500,
-      "lumpy_cents": 24000,
+      "lumpy_cents": 13334,
       "savings_cents": 8900,
-      "free_cents": 105600,
+      "free_cents": 116266,
       "over_committed": false
     },
     {
@@ -61,9 +61,9 @@
         "Phone 8500"
       ],
       "hold_total_cents": 25300,
-      "lumpy_cents": 24000,
+      "lumpy_cents": 13333,
       "savings_cents": 8900,
-      "free_cents": 119800,
+      "free_cents": 130467,
       "over_committed": false
     },
     {
@@ -73,9 +73,9 @@
       "amount_cents": 178000,
       "holds": [],
       "hold_total_cents": 0,
-      "lumpy_cents": 24000,
+      "lumpy_cents": 13333,
       "savings_cents": 8900,
-      "free_cents": 145100,
+      "free_cents": 155767,
       "over_committed": false
     }
   ],
@@ -83,23 +83,23 @@
     {
       "window": "2026-01-02..2026-01-15",
       "income_cents": 178000,
-      "planned_free_cents": 105600,
+      "planned_free_cents": 116266,
       "spent_discretionary_cents": 8200,
-      "available_cents": 97400
+      "available_cents": 108066
     },
     {
       "window": "2026-01-16..2026-01-29",
       "income_cents": 178000,
-      "planned_free_cents": 119800,
+      "planned_free_cents": 130467,
       "spent_discretionary_cents": 11350,
-      "available_cents": 108450
+      "available_cents": 119117
     },
     {
       "window": "2026-01-30..2026-02-12",
       "income_cents": 178000,
-      "planned_free_cents": 145100,
+      "planned_free_cents": 155767,
       "spent_discretionary_cents": 6100,
-      "available_cents": 139000
+      "available_cents": 149667
     }
   ],
   "unfunded": [],
@@ -116,7 +116,7 @@
     }
   ],
   "lumpy": {
-    "monthly_contribution_cents": 72000,
+    "monthly_contribution_cents": 40000,
     "total_outflow_cents": 216000,
     "worst_balance_cents": 0,
     "first_short_month": null,
@@ -124,18 +124,18 @@
       {
         "month": "2026-01",
         "start": 0,
-        "in": 72000,
+        "in": 40000,
         "out": 0,
-        "end": 72000,
+        "end": 40000,
         "due": [],
         "short": false
       },
       {
         "month": "2026-02",
-        "start": 72000,
-        "in": 72000,
+        "start": 40000,
+        "in": 40000,
         "out": 24000,
-        "end": 120000,
+        "end": 56000,
         "due": [
           "Renters insurance"
         ],
@@ -143,10 +143,10 @@
       },
       {
         "month": "2026-03",
-        "start": 120000,
-        "in": 72000,
+        "start": 56000,
+        "in": 40000,
         "out": 96000,
-        "end": 96000,
+        "end": 0,
         "due": [
           "Car insurance"
         ],
@@ -154,55 +154,55 @@
       },
       {
         "month": "2026-04",
-        "start": 96000,
-        "in": 72000,
+        "start": 0,
+        "in": 40000,
         "out": 0,
-        "end": 168000,
+        "end": 40000,
         "due": [],
         "short": false
       },
       {
         "month": "2026-05",
-        "start": 168000,
-        "in": 72000,
+        "start": 40000,
+        "in": 40000,
         "out": 0,
-        "end": 240000,
+        "end": 80000,
         "due": [],
         "short": false
       },
       {
         "month": "2026-06",
-        "start": 240000,
-        "in": 72000,
+        "start": 80000,
+        "in": 40000,
         "out": 0,
-        "end": 312000,
+        "end": 120000,
         "due": [],
         "short": false
       },
       {
         "month": "2026-07",
-        "start": 312000,
-        "in": 72000,
+        "start": 120000,
+        "in": 40000,
         "out": 0,
-        "end": 384000,
+        "end": 160000,
         "due": [],
         "short": false
       },
       {
         "month": "2026-08",
-        "start": 384000,
-        "in": 72000,
+        "start": 160000,
+        "in": 40000,
         "out": 0,
-        "end": 456000,
+        "end": 200000,
         "due": [],
         "short": false
       },
       {
         "month": "2026-09",
-        "start": 456000,
-        "in": 72000,
+        "start": 200000,
+        "in": 40000,
         "out": 96000,
-        "end": 432000,
+        "end": 144000,
         "due": [
           "Car insurance"
         ],
@@ -210,28 +210,28 @@
       },
       {
         "month": "2026-10",
-        "start": 432000,
-        "in": 72000,
+        "start": 144000,
+        "in": 40000,
         "out": 0,
-        "end": 504000,
+        "end": 184000,
         "due": [],
         "short": false
       },
       {
         "month": "2026-11",
-        "start": 504000,
-        "in": 72000,
+        "start": 184000,
+        "in": 40000,
         "out": 0,
-        "end": 576000,
+        "end": 224000,
         "due": [],
         "short": false
       },
       {
         "month": "2026-12",
-        "start": 576000,
-        "in": 72000,
+        "start": 224000,
+        "in": 40000,
         "out": 0,
-        "end": 648000,
+        "end": 264000,
         "due": [],
         "short": false
       }
@@ -300,8 +300,8 @@
     }
   ],
   "forecast": {
-    "total_free_cents": 1015000,
-    "average_free_cents": 84583,
+    "total_free_cents": 1399000,
+    "average_free_cents": 116583,
     "tightest_month": "2026-02",
     "first_tight_month": null,
     "first_short_month": null,
@@ -309,84 +309,84 @@
       {
         "month": "2026-01",
         "income_cents": 534000,
-        "free": 225500,
+        "free": 257500,
         "lumpy_due_cents": 0,
         "tight": false
       },
       {
         "month": "2026-02",
         "income_cents": 356000,
-        "free": 56400,
+        "free": 88400,
         "lumpy_due_cents": 24000,
         "tight": false
       },
       {
         "month": "2026-03",
         "income_cents": 356000,
-        "free": 56400,
+        "free": 88400,
         "lumpy_due_cents": 96000,
         "tight": false
       },
       {
         "month": "2026-04",
         "income_cents": 356000,
-        "free": 56400,
+        "free": 88400,
         "lumpy_due_cents": 0,
         "tight": false
       },
       {
         "month": "2026-05",
         "income_cents": 356000,
-        "free": 56400,
+        "free": 88400,
         "lumpy_due_cents": 0,
         "tight": false
       },
       {
         "month": "2026-06",
         "income_cents": 356000,
-        "free": 56400,
+        "free": 88400,
         "lumpy_due_cents": 0,
         "tight": false
       },
       {
         "month": "2026-07",
         "income_cents": 534000,
-        "free": 225500,
+        "free": 257500,
         "lumpy_due_cents": 0,
         "tight": false
       },
       {
         "month": "2026-08",
         "income_cents": 356000,
-        "free": 56400,
+        "free": 88400,
         "lumpy_due_cents": 0,
         "tight": false
       },
       {
         "month": "2026-09",
         "income_cents": 356000,
-        "free": 56400,
+        "free": 88400,
         "lumpy_due_cents": 96000,
         "tight": false
       },
       {
         "month": "2026-10",
         "income_cents": 356000,
-        "free": 56400,
+        "free": 88400,
         "lumpy_due_cents": 0,
         "tight": false
       },
       {
         "month": "2026-11",
         "income_cents": 356000,
-        "free": 56400,
+        "free": 88400,
         "lumpy_due_cents": 0,
         "tight": false
       },
       {
         "month": "2026-12",
         "income_cents": 356000,
-        "free": 56400,
+        "free": 88400,
         "lumpy_due_cents": 0,
         "tight": false
       }
@@ -396,9 +396,9 @@
     {
       "window": "2026-01-02..2026-01-15",
       "day": "9/14",
-      "on_track_cents": 67886,
-      "delta_cents": -59686,
-      "daily_left_cents": 16233,
+      "on_track_cents": 74742,
+      "delta_cents": -66542,
+      "daily_left_cents": 18011,
       "status": "under"
     },
     {

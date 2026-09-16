@@ -10,77 +10,113 @@ export type LumpyPlan = {
   steady_cents: Cents;
   /** Months from `from` until the next time it comes due. 0 means this month. */
   months_until_due: number;
-  /** What you must set aside each month to have the full amount by the due date. */
+};
+
+/** What each item costs to carry, and when it next comes due. */
+export function plan(items: LumpyItem[], fromMonth: ISOMonth): LumpyPlan[] {
+  const from = d.monthStart(fromMonth);
+  return items
+    .filter((i) => i.active)
+    .map((item) => ({
+      item,
+      steady_cents: divRound(item.amount_cents, item.frequency_months),
+      months_until_due: Math.max(0, d.monthsBetween(fromMonth, d.monthOf(nextDueOnOrAfter(item, from)))),
+    }));
+}
+
+export type FundPlan = {
+  /** The flat long-run cost: every item's amount over its cycle, added up. */
+  steady_cents: Cents;
+  /** What to actually save each month, flat, so the fund never runs dry. */
+  required_cents: Cents;
+  /** `required - steady`. Zero whenever the flat amount is already enough. */
   catch_up_cents: Cents;
-  /** The number to actually save this month: the larger of the two. */
-  recommended_cents: Cents;
-  behind: boolean;
-  /** How much of this item is already sitting in the fund. */
-  already_covered_cents: Cents;
+  /** The hole: the deepest the flat amount alone would put the fund below zero. */
+  short_by_cents: Cents;
+  /** The month it would run dry on the flat amount. Null when it never does. */
+  short_month: ISOMonth | null;
+  /** How far the check ran: the month the last item first comes due. */
+  through_month: ISOMonth;
 };
 
 /**
- * Steady state is the honest long-run number. Catch-up is the honest number
- * *right now*: a $1,200 annual bill due in 3 months needs $400/mo, not $100/mo,
- * because you did not start saving for it a year ago.
+ * What the fund has to be paid each month, as one flat number.
  *
- * Money already in the fund is claimed by whatever comes due first, so an
- * account with a balance is not told to save as if it were empty.
+ * The question is cash flow, not bookkeeping: walk every occurrence in due
+ * order and ask what constant monthly contribution keeps the balance from ever
+ * going negative. For a contribution C on the 1st of month k, the fund has
+ * `balance + C * (k + 1)` to have paid `cumulative outflow through month k`, so
+ * every month sets a floor of `(cumulative - balance) / (k + 1)` and the answer
+ * is the largest of those floors, or the flat cost if none of them is bigger.
+ *
+ * Doing it per item and adding the results up -- which is what this used to do --
+ * over-collects, and keeps over-collecting forever. Each item was told to fund
+ * itself from scratch by its own due date, so a bill 10 months out ignored the
+ * ten contributions that arrive before it, and the balance could only be claimed
+ * once, by whatever came due first. On a real fund that ran about $1,200 a year
+ * above the bills and settled into a balance that never came back down. The
+ * timeline dipping to nearly zero at the tightest month is the point: that is
+ * what a fund with nothing spare in it looks like.
+ *
+ * The window runs to the last of every item's *next* occurrence, which is as far
+ * as being behind can reach -- past that, steady state is the whole story.
  */
-export function plan(items: LumpyItem[], fromMonth: ISOMonth, balanceCents: Cents = 0): LumpyPlan[] {
+export function fundPlan(items: LumpyItem[], fromMonth: ISOMonth, balanceCents: Cents = 0): FundPlan {
   const active = items.filter((i) => i.active);
-  const from = d.monthStart(fromMonth);
+  const steady = sum(active.map((i) => divRound(i.amount_cents, i.frequency_months)));
+  const flat: FundPlan = {
+    steady_cents: steady,
+    required_cents: steady,
+    catch_up_cents: 0,
+    short_by_cents: 0,
+    short_month: null,
+    through_month: fromMonth,
+  };
+  if (active.length === 0) return flat;
 
-  const withDue = active.map((item) => ({ item, due: nextDueOnOrAfter(item, from) }));
-  // Soonest bills get first claim on the balance: that is the order they will spend it.
-  const claimOrder = [...withDue].sort((a, b) => d.compare(a.due, b.due) || a.item.id - b.item.id);
-  const covered = new Map<number, Cents>();
-  let left = Math.max(0, balanceCents);
-  for (const { item } of claimOrder) {
-    const take = Math.min(left, item.amount_cents);
-    covered.set(item.id, take);
-    left -= take;
+  const from = d.monthStart(fromMonth);
+  const through = d.monthOf(active.map((i) => nextDueOnOrAfter(i, from)).sort(d.compare).at(-1)!);
+  const outflow = new Map<ISOMonth, Cents>();
+  for (const item of active) {
+    for (const date of dueDates(item, from, d.monthEnd(through))) {
+      const m = d.monthOf(date);
+      outflow.set(m, (outflow.get(m) ?? 0) + item.amount_cents);
+    }
   }
 
-  return withDue.map(({ item, due }) => {
-    const steady = divRound(item.amount_cents, item.frequency_months);
-    const monthsUntil = Math.max(0, d.monthsBetween(fromMonth, d.monthOf(due)));
-    const needed = Math.max(0, item.amount_cents - (covered.get(item.id) ?? 0));
-    const catchUp = monthsUntil <= 0 ? needed : divRound(needed, monthsUntil);
-    return {
-      item,
-      steady_cents: steady,
-      months_until_due: monthsUntil,
-      catch_up_cents: catchUp,
-      recommended_cents: Math.max(steady, catchUp),
-      behind: catchUp > steady,
-      already_covered_cents: covered.get(item.id) ?? 0,
-    };
+  // A negative balance is not money the fund can spend, and an overdrawn savings
+  // account is somebody else's problem; treat it as empty, the way plan always has.
+  const balance = Math.max(0, balanceCents);
+  let cumulative = 0;
+  let required = steady;
+  let shortBy = 0;
+  let shortMonth: ISOMonth | null = null;
+  d.monthRange(fromMonth, d.monthsBetween(fromMonth, through) + 1).forEach((month, k) => {
+    cumulative += outflow.get(month) ?? 0;
+    // Ceiling, not round: a contribution half a cent light is a fund that is short.
+    required = Math.max(required, Math.ceil((cumulative - balance) / (k + 1)));
+    const short = cumulative - balance - steady * (k + 1);
+    if (short > shortBy) {
+      shortBy = short;
+      shortMonth = month;
+    }
   });
+
+  return {
+    ...flat,
+    required_cents: required,
+    catch_up_cents: required - steady,
+    short_by_cents: shortBy,
+    short_month: shortMonth,
+    through_month: through,
+  };
 }
 
 export const steadyMonthlyTotal = (items: LumpyItem[], fromMonth: ISOMonth): Cents =>
   sum(plan(items, fromMonth).map((p) => p.steady_cents));
 
 export const recommendedMonthlyTotal = (items: LumpyItem[], fromMonth: ISOMonth, balanceCents: Cents = 0): Cents =>
-  sum(plan(items, fromMonth, balanceCents).map((p) => p.recommended_cents));
-
-/**
- * The hole, as one number: for every item due sooner than a full cycle away,
- * the part of it the flat monthly amount will not have saved by its due date.
- *
- * An item due this month counts whole -- zero months left to save in.
- */
-export const behindTotal = (plans: LumpyPlan[]): Cents =>
-  sum(
-    plans
-      .filter((p) => p.behind)
-      .map((p) => Math.max(0, p.item.amount_cents - p.already_covered_cents - p.steady_cents * p.months_until_due)),
-  );
-
-/** What to add to the flat monthly amount to close that hole on time. */
-export const catchUpTotal = (plans: LumpyPlan[]): Cents =>
-  sum(plans.map((p) => p.recommended_cents - p.steady_cents));
+  fundPlan(items, fromMonth, balanceCents).required_cents;
 
 export type TimelineRow = {
   month: ISOMonth;
@@ -115,11 +151,8 @@ export function timeline(
   mode: "steady" | "recommended" = "recommended",
 ): Timeline {
   const active = items.filter((i) => i.active);
-  const contribution = sum(
-    plan(active, startMonth, openingBalanceCents).map((p) =>
-      mode === "steady" ? p.steady_cents : p.recommended_cents,
-    ),
-  );
+  const fund = fundPlan(active, startMonth, openingBalanceCents);
+  const contribution = mode === "steady" ? fund.steady_cents : fund.required_cents;
 
   const monthsList = d.monthRange(startMonth, months);
   const lastMonth = monthsList[monthsList.length - 1]!;

@@ -18,7 +18,6 @@ import { StatTile } from "@/components/app/stat-tile";
 import { Loading, LoadError, PageHeader } from "@/components/app/page";
 import { ApiError, eden, errorText, useApi, useInvalidateAll, useMutate } from "@/lib/api";
 import { CYCLE_LABEL, dateLabelFull, merchantTitle, money, monthLabel, thisMonth } from "@/lib/format";
-import * as core from "@lumpy/budget-core";
 
 
 type Draft = {
@@ -158,9 +157,10 @@ export default function LumpyFund() {
   const rows = items.data ?? [];
   const plans = timeline.data?.plan ?? [];
   const planFor = (id: number) => plans.find((p) => p.item.id === id);
-  const steady = plans.reduce((a, p) => a + p.steady_cents, 0);
-  const behindCents = core.behindTotal(plans);
-  const catchUpCents = core.catchUpTotal(plans);
+  const fund = timeline.data?.fund;
+  const steady = fund?.steady_cents ?? 0;
+  const behindCents = fund?.short_by_cents ?? 0;
+  const catchUpCents = fund?.catch_up_cents ?? 0;
   const yearlyTotal = rows.filter((r) => r.active).reduce((a, r) => a + Math.round((r.amount_cents * 12) / r.frequency_months), 0);
   // rows[0] is the current month, so rows[1] is what the fund has to cover next.
   const nextMonth = timeline.data?.rows[1];
@@ -238,9 +238,10 @@ export default function LumpyFund() {
               Behind by <Money cents={behindCents} />
             </CardTitle>
             <CardDescription>
-              Some of the fund comes due sooner than a full cycle away, so the flat monthly amount will not
-              have saved it in time. Put <Money cents={catchUpCents} /> a month in on top of the
-              flat amount and every one of them is covered on its due date.
+              On the flat monthly amount the fund runs dry
+              {fund?.short_month ? ` in ${monthLabel(fund.short_month)}` : ""} and is that much short of
+              what has to be paid by then. Put <Money cents={catchUpCents} /> a month in on top and every
+              bill through {fund ? monthLabel(fund.through_month) : "the window"} is covered on its due date.
             </CardDescription>
           </CardHeader>
         </Card>

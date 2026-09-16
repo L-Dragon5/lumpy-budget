@@ -373,11 +373,23 @@ for it. The lumpy and savings transfers are carved out of each paycheck *before*
 any bill is assigned, so a small rental cheque is never handed a mortgage. When
 nothing can cover a bill it is flagged rather than hidden.
 
-**The lumpy fund.** Steady state is `amount / cycle_months`. Catch-up is the
-honest number right now: a $1,200 annual bill due in three months needs $400 a
-month, not $100, because you did not start saving for it a year ago. Money
-already in the account is claimed by whatever comes due first. The timeline runs
-12 months and names the first month the fund would run dry.
+**The lumpy fund.** Steady state is `amount / cycle_months`, added up: the flat
+long-run cost. Catch-up is what the calendar says on top of it, and it is a cash
+flow question, not a per-item one. `fundPlan` walks every occurrence from this
+month to the last item's next due date and asks what constant monthly
+contribution keeps the balance from ever going negative: a contribution `C` has
+paid `balance + C * (k + 1)` by the end of month `k`, so each month sets a floor
+of `(cumulative outflow - balance) / (k + 1)` and the answer is the largest
+floor, or the flat cost when none of them is bigger. The timeline runs 12 months
+and names the first month the fund would run dry.
+
+Asked item by item and added up -- which is what this did until it was measured
+against a real fund -- it over-collects and never stops. Each item was told to
+fund itself from scratch by its own due date, ignoring the contributions that
+arrive before then, and the balance could only be claimed once, by whatever came
+due first. On one real household that was about $1,200 a year above the bills,
+with a balance that climbed from $1,071 to a $3,300 plateau and never came back
+down. Cash flow first, the same fund asks for the flat $449.94 and nothing more.
 
 The page keeps those two apart. "Save each month" is the flat cost and nothing
 else, so it does not swing with whichever bill happens to be badly timed this

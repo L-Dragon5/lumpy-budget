@@ -109,7 +109,10 @@ export const computed = new Elysia({ prefix: "/api" })
       return {
         ...core.timeline(items, start, months, opening, MODE(query.lumpy_mode)),
         opening_balance_cents: opening,
-        plan: core.plan(items, start, opening),
+        plan: core.plan(items, start),
+        // What the fund is short and what closes it, as one set of numbers rather
+        // than one per item: the contribution is a cash-flow answer now.
+        fund: core.fundPlan(items, start, opening),
       };
     },
     {

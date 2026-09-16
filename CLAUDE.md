@@ -290,6 +290,22 @@ Four places, in this order, or reads silently drop it:
   foreign key and the export is ordered `txn_date DESC, id DESC`, so the child
   comes out of the file first. A child is always created after its parent, so
   ascending id is parents-first.
+- **The lumpy contribution is a cash-flow answer, not a sum of per-item ones.**
+  `fundPlan` in `budget-core/src/lumpy.ts` is the one place it is decided, and
+  `recommendedMonthlyTotal` and `timeline`'s recommended mode both read it.
+  Summing `max(steady_i, catch_up_i)` over items -- what this used to do -- tells
+  every item to fund itself from scratch by its own due date and lets the balance
+  be claimed only once, so the fund over-collects forever; on a real household
+  that was $1,200 a year and a balance that plateaued instead of cycling. The
+  floor per month is `(cumulative outflow - balance) / (k + 1)`, `k + 1` because
+  a contribution lands on the 1st and bills are paid during the month, the same
+  order `timeline` walks -- change one and the projection stops touching zero at
+  the tight month. `Math.ceil`, not `divRound`: a contribution half a cent light
+  is a fund that is short. The window ends at the last item's *next* occurrence,
+  which is as far as being behind can reach. `plan()` is per item and carries no
+  catch-up any more: `steady_cents` and `months_until_due`, nothing else.
+  Pinned by a 1000-fund property test in `lumpy.test.ts` (the number is enough,
+  and one cent less is not) and by a scenario invariant.
 - **A dismissed suggestion is a `settings` row, not a table.**
   `dismissed_recurring` holds a JSON array of `merchantKey`s and is passed to
   `recurringCandidates` as `dismissedKeys`, where it joins the set that already

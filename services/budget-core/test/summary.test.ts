@@ -122,10 +122,11 @@ test("catch-up mode raises the lumpy contribution when a bill is close", () => {
   const soon = lumpy({ amount_cents: 120000, frequency_months: 12, next_due_date: "2026-06-01" });
   const recommended = monthSummary(inputs({ lumpyItems: [soon] }));
   const steady = monthSummary(inputs({ lumpyItems: [soon], lumpyMode: "steady" }));
-  expect(recommended.lumpy_cents).toBe(40000); // 120000 over the 3 months left
+  // 120000 over this month and the three before it comes due: four contributions.
+  expect(recommended.lumpy_cents).toBe(30000);
   expect(steady.lumpy_cents).toBe(10000);
   expect(recommended.lumpy_steady_cents).toBe(10000);
-  expect(recommended.available_cents).toBe(steady.available_cents - 30000);
+  expect(recommended.available_cents).toBe(steady.available_cents - 20000);
 });
 
 test("bills nobody can pay are reported, not swallowed", () => {

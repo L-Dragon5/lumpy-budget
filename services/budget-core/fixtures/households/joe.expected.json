@@ -7,10 +7,10 @@
     "surplus_cents": 0,
     "extra_paycheck": false,
     "fixed_cents": 525299,
-    "lumpy_cents": 167320,
+    "lumpy_cents": 127988,
     "lumpy_steady_cents": 127988,
     "savings_cents": 104800,
-    "planned_free_cents": 12581,
+    "planned_free_cents": 51913,
     "spent": {
       "discretionary": 55686,
       "fixed": 263300,
@@ -20,7 +20,7 @@
       "income": -310000,
       "total": 358986
     },
-    "available_cents": -43105
+    "available_cents": -3773
   },
   "paychecks": [
     {
@@ -78,9 +78,9 @@
         "Health insurance 38000"
       ],
       "hold_total_cents": 85300,
-      "lumpy_cents": 38215,
+      "lumpy_cents": 29232,
       "savings_cents": 23936,
-      "free_cents": 37549,
+      "free_cents": 46532,
       "over_committed": false
     },
     {
@@ -95,9 +95,9 @@
         "Student loan 32700"
       ],
       "hold_total_cents": 53799,
-      "lumpy_cents": 64553,
+      "lumpy_cents": 49378,
       "savings_cents": 40432,
-      "free_cents": 153716,
+      "free_cents": 168891,
       "over_committed": false
     },
     {
@@ -107,9 +107,9 @@
       "amount_cents": 312500,
       "holds": [],
       "hold_total_cents": 0,
-      "lumpy_cents": 64552,
+      "lumpy_cents": 49378,
       "savings_cents": 40432,
-      "free_cents": 207516,
+      "free_cents": 222690,
       "over_committed": false
     }
   ],
@@ -117,23 +117,23 @@
     {
       "window": "2026-03-05..2026-03-14",
       "income_cents": 185000,
-      "planned_free_cents": 37549,
+      "planned_free_cents": 46532,
       "spent_discretionary_cents": 15665,
-      "available_cents": 21884
+      "available_cents": 30867
     },
     {
       "window": "2026-03-15..2026-03-30",
       "income_cents": 312500,
-      "planned_free_cents": 153716,
+      "planned_free_cents": 168891,
       "spent_discretionary_cents": 21279,
-      "available_cents": 132437
+      "available_cents": 147612
     },
     {
       "window": "2026-03-31..2026-04-04",
       "income_cents": 312500,
-      "planned_free_cents": 207516,
+      "planned_free_cents": 222690,
       "spent_discretionary_cents": 99999,
-      "available_cents": 107517
+      "available_cents": 122691
     }
   ],
   "unfunded": [],
@@ -160,26 +160,26 @@
     }
   ],
   "lumpy": {
-    "monthly_contribution_cents": 167320,
+    "monthly_contribution_cents": 127988,
     "total_outflow_cents": 1542100,
-    "worst_balance_cents": 250000,
+    "worst_balance_cents": 128268,
     "first_short_month": null,
     "rows": [
       {
         "month": "2026-03",
         "start": 250000,
-        "in": 167320,
+        "in": 127988,
         "out": 0,
-        "end": 417320,
+        "end": 377988,
         "due": [],
         "short": false
       },
       {
         "month": "2026-04",
-        "start": 417320,
-        "in": 167320,
+        "start": 377988,
+        "in": 127988,
         "out": 45000,
-        "end": 539640,
+        "end": 460976,
         "due": [
           "HOA dues"
         ],
@@ -187,10 +187,10 @@
       },
       {
         "month": "2026-05",
-        "start": 539640,
-        "in": 167320,
+        "start": 460976,
+        "in": 127988,
         "out": 142800,
-        "end": 564160,
+        "end": 446164,
         "due": [
           "Car insurance"
         ],
@@ -198,10 +198,10 @@
       },
       {
         "month": "2026-06",
-        "start": 564160,
-        "in": 167320,
+        "start": 446164,
+        "in": 127988,
         "out": 8600,
-        "end": 722880,
+        "end": 565552,
         "due": [
           "Domain renewals"
         ],
@@ -209,10 +209,10 @@
       },
       {
         "month": "2026-07",
-        "start": 722880,
-        "in": 167320,
+        "start": 565552,
+        "in": 127988,
         "out": 465000,
-        "end": 425200,
+        "end": 228540,
         "due": [
           "Property taxes",
           "HOA dues"
@@ -221,10 +221,10 @@
       },
       {
         "month": "2026-08",
-        "start": 425200,
-        "in": 167320,
+        "start": 228540,
+        "in": 127988,
         "out": 9500,
-        "end": 583020,
+        "end": 347028,
         "due": [
           "Credit card annual fee"
         ],
@@ -232,10 +232,10 @@
       },
       {
         "month": "2026-09",
-        "start": 583020,
-        "in": 167320,
+        "start": 347028,
+        "in": 127988,
         "out": 168000,
-        "end": 582340,
+        "end": 307016,
         "due": [
           "Home insurance"
         ],
@@ -243,10 +243,10 @@
       },
       {
         "month": "2026-10",
-        "start": 582340,
-        "in": 167320,
+        "start": 307016,
+        "in": 127988,
         "out": 69000,
-        "end": 680660,
+        "end": 366004,
         "due": [
           "HOA dues",
           "Furnace service"
@@ -255,10 +255,10 @@
       },
       {
         "month": "2026-11",
-        "start": 680660,
-        "in": 167320,
+        "start": 366004,
+        "in": 127988,
         "out": 156700,
-        "end": 691280,
+        "end": 337292,
         "due": [
           "Car insurance",
           "Amazon Prime"
@@ -267,19 +267,19 @@
       },
       {
         "month": "2026-12",
-        "start": 691280,
-        "in": 167320,
+        "start": 337292,
+        "in": 127988,
         "out": 0,
-        "end": 858600,
+        "end": 465280,
         "due": [],
         "short": false
       },
       {
         "month": "2027-01",
-        "start": 858600,
-        "in": 167320,
+        "start": 465280,
+        "in": 127988,
         "out": 465000,
-        "end": 560920,
+        "end": 128268,
         "due": [
           "Property taxes",
           "HOA dues"
@@ -288,10 +288,10 @@
       },
       {
         "month": "2027-02",
-        "start": 560920,
-        "in": 167320,
+        "start": 128268,
+        "in": 127988,
         "out": 12500,
-        "end": 715740,
+        "end": 243756,
         "due": [
           "Car registration"
         ],
@@ -362,8 +362,8 @@
     }
   ],
   "forecast": {
-    "total_free_cents": 150972,
-    "average_free_cents": 12581,
+    "total_free_cents": 622956,
+    "average_free_cents": 51913,
     "tightest_month": "2026-03",
     "first_tight_month": null,
     "first_short_month": null,
@@ -371,84 +371,84 @@
       {
         "month": "2026-03",
         "income_cents": 810000,
-        "free": 12581,
+        "free": 51913,
         "lumpy_due_cents": 0,
         "tight": false
       },
       {
         "month": "2026-04",
         "income_cents": 810000,
-        "free": 12581,
+        "free": 51913,
         "lumpy_due_cents": 45000,
         "tight": false
       },
       {
         "month": "2026-05",
         "income_cents": 810000,
-        "free": 12581,
+        "free": 51913,
         "lumpy_due_cents": 142800,
         "tight": false
       },
       {
         "month": "2026-06",
         "income_cents": 810000,
-        "free": 12581,
+        "free": 51913,
         "lumpy_due_cents": 8600,
         "tight": false
       },
       {
         "month": "2026-07",
         "income_cents": 810000,
-        "free": 12581,
+        "free": 51913,
         "lumpy_due_cents": 465000,
         "tight": false
       },
       {
         "month": "2026-08",
         "income_cents": 810000,
-        "free": 12581,
+        "free": 51913,
         "lumpy_due_cents": 9500,
         "tight": false
       },
       {
         "month": "2026-09",
         "income_cents": 810000,
-        "free": 12581,
+        "free": 51913,
         "lumpy_due_cents": 168000,
         "tight": false
       },
       {
         "month": "2026-10",
         "income_cents": 810000,
-        "free": 12581,
+        "free": 51913,
         "lumpy_due_cents": 69000,
         "tight": false
       },
       {
         "month": "2026-11",
         "income_cents": 810000,
-        "free": 12581,
+        "free": 51913,
         "lumpy_due_cents": 156700,
         "tight": false
       },
       {
         "month": "2026-12",
         "income_cents": 810000,
-        "free": 12581,
+        "free": 51913,
         "lumpy_due_cents": 0,
         "tight": false
       },
       {
         "month": "2027-01",
         "income_cents": 810000,
-        "free": 12581,
+        "free": 51913,
         "lumpy_due_cents": 465000,
         "tight": false
       },
       {
         "month": "2027-02",
         "income_cents": 810000,
-        "free": 12581,
+        "free": 51913,
         "lumpy_due_cents": 12500,
         "tight": false
       }
@@ -458,9 +458,9 @@
     {
       "window": "2026-03-05..2026-03-14",
       "day": "6/10",
-      "on_track_cents": 22529,
-      "delta_cents": -6864,
-      "daily_left_cents": 4377,
+      "on_track_cents": 27919,
+      "delta_cents": -12254,
+      "daily_left_cents": 6173,
       "status": "under"
     },
     {

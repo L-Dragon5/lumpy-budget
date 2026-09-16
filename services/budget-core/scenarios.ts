@@ -183,12 +183,31 @@ export function run(h: Household) {
       };
     })(),
     // A month's paychecks must add up to the month's income, always.
-    invariants: checkInvariants(summary, f),
+    invariants: checkInvariants(summary, f, h, t),
   };
 }
 
-function checkInvariants(s: core.MonthSummary, f: core.Forecast): string[] {
+function checkInvariants(
+  s: core.MonthSummary,
+  f: core.Forecast,
+  h: Household,
+  t: core.Timeline,
+): string[] {
   const problems: string[] = [];
+  // The whole point of the contribution: pay it every month and the fund never
+  // goes below zero inside the window it was worked out over. Checked on the
+  // household's own mode, and on "recommended" whatever the household asked for.
+  const fund = core.fundPlan(h.lumpyItems, h.month, h.openingBalance);
+  const months = core.monthsBetween(h.month, fund.through_month) + 1;
+  const run = core.timeline(h.lumpyItems, h.month, months, h.openingBalance, "recommended");
+  if (run.worst_balance_cents < 0)
+    problems.push(`the required contribution still runs the fund to ${run.worst_balance_cents}`);
+  if (run.first_short_month !== null)
+    problems.push(`the required contribution is short in ${run.first_short_month}`);
+  if (fund.required_cents < fund.steady_cents)
+    problems.push(`required ${fund.required_cents} is below the flat cost ${fund.steady_cents}`);
+  if (h.lumpyMode === "recommended" && t.monthly_contribution_cents !== fund.required_cents)
+    problems.push(`timeline contributes ${t.monthly_contribution_cents}, fund plan says ${fund.required_cents}`);
   // The forecast is the month summary run forward, so its first row has to be
   // the month summary. Two ways to compute one number is one way to drift.
   const first = f.rows[0];
