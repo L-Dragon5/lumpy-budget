@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import type { Expense, ExpenseInput } from "@lumpy/contracts";
-import { monthEnd, monthStart, totalsByBucket } from "@lumpy/budget-core";
+import { SPENDING, bucketOf, categoryIndex, monthEnd, monthStart, totalsByBucket } from "@lumpy/budget-core";
 import { applyRules, suggestRule } from "@lumpy/csv-import";
 import { SearchIcon, SplitIcon, UploadIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -28,6 +28,8 @@ import { ApiError, eden, errorText, useApi, useMutate } from "@/lib/api";
 import { dateLabelFull, monthParam, thisMonth } from "@/lib/format";
 
 const ALL = "__all__";
+const NOT_SPENDING =
+  "Card payments, transfers between your own accounts, and income. Not spending, so not in the total.";
 const UNCATEGORIZED = "none";
 
 type Draft = { txn_date: string; amount_cents: number | null; merchant: string; description: string; category_id: string };
@@ -40,6 +42,7 @@ export default function Expenses() {
   const [month, setMonth] = useState(() => monthParam(params.get("month")) ?? thisMonth());
   const [category, setCategory] = useState(() => (params.get("category") === UNCATEGORIZED ? UNCATEGORIZED : ALL));
   const [search, setSearch] = useState("");
+  const [showNonSpending, setShowNonSpending] = useState(false);
   const [importing, setImporting] = useState(false);
 
   const query = {
@@ -65,14 +68,24 @@ export default function Expenses() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const set = (patch: Partial<Draft>) => setDraft((d) => (d ? { ...d, ...patch } : d));
 
-  const rows = expenses.data ?? [];
+  const all = expenses.data ?? [];
   const cats = categories.data ?? [];
   // The same definition every report totals with: a card payment or a transfer
   // between your own accounts is not spending (the charges it pays were already
   // counted on the day they happened), and a paycheck is money arriving.
-  const totals = totalsByBucket(rows, cats);
+  const totals = totalsByBucket(all, cats);
   const notSpending = totals.transfer + totals.income;
-  const uncategorized = rows.filter((e) => e.category_id === null).length;
+  const byId = categoryIndex(cats);
+  const isSpending = (e: Expense) => SPENDING.includes(bucketOf(e, byId));
+  // Those rows are not in the total, so by default they are not in the list
+  // either -- a card payment is the biggest number on the page and says
+  // nothing about the month. Asking for one category shows that category
+  // whatever bucket it is in, which is the only way to look at them.
+  const hiding = category === ALL && !showNonSpending;
+  const rows = hiding ? all.filter(isSpending) : all;
+  // Counted over every row: an uncategorized credit is hidden by the line
+  // above, and the queue is how you find it.
+  const uncategorized = all.filter((e) => e.category_id === null).length;
 
   const categoryOptions = [
     { value: ALL, label: "All categories" },
@@ -196,14 +209,15 @@ export default function Expenses() {
           <span className="text-muted-foreground">
             Spent <Money cents={totals.total} className="font-medium text-foreground" />
           </span>
-          {notSpending !== 0 ? (
-            <span
-              className="text-muted-foreground"
-              title="Card payments, transfers between your own accounts, and income. Not spending, so not in the total."
-            >
+          {notSpending === 0 ? null : category !== ALL ? (
+            <span className="text-muted-foreground" title={NOT_SPENDING}>
               <Money cents={notSpending} /> not spending
             </span>
-          ) : null}
+          ) : (
+            <Button variant="ghost" size="sm" title={NOT_SPENDING} onClick={() => setShowNonSpending((v) => !v)}>
+              <Money cents={notSpending} /> not spending{hiding ? ", hidden" : ""}
+            </Button>
+          )}
         </div>
       </div>
 
