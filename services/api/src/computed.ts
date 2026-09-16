@@ -1,5 +1,5 @@
 import { Elysia } from "elysia";
-import { backup, bulkExpenseInput, incomeCalendarResult, isoDate, isoMonth, restoreResult } from "@lumpy/contracts";
+import { backup, bulkExpenseInput, incomeCalendarResult, isoDate, isoMonth, restoreResult, type Expense } from "@lumpy/contracts";
 import * as core from "@lumpy/budget-core";
 import { rows, sql, TABLES, type TableName } from "@lumpy/db";
 import { z } from "zod";
@@ -164,6 +164,20 @@ export const computed = new Elysia({ prefix: "/api" })
   }, { body: settingInput })
 
   /**
+   * Forget a setting entirely, which is not the same as zeroing it.
+   *
+   * `fixed_balance_cents` is the case that needs it: the row existing is what
+   * tells the cash position this household keeps its bills in a second account,
+   * so a zero would be a bills account with nothing in it rather than no bills
+   * account. Every other reader takes a fallback, so a key deleted by mistake
+   * reads as the default rather than a crash.
+   */
+  .delete("/settings/:name", async ({ params }) => {
+    await sql.unsafe("DELETE FROM settings WHERE name = ?", [params.name]);
+    return { deleted: params.name };
+  })
+
+  /**
    * How much has left the lumpy fund since its balance was last typed in.
    *
    * The schedule heals itself -- nextDueOnOrAfter rolls a passed due date forward --
@@ -308,8 +322,17 @@ export const computed = new Elysia({ prefix: "/api" })
   .get("/cash-position", async () => {
     const today = core.todayISO();
     const month = core.monthOf(today);
-    const row = await store.settingRow("checking_balance_cents");
+    const [row, fixedRow] = await Promise.all([
+      store.settingRow("checking_balance_cents"),
+      // The bills account exists once a balance has been typed for it, not when
+      // a format is flagged: a household can keep its bills somewhere it never
+      // imports, and one that has never heard of the split must keep the single
+      // tile it has always had.
+      store.settingRow("fixed_balance_cents"),
+    ]);
+    const split = fixedRow !== null;
     const asOf = row?.updated_on ?? today;
+    const fixedAsOf = fixedRow?.updated_on ?? today;
     const [streams, fixedCosts, lumpyItems, savingsGoals, opening, cats] = await Promise.all([
       store.streams(), store.fixedCosts(), store.lumpyItems(), store.savingsGoals(),
       store.setting("lumpy_opening_balance_cents", "0"),
@@ -325,10 +348,13 @@ export const computed = new Elysia({ prefix: "/api" })
         savingsMonthlyCents: core.savingsMonthlyTotal(savingsGoals, income),
       }).paychecks;
 
-    // Bounded at today: money dated ahead of itself has not left the account.
-    const [since, cardBatches] = await Promise.all([
-      store.expensesBetween(asOf, today),
+    // One read covering both accounts' windows, bounded at today: money dated
+    // ahead of itself has not left either account.
+    const earliest = core.compare(asOf, fixedAsOf) <= 0 ? asOf : fixedAsOf;
+    const [since, cardBatches, fixedBatches] = await Promise.all([
+      store.expensesBetween(earliest, today),
       store.nonCashBatchIds(),
+      store.fixedBatchIds(),
     ]);
     const byId = core.categoryIndex(cats);
     // Every bucket, not just discretionary. A mortgage payment is reconciliation
@@ -342,25 +368,63 @@ export const computed = new Elysia({ prefix: "/api" })
     // hand-kept balance has gone stale; a paycheck netted into it would hide the
     // warning on exactly the day the balance moved most. Deposits sat under
     // `transfer` until migration 013 gave them `income`, so both are named.
-    const spent = since.filter((e) => {
+    const leftTheBank = (e: Expense) => {
       const bucket = core.bucketOf(e, byId);
       return (
         bucket !== "transfer" &&
         bucket !== "income" &&
         !(e.import_batch_id !== null && cardBatches.has(e.import_batch_id))
       );
-    });
+    };
+    // Which of the two accounts it came out of. A row with no batch was typed by
+    // hand and lands on the everyday account, which is the one a person spends
+    // against and so the safe place to put an unknown.
+    const fromFixedAccount = (e: Expense) =>
+      e.import_batch_id !== null && fixedBatches.has(e.import_batch_id);
+    const spentOn = (start: string, mine: (e: Expense) => boolean) =>
+      since.filter((e) => core.compare(e.txn_date, start) >= 0 && leftTheBank(e) && mine(e));
+
+    const spent = spentOn(asOf, (e) => !split || !fromFixedAccount(e));
+    const paychecks = [...plan(month), ...plan(core.addMonths(month, 1))];
 
     return {
       set_at: row?.updated_at ?? null,
       ...core.cashPosition({
-        paychecks: [...plan(month), ...plan(core.addMonths(month, 1))],
+        paychecks,
         today,
         balanceCents: Number(row?.value ?? "0") || 0,
         asOf,
         spentSinceCents: core.sum(spent.map((e) => e.amount_cents)),
         spentSinceCount: spent.length,
+        // Split in two, the bills are not waiting on this balance. They come off
+        // the other account below, once, and charging them here as well would
+        // say the spending money is spoken for while the bills sit funded.
+        paysBills: !split,
       }),
+      /**
+       * The second checking account, or null for a household with one.
+       *
+       * Same shape as the tile above and the same arithmetic, asked of the money
+       * the bills actually come out of. Null rather than a row of zeroes: an
+       * account nobody has told the app about is not an account with nothing in
+       * it, and the dashboard shows one tile instead of two.
+       */
+      fixed: split
+        ? (() => {
+            const fixedSpent = spentOn(fixedAsOf, fromFixedAccount);
+            return {
+              set_at: fixedRow.updated_at,
+              ...core.cashPosition({
+                paychecks,
+                today,
+                balanceCents: Number(fixedRow.value) || 0,
+                asOf: fixedAsOf,
+                spentSinceCents: core.sum(fixedSpent.map((e) => e.amount_cents)),
+                spentSinceCount: fixedSpent.length,
+              }),
+            };
+          })()
+        : null,
     };
   })
 

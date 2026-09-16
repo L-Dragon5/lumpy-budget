@@ -28,7 +28,10 @@ export type CashPosition = {
   spent_since_count: number;
   next_paycheck_date: ISODate | null;
   next_paycheck_cents: Cents;
-  /** Bills due between today and that paycheck. What the balance has to survive. */
+  /**
+   * Bills due between today and that paycheck. What the balance has to survive.
+   * Empty on an account that does not pay them -- see `paysBills`.
+   */
   due_before_next_paycheck_cents: Cents;
   due: { name: string; amount_cents: Cents; due_date: ISODate }[];
   /** Balance less those bills. What is really free until payday. */
@@ -46,6 +49,16 @@ export type CashInputs = {
   asOf: ISODate;
   spentSinceCents?: Cents;
   spentSinceCount?: number;
+  /**
+   * Does this account pay the fixed bills? True for a household with one
+   * checking account, and for the bills account of a household with two.
+   *
+   * False is the everyday account beside a bills account: the mortgage is not
+   * waiting on this balance, so charging it here would say the spending money is
+   * spoken for when the bills are sitting in the other account, funded. The bills
+   * are counted once, against the account they actually leave.
+   */
+  paysBills?: boolean;
 };
 
 export function cashPosition(input: CashInputs): CashPosition {
@@ -62,7 +75,7 @@ export function cashPosition(input: CashInputs): CashPosition {
   // still one bill and must be counted once.
   const seen = new Set<string>();
   const due: Hold[] = [];
-  for (const p of input.paychecks) {
+  for (const p of input.paysBills === false ? [] : input.paychecks) {
     for (const h of p.holds) {
       const key = `${h.fixed_cost_id}|${h.due_date}`;
       if (seen.has(key)) continue;

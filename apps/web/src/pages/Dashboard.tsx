@@ -10,8 +10,8 @@ import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SingleToggle } from "@/components/app/controls";
 import { Money } from "@/components/app/money";
-import { BalanceTile } from "@/components/app/balance-tile";
 import { CardBalances } from "@/components/app/card-balances";
+import { CheckingBalances } from "@/components/app/checking-balances";
 import { StatTile } from "@/components/app/stat-tile";
 import { Loading, LoadError, MonthNav, PageHeader } from "@/components/app/page";
 import AnimatedContent from "@/components/AnimatedContent";
@@ -26,7 +26,6 @@ export default function Dashboard() {
   const summary = useApi(["summary", month], () => eden.api.summary.get({ query: { month } }));
   const timeline = useApi(["lumpy-timeline", month], () =>
     eden.api["lumpy-timeline"].get({ query: { start: month, months: 12 } }));
-  const cash = useApi(["cash-position"], () => eden.api["cash-position"].get());
 
   if (summary.isLoading) return <Loading rows={4} />;
   if (summary.error) return <LoadError error={summary.error} />;
@@ -41,7 +40,6 @@ export default function Dashboard() {
   // The clock is read here, once: budget-core never reads one, which is what
   // makes the pace arithmetic testable and the scenarios reproducible.
   const today = todayISO();
-  const c = cash.data;
 
   return (
     <>
@@ -157,8 +155,8 @@ export default function Dashboard() {
         </div>
       </AnimatedContent>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
+      <div className="mt-6">
+        <Card>
           <CardHeader>
             <CardTitle>{view === "month" ? "Where the month goes" : "Each paycheck"}</CardTitle>
             <CardDescription>
@@ -273,44 +271,16 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <div className="flex flex-col gap-4">
-        <BalanceTile
-          settingKey="checking_balance_cents"
-          label="In checking"
-          caption={
-            c === undefined ? (
-              "What the account holds right now."
-            ) : (
-              <>
-                {c.due.length > 0 ? (
-                  <span className={c.short ? "text-destructive" : undefined}>
-                    <Money cents={c.due_before_next_paycheck_cents} /> of bills due before{" "}
-                    {c.next_paycheck_date ? dateLabel(c.next_paycheck_date) : "the next paycheck"} (
-                    {c.due.map((x) => x.name).join(", ")}), leaving <Money cents={c.projected_cents} />.
-                  </span>
-                ) : (
-                  <>
-                    No bills due before{" "}
-                    {c.next_paycheck_date ? dateLabel(c.next_paycheck_date) : "the next paycheck"}.
-                  </>
-                )}
-                {/* A hand-kept number goes stale, and a stale balance says you are
-                    fine on the strength of a week-old fact. */}
-                {c.days_stale > 0 && c.spent_since_cents > 0 ? (
-                  <span className="mt-1 block text-amber-600 dark:text-amber-500">
-                    Set {c.days_stale} day{c.days_stale === 1 ? "" : "s"} ago;{" "}
-                    <Money cents={c.spent_since_cents} /> has been recorded since.
-                  </span>
-                ) : null}
-              </>
-            )
-          }
-          editCaption="Whatever the account says right now. The bills due before your next paycheck come off it."
-        />
+      </div>
 
-        {/* The money owed, directly under the money you have: the tile above
-            leaves a card charge out until the card is paid, and this says what
-            that payment is going to be. */}
+      {/* The accounts sit under the month, not beside it: what is planned and
+          what is actually in the bank are two different questions, and the plan
+          reads better across the full width than squeezed into two thirds.
+          The money owed goes next to the money you have -- the tile beside it
+          leaves a card charge out until the card is paid, and this says what
+          that payment is going to be. */}
+      <div className="mt-4 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+        <CheckingBalances />
         <CardBalances />
 
         <Card>
@@ -360,7 +330,6 @@ export default function Dashboard() {
             </Button>
           </CardContent>
         </Card>
-        </div>
       </div>
     </>
   );

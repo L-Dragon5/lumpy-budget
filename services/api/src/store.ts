@@ -83,9 +83,32 @@ export async function nonCashBatchIds(): Promise<Set<number>> {
 }
 
 /**
- * Where a card's opening balance is kept. One `settings` row per card, keyed by
- * profile id, so adding a card adds no schema and deleting one leaves a row
- * nothing reads rather than a dangling foreign key.
+ * Import batches that came off the bills account rather than the everyday one.
+ *
+ * Same shape as the query above and the same single reader, for the other half
+ * of the same question. `cash_account = TRUE` is in the WHERE on purpose: a card
+ * is neither checking account, and `fixed_account` is left alone on a card
+ * rather than kept false, so a format flipped from checking to card and back
+ * does not quietly lose which account it was.
+ *
+ * A row with no batch -- typed by hand -- is not in here and lands on the
+ * everyday account. That is the safe error: the everyday balance is the one a
+ * person spends against, and a bill typed in by hand is a bill that already came
+ * out of somewhere.
+ */
+export async function fixedBatchIds(): Promise<Set<number>> {
+  const out = (await sql.unsafe(
+    `SELECT b.id FROM import_batches b
+       JOIN import_profiles p ON p.id = b.profile_id
+      WHERE p.cash_account = TRUE AND p.fixed_account = TRUE`,
+  )) as { id: number }[];
+  return new Set(out.map((r) => Number(r.id)));
+}
+
+/**
+ * Where a card's balance is kept. One `settings` row per card, keyed by profile
+ * id, so adding a card adds no schema and deleting one leaves a row nothing
+ * reads rather than a dangling foreign key.
  *
  * Exported and handed to the client in the response, so the string format is
  * written once and the web app never builds it.
@@ -95,84 +118,116 @@ export async function nonCashBatchIds(): Promise<Set<number>> {
  * which starts the counter over, and `restore()` replaces every profile with the
  * file's. Both forget every key under this prefix on the way past, or the first
  * card created afterwards opens with a balance somebody typed for another card.
+ *
+ * Migration 018 replaced `card_opening_balance_cents:` with this one. That key
+ * meant "before my first import" and could only ever be typed once; this one is
+ * what the card says today, and `settings.updated_at` is the day it said it.
  */
-export const CARD_OPENING_PREFIX = "card_opening_balance_cents:";
-export const cardOpeningKey = (profileId: number): string => `${CARD_OPENING_PREFIX}${profileId}`;
+export const CARD_BALANCE_PREFIX = "card_balance_cents:";
+export const cardBalanceKey = (profileId: number): string => `${CARD_BALANCE_PREFIX}${profileId}`;
 
 export type CardBalance = {
   profile_id: number;
   name: string;
-  opening_key: string;
-  /** What the card owed before the first statement you imported. Typed in once. */
-  opening_cents: number;
-  /** Everything imported under this card since: charges positive, payments negative. */
-  net_cents: number;
+  balance_key: string;
+  /** What the card said the day somebody read it. Typed in. */
+  stated_cents: number;
+  /** The day it said it, or null when no balance has ever been typed. */
+  as_of: string | null;
+  days_stale: number;
+  /** Rows imported under this card dated on or after `as_of`: charges positive, payments negative. */
+  since_cents: number;
+  since_count: number;
+  /** What the card is owed now: the stated balance plus what has posted since. */
   balance_cents: number;
+  /** Every row ever imported under this card, whatever its date. */
   txn_count: number;
-  /** The last row imported under this card, which is how stale the number is. */
+  /** The last row imported under this card, which is how stale the import is. */
   last_txn_date: string | null;
 };
 
 /**
- * What each credit card is about to ask for.
+ * What each credit card is about to ask for -- the number that takes it to zero.
  *
- * A card statement writes a purchase as a charge and the payment as a credit, so
- * the running sum of every row imported under that format is exactly the change
- * in the balance -- no payment rule, no cycle, no due date to keep in step. Add
- * the balance the card carried before the first statement anybody imported and
- * you have the number.
+ * The one number a person can actually check is today's balance on the issuer's
+ * site, so that is what gets typed in, and `settings.updated_at` is the day they
+ * read it. Everything imported since is added on top: a card statement writes a
+ * purchase as a charge and a payment as a credit, so the running sum of rows
+ * after that day is exactly how the balance has moved since.
  *
- * The known ceiling is the same one the whole app runs on: this is only as
- * current as the last card statement imported, which is why `last_txn_date`
- * comes back with it. A month of charges nobody has imported is a month this
- * number does not know about, and the tile says so rather than implying the
- * card is quiet.
+ * On or after, not after: a row dated the day the balance was read is counted
+ * twice, and over-stating what a card is owed is the safe error in the same way
+ * the checking tile over-states what has been spent. Imports lag by days, so the
+ * overlap is usually empty.
  *
- * `LEFT JOIN` twice so a card with no imports is a row of zeroes rather than
- * missing: a card you set up and have not imported is a card whose balance you
- * have not been told, and saying nothing about it hides it.
+ * Nothing typed in at all falls back to the sum of every row ever imported,
+ * which is what this was before a balance could be typed. Better than zero: a
+ * card with statements in it is not a card that owes nothing, and the tile says
+ * which of the two it is showing.
+ *
+ * The known ceiling is the same one the whole app runs on: charges nobody has
+ * imported and nobody has typed a balance over are charges this does not know
+ * about, which is what `as_of`, `days_stale` and `last_txn_date` come back for.
+ *
+ * `LEFT JOIN` throughout so a card with no imports and no balance is a row of
+ * zeroes rather than missing: a card you set up and have not touched is a card
+ * whose balance you have not been told, and saying nothing about it hides it.
  */
-export async function cardBalances(): Promise<CardBalance[]> {
+export async function cardBalances(today: string = core.todayISO()): Promise<CardBalance[]> {
   const found = (await sql.unsafe(
     // DATE_FORMAT because this is a raw statement: `rows()` is what coerces a
-    // DATE into a YYYY-MM-DD string and nothing here goes through it.
-    `SELECT p.id                                        AS profile_id,
-            p.name                                      AS name,
-            COALESCE(SUM(e.amount_cents), 0)            AS net_cents,
-            COUNT(e.id)                                 AS txn_count,
-            DATE_FORMAT(MAX(e.txn_date), '%Y-%m-%d')    AS last_txn_date
+    // DATE into a YYYY-MM-DD string and nothing here goes through it. DATE() on
+    // updated_at for the same reason `settingRow` does it: a TIMESTAMP written
+    // at 8pm local is already tomorrow in UTC, and this compares it to a DATE.
+    `SELECT p.id                                     AS profile_id,
+            p.name                                   AS name,
+            s.value                                  AS stated,
+            DATE_FORMAT(DATE(s.updated_at), '%Y-%m-%d') AS as_of,
+            COALESCE(SUM(CASE WHEN s.updated_at IS NULL OR e.txn_date >= DATE(s.updated_at)
+                              THEN e.amount_cents END), 0)  AS since_cents,
+            COUNT(CASE WHEN s.updated_at IS NULL OR e.txn_date >= DATE(s.updated_at)
+                       THEN e.id END)                       AS since_count,
+            COUNT(e.id)                              AS txn_count,
+            DATE_FORMAT(MAX(e.txn_date), '%Y-%m-%d') AS last_txn_date
        FROM import_profiles p
-       LEFT JOIN import_batches b ON b.profile_id = p.id
-       LEFT JOIN expenses e       ON e.import_batch_id = b.id
-                                 -- a split parent: its parts carry the batch too.
-                                 -- Spelled out, not NOT_SPLIT_PARENT, which names
-                                 -- the outer table \`expenses\`, not the alias.
-                                 AND NOT EXISTS (SELECT 1 FROM expenses c WHERE c.parent_id = e.id)
+       LEFT JOIN settings s        ON s.name = CONCAT(?, p.id)
+       LEFT JOIN import_batches b  ON b.profile_id = p.id
+       LEFT JOIN expenses e        ON e.import_batch_id = b.id
+                                  -- a split parent: its parts carry the batch too.
+                                  -- Spelled out, not NOT_SPLIT_PARENT, which names
+                                  -- the outer table \`expenses\`, not the alias.
+                                  AND NOT EXISTS (SELECT 1 FROM expenses c WHERE c.parent_id = e.id)
       WHERE p.cash_account = FALSE
-      GROUP BY p.id, p.name
+      GROUP BY p.id, p.name, s.value, s.updated_at
       ORDER BY p.name ASC`,
-  )) as { profile_id: number; name: string; net_cents: string | number; txn_count: string | number; last_txn_date: string | null }[];
+    [CARD_BALANCE_PREFIX],
+  )) as {
+    profile_id: number; name: string; stated: string | null; as_of: string | null;
+    since_cents: string | number; since_count: string | number;
+    txn_count: string | number; last_txn_date: string | null;
+  }[];
 
-  return Promise.all(
-    found.map(async (r) => {
-      const profile_id = Number(r.profile_id);
-      // SUM over BIGINT comes back as a string on some drivers. Every other
-      // money value in this app is an integer number of cents and this one is
-      // not allowed to be the exception.
-      const net = Number(r.net_cents) || 0;
-      const opening = Number(await setting(cardOpeningKey(profile_id), "0")) || 0;
-      return {
-        profile_id,
-        name: r.name,
-        opening_key: cardOpeningKey(profile_id),
-        opening_cents: opening,
-        net_cents: net,
-        balance_cents: opening + net,
-        txn_count: Number(r.txn_count) || 0,
-        last_txn_date: r.last_txn_date,
-      };
-    }),
-  );
+  return found.map((r) => {
+    const profile_id = Number(r.profile_id);
+    // SUM and COUNT over BIGINT come back as strings on some drivers. Every other
+    // money value in this app is an integer number of cents and this one is not
+    // allowed to be the exception.
+    const since = Number(r.since_cents) || 0;
+    const stated = r.as_of === null ? 0 : Number(r.stated) || 0;
+    return {
+      profile_id,
+      name: r.name,
+      balance_key: cardBalanceKey(profile_id),
+      stated_cents: stated,
+      as_of: r.as_of,
+      days_stale: r.as_of === null ? 0 : Math.max(0, core.diffDays(r.as_of, today)),
+      since_cents: since,
+      since_count: Number(r.since_count) || 0,
+      balance_cents: stated + since,
+      txn_count: Number(r.txn_count) || 0,
+      last_txn_date: r.last_txn_date,
+    };
+  });
 }
 
 export async function setting(name: string, fallback = "0"): Promise<string> {
@@ -592,7 +647,7 @@ const RESTORE_ORDER = [
  * `settings` is upserted rather than replaced: it is a key/value table shared
  * with future migrations, and its `updated_at` only moves when a value really
  * changes -- which is what the lumpy-drift window reads. The one exception is a
- * card's opening balance, which is keyed by a profile id: every profile is
+ * card's balance, which is keyed by a profile id: every profile is
  * about to be replaced, so every key naming one goes with it, and the file's
  * own keys come back in the upsert below.
  */
@@ -600,7 +655,7 @@ export async function restore(tables: BackupTables): Promise<RestoreResult> {
   const restored: Record<string, number> = {};
   await sql.begin(async (tx: Executor) => {
     // LEFT rather than LIKE: an underscore in a LIKE pattern is a wildcard.
-    await tx.unsafe("DELETE FROM settings WHERE LEFT(name, CHAR_LENGTH(?)) = ?", [CARD_OPENING_PREFIX, CARD_OPENING_PREFIX]);
+    await tx.unsafe("DELETE FROM settings WHERE LEFT(name, CHAR_LENGTH(?)) = ?", [CARD_BALANCE_PREFIX, CARD_BALANCE_PREFIX]);
     for (let i = RESTORE_ORDER.length - 1; i >= 0; i--) {
       await tx.unsafe(`DELETE FROM \`${RESTORE_ORDER[i]}\``);
     }

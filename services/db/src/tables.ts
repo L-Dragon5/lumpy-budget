@@ -58,9 +58,9 @@ export const TABLES = {
     order: "priority ASC, id ASC",
   },
   import_profiles: {
-    cols: ["id", "name", "mapping", "cash_account"],
+    cols: ["id", "name", "mapping", "cash_account", "fixed_account"],
     json: ["mapping"],
-    bool: ["cash_account"],
+    bool: ["cash_account", "fixed_account"],
     order: "name ASC",
   },
   import_batches: {

@@ -46,7 +46,7 @@ The hook is not installed by cloning: `git config core.hooksPath .githooks`.
 Four places, in this order, or reads silently drop it:
 
 1. a new numbered `services/db/migrations/NNN_*.sql` (forward-only, no rollback).
-   **Start at 013.** 001-010 were squashed into `001_init.sql`; the databases
+   **Start at 019.** 001-010 were squashed into `001_init.sql`; the databases
    that lived through them still record 002-010 in `_migrations`, so reusing a
    number below 011 reads as history that already ran. 011 and 012 are real
    files, applied on top of `001_init.sql` on a fresh database too -- do not fold
@@ -321,6 +321,33 @@ Four places, in this order, or reads silently drop it:
   `/etc/localtime`, which is the zone the API really runs in. Without it, every
   test comparing a JS date to a `DATE()` off the same instant fails between 8pm
   local and midnight and passes again in the morning.
+- **`fixed_balance_cents` existing is what splits the cash position in two.**
+  Not a flag, not a count of profiles: a household keeps its bills somewhere it
+  may never import, and one that has never heard of the split has to keep the
+  single tile it has always had. So the row is deleted rather than zeroed by
+  `wipe()` (`DELETED_SETTING_PREFIXES`) and by the API test's `resetDb`, or an
+  emptied database claims a bills account with nothing in it, and every later
+  test runs split. `DELETE /api/settings/:name` exists for the same reason: the
+  web app removes the account by removing the balance.
+- **`import_profiles.fixed_account` is only read when `cash_account` is true.**
+  A card is neither checking account. `fixedBatchIds` puts `cash_account = TRUE`
+  in its own WHERE rather than trusting the column to be false on a card, so a
+  format flipped to card and back does not lose which account it was. A row with
+  no batch was typed by hand and lands on the everyday account: that is the one a
+  person spends against, so it is the safe place for an unknown. `cashPosition`
+  takes `paysBills`, and false is the everyday account beside a bills account --
+  the bills are counted once, against the account they actually leave, or the
+  everyday tile calls spending money spoken for while the bill sits funded.
+- **A card's balance is typed as of a day, not carried from an opening.**
+  `card_balance_cents:<id>` (migration 018 deleted the `card_opening_balance_cents:`
+  keys rather than renaming them -- the old value with a new as-of would have
+  shown an opening balance as the whole balance). `settings.updated_at` is the
+  as-of, and `cardBalances` adds rows dated **on or after** it: over-stating what
+  a card is owed is the safe error, the same one `/cash-position` makes by
+  including the as-of day's spending. No balance ever typed falls back to the sum
+  of every imported row, which is what this was before, so migration 018 degraded
+  to the old behaviour rather than to zero. A future-dated card row is counted,
+  unlike in the checking tile, for the same safe-error reason.
 - **A part inherits `import_batch_id` from the charge.** `nonCashBatchIds` reads
   the batch to tell a card charge from money out of checking; batchless parts
   would be counted against the checking balance forever. Same trap

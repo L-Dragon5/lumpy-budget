@@ -827,10 +827,10 @@ describe("backup restore", () => {
     await household();
     const before = await dump();
 
-    // Exactly what an older export is: rows with no merchant_pattern and no
-    // cash_account. Both columns are NOT NULL, so the schema's defaults are the
-    // only thing between an old backup and a constraint error -- which is the
-    // fourth place in the add-a-column checklist earning its keep.
+    // Exactly what an older export is: rows with no merchant_pattern, no
+    // cash_account and no fixed_account. Every one is NOT NULL, so the schema's
+    // defaults are the only thing between an old backup and a constraint error --
+    // which is the fourth place in the add-a-column checklist earning its keep.
     const strip = (rows: Record<string, unknown>[], keys: string[]) =>
       rows.map((r) => Object.fromEntries(Object.entries(r).filter(([k]) => !keys.includes(k))));
 
@@ -839,7 +839,7 @@ describe("backup restore", () => {
       tables: {
         ...before.tables,
         lumpy_items: strip(before.tables.lumpy_items, ["merchant_pattern", "merchant_whole_word"]),
-        import_profiles: strip(before.tables.import_profiles, ["cash_account"]),
+        import_profiles: strip(before.tables.import_profiles, ["cash_account", "fixed_account"]),
       },
     });
     expect(res.status).toBe(200);
@@ -851,6 +851,8 @@ describe("backup restore", () => {
     expect(after.tables.import_profiles).toHaveLength(before.tables.import_profiles.length);
     expect(after.tables.import_profiles.length).toBeGreaterThan(0);
     expect(after.tables.import_profiles.every((p: { cash_account: unknown }) => p.cash_account === true)).toBe(true);
+    // The other way round: a household that predates the split is one account.
+    expect(after.tables.import_profiles.every((p: { fixed_account: unknown }) => p.fixed_account === false)).toBe(true);
   });
 
   test("a partial file is legitimate: what it omits comes back empty", async () => {
@@ -1774,6 +1776,131 @@ describe("cash position", () => {
   });
 });
 
+describe("two checking accounts", () => {
+  beforeEach(() => resetDb({ withSeed: true }));
+
+  const mapping = {
+    date_column: "Date", amount_column: "Amount", debit_column: null, credit_column: null,
+    merchant_column: "Merchant", description_column: null, date_format: "auto" as const,
+    flip_sign: false, skip_rows: 0,
+  };
+
+  /** A saved format standing in for one of the accounts, and a statement off it. */
+  const statement = async (
+    name: string,
+    flags: { cash_account: boolean; fixed_account?: boolean },
+    amount_cents: number,
+  ) => {
+    const profile = await post("/api/import-profiles", { name, mapping, ...flags });
+    expect(profile.status).toBe(201);
+    await post("/api/import", {
+      filename: `${name}.csv`,
+      profile_id: profile.body.id,
+      rows: [{
+        txn_date: todayISO(), amount_cents, merchant: `${name} purchase`,
+        description: "", category_id: null, source: "import",
+      }],
+    });
+    return profile.body.id as number;
+  };
+
+  const weeklyPay = () =>
+    post("/api/income-streams", {
+      name: "Job", amount_cents: 90000, frequency: "weekly", anchor_date: todayISO(),
+      day_1: null, day_2: null, day_of_month: null, active: true,
+    });
+
+  test("one account until a balance is typed for a second", async () => {
+    await put("/api/settings", { name: "checking_balance_cents", value: "180000" });
+    await weeklyPay();
+
+    const before = (await api("/api/cash-position")).body;
+    // Null, not a row of zeroes: an account nobody has told the app about is not
+    // an account with nothing in it, and the dashboard shows one tile.
+    expect(before.fixed).toBeNull();
+    expect(before.balance_cents).toBe(180000);
+
+    await put("/api/settings", { name: "fixed_balance_cents", value: "60000" });
+    const after = (await api("/api/cash-position")).body;
+    expect(after.fixed).not.toBeNull();
+    expect(after.fixed.balance_cents).toBe(60000);
+    expect(after.fixed.as_of).toBe(todayISO());
+  });
+
+  test("the bills are a claim on the bills account and on nothing else", async () => {
+    await put("/api/settings", { name: "checking_balance_cents", value: "180000" });
+    await put("/api/settings", { name: "fixed_balance_cents", value: "60000" });
+    // Due tomorrow, so it lands before any paycheck however the month falls.
+    await post("/api/fixed-costs", {
+      name: "Car loan", amount_cents: 40000, due_day: Number(addDays(todayISO(), 1).slice(8, 10)),
+      lead_days: 0, category_id: null, merchant_pattern: null, merchant_whole_word: false, active: true,
+    });
+    await weeklyPay();
+
+    const res = (await api("/api/cash-position")).body;
+    // Counted once, against the account it actually leaves. Charged to both, the
+    // everyday tile would call spending money spoken for while the bill sits
+    // funded in the other account.
+    expect(res.due).toEqual([]);
+    expect(res.due_before_next_paycheck_cents).toBe(0);
+    expect(res.projected_cents).toBe(180000);
+    expect(res.fixed.due.map((d: { name: string }) => d.name)).toContain("Car loan");
+    expect(res.fixed.due_before_next_paycheck_cents).toBe(40000);
+    expect(res.fixed.projected_cents).toBe(20000);
+  });
+
+  test("a bills-account statement is spent from the bills account, not the everyday one", async () => {
+    await put("/api/settings", { name: "checking_balance_cents", value: "180000" });
+    await put("/api/settings", { name: "fixed_balance_cents", value: "60000" });
+    await statement("Everyday Bank", { cash_account: true }, 4300);
+    await statement("Bills Bank", { cash_account: true, fixed_account: true }, 21000);
+    await statement("Airline Card", { cash_account: false }, 9900);
+    // No batch, so nothing knows which account it came out of. It lands on the
+    // everyday account, which is the one a person spends against.
+    await post("/api/expenses", {
+      txn_date: todayISO(), amount_cents: 1200, merchant: "Coffee",
+      description: "", category_id: null, source: "manual",
+    });
+
+    const res = (await api("/api/cash-position")).body;
+    expect(res.spent_since_cents).toBe(5500);
+    expect(res.spent_since_count).toBe(2);
+    expect(res.fixed.spent_since_cents).toBe(21000);
+    expect(res.fixed.spent_since_count).toBe(1);
+
+    // And the card is still money owed rather than money gone, out of both.
+    const month = todayISO().slice(0, 7);
+    expect((await api(`/api/summary?month=${month}`)).body.spent.discretionary).toBe(36400);
+  });
+
+  test("pooled again the moment the second balance is deleted", async () => {
+    await put("/api/settings", { name: "checking_balance_cents", value: "180000" });
+    await put("/api/settings", { name: "fixed_balance_cents", value: "60000" });
+    await statement("Bills Bank", { cash_account: true, fixed_account: true }, 21000);
+    expect((await api("/api/cash-position")).body.fixed).not.toBeNull();
+
+    expect((await del("/api/settings/fixed_balance_cents")).status).toBe(200);
+    const res = (await api("/api/cash-position")).body;
+    expect(res.fixed).toBeNull();
+    // The flag on the format is still set and is simply not read: with one
+    // account there is only one place that money can have come from.
+    expect(res.spent_since_cents).toBe(21000);
+  });
+
+  test("a format saved before the column existed is the everyday account", async () => {
+    // Zod defaults it, so a merge from an older backup file cannot arrive
+    // without it and quietly start counting against the wrong balance.
+    const merged = await post("/api/import-profiles/merge", {
+      version: 1,
+      tables: { import_profiles: [{ name: "Old Bank", mapping }] },
+    });
+    expect(merged.body.added).toEqual(["Old Bank"]);
+    const saved = ((await api("/api/import-profiles")).body as { name: string; fixed_account: boolean }[])
+      .find((p) => p.name === "Old Bank")!;
+    expect(saved.fixed_account).toBe(false);
+  });
+});
+
 describe("budgeted versus actual, through the API", () => {
   beforeEach(() => resetDb({ withSeed: true }));
 
@@ -2090,83 +2217,134 @@ describe("card balances", () => {
     flip_sign: false, skip_rows: 0,
   };
 
-  test("the running sum of a card statement is what the card will ask for", async () => {
-    const card = await post("/api/import-profiles", { name: "Airline Card", mapping, cash_account: false });
-    await post("/api/import", {
-      filename: "card-march.csv", profile_id: card.body.id,
-      rows: [
-        { txn_date: "2026-03-02", amount_cents: 12000, merchant: "WEGMANS", description: "", category_id: null, source: "import" },
-        { txn_date: "2026-03-09", amount_cents: 4500, merchant: "SHELL", description: "", category_id: null, source: "import" },
-        // The payment posts on the card statement as a credit, so the running
-        // sum needs no rule to know a payment happened.
-        { txn_date: "2026-03-20", amount_cents: -10000, merchant: "PAYMENT THANK YOU", description: "", category_id: null, source: "import" },
-      ],
+  const card = async (name: string) =>
+    (await post("/api/import-profiles", { name, mapping, cash_account: false })).body.id as number;
+
+  const importRows = (profile_id: number, rows: { txn_date: string; amount_cents: number; merchant: string }[]) =>
+    post("/api/import", {
+      filename: `${profile_id}.csv`,
+      profile_id,
+      rows: rows.map((r) => ({ ...r, description: "", category_id: null, source: "import" })),
     });
 
-    const [row] = (await api("/api/card-balances")).body;
+  const balances = async () => (await api("/api/card-balances")).body;
+
+  test("no balance typed in yet falls back to the running sum of the statements", async () => {
+    const id = await card("Airline Card");
+    await importRows(id, [
+      { txn_date: "2026-03-02", amount_cents: 12000, merchant: "WEGMANS" },
+      { txn_date: "2026-03-09", amount_cents: 4500, merchant: "SHELL" },
+      // The payment posts on the card statement as a credit, so the running
+      // sum needs no rule to know a payment happened.
+      { txn_date: "2026-03-20", amount_cents: -10000, merchant: "PAYMENT THANK YOU" },
+    ]);
+
+    const [row] = await balances();
     expect(row).toMatchObject({
-      name: "Airline Card", opening_cents: 0, net_cents: 6500, balance_cents: 6500,
+      name: "Airline Card", stated_cents: 0, as_of: null, days_stale: 0,
+      since_cents: 6500, since_count: 3, balance_cents: 6500,
       txn_count: 3, last_txn_date: "2026-03-20",
-      opening_key: `card_opening_balance_cents:${card.body.id}`,
+      balance_key: `card_balance_cents:${id}`,
     });
   });
 
-  test("an opening balance carries the statements you never imported", async () => {
-    const card = await post("/api/import-profiles", { name: "Store Card", mapping, cash_account: false });
-    await put("/api/settings", { name: `card_opening_balance_cents:${card.body.id}`, value: "45000" });
-    await post("/api/import", {
-      filename: "store-march.csv", profile_id: card.body.id,
-      rows: [{ txn_date: "2026-03-02", amount_cents: 3000, merchant: "HOME DEPOT", description: "", category_id: null, source: "import" }],
-    });
+  test("a typed balance replaces everything imported before the day it was read", async () => {
+    const id = await card("Store Card");
+    // Already imported, and already inside the number the issuer showed. Added on
+    // top, the card would read as owing this twice.
+    await importRows(id, [{ txn_date: "2026-03-02", amount_cents: 3000, merchant: "HOME DEPOT" }]);
+    await put("/api/settings", { name: `card_balance_cents:${id}`, value: "45000" });
 
-    const [row] = (await api("/api/card-balances")).body;
-    expect(row).toMatchObject({ opening_cents: 45000, net_cents: 3000, balance_cents: 48000 });
+    const [row] = await balances();
+    expect(row).toMatchObject({
+      stated_cents: 45000, as_of: todayISO(), days_stale: 0,
+      since_cents: 0, since_count: 0, balance_cents: 45000,
+      // Still every row, because this is how stale the import is, not what the
+      // balance is made of.
+      txn_count: 1, last_txn_date: "2026-03-02",
+    });
+  });
+
+  test("what posts after the balance was read is added to it", async () => {
+    const id = await card("Store Card");
+    await put("/api/settings", { name: `card_balance_cents:${id}`, value: "45000" });
+    await importRows(id, [
+      // On the day it was read, not after: counted. Over-stating what a card is
+      // owed is the safe error, the same way the checking tile over-states what
+      // has been spent, and imports lag by days so the overlap is usually empty.
+      { txn_date: todayISO(), amount_cents: 2500, merchant: "SHELL" },
+      { txn_date: addDays(todayISO(), -1), amount_cents: 9900, merchant: "OLD CHARGE" },
+    ]);
+
+    const [row] = await balances();
+    expect(row).toMatchObject({ stated_cents: 45000, since_cents: 2500, since_count: 1, balance_cents: 47500 });
+  });
+
+  test("a balance typed days ago says how many", async () => {
+    const id = await card("Store Card");
+    await put("/api/settings", { name: `card_balance_cents:${id}`, value: "45000" });
+    // The only way to move a TIMESTAMP into the past, and the thing every stale
+    // reading in this app is measured against.
+    await sql.unsafe("UPDATE settings SET updated_at = ? WHERE name = ?", [
+      `${addDays(todayISO(), -9)} 09:00:00`,
+      `card_balance_cents:${id}`,
+    ]);
+
+    const [row] = await balances();
+    expect(row.as_of).toBe(addDays(todayISO(), -9));
+    expect(row.days_stale).toBe(9);
+  });
+
+  test("a payment credited since the balance was read brings it down", async () => {
+    const id = await card("Airline Card");
+    await put("/api/settings", { name: `card_balance_cents:${id}`, value: "50000" });
+    await importRows(id, [{ txn_date: todayISO(), amount_cents: -50000, merchant: "PAYMENT THANK YOU" }]);
+
+    const [row] = await balances();
+    expect(row.balance_cents).toBe(0);
   });
 
   test("a checking statement is not a card and a card with no imports is still a card", async () => {
     await post("/api/import-profiles", { name: "Big Bank", mapping, cash_account: true });
-    const fresh = await post("/api/import-profiles", { name: "New Card", mapping, cash_account: false });
+    const fresh = await card("New Card");
     await post("/api/import", {
       filename: "bank.csv", profile_id: null,
       rows: [{ txn_date: "2026-03-02", amount_cents: 9900, merchant: "RENT", description: "", category_id: null, source: "import" }],
     });
 
-    const body = (await api("/api/card-balances")).body;
+    const body = await balances();
     expect(body).toHaveLength(1);
     // Zero, not absent: a card you have set up and not imported yet is a card
     // whose balance you have not been told, and saying nothing hides it.
     expect(body[0]).toMatchObject({
-      name: "New Card", profile_id: fresh.body.id, net_cents: 0, balance_cents: 0,
-      txn_count: 0, last_txn_date: null,
+      name: "New Card", profile_id: fresh, since_cents: 0, balance_cents: 0,
+      txn_count: 0, last_txn_date: null, as_of: null,
     });
   });
 
-  test("a restore takes the card openings with the cards they belong to", async () => {
-    const kept = await post("/api/import-profiles", { name: "Airline Card", mapping, cash_account: false });
-    const other = await post("/api/import-profiles", { name: "Store Card", mapping, cash_account: false });
-    await put("/api/settings", { name: `card_opening_balance_cents:${kept.body.id}`, value: "12300" });
+  test("a restore takes the card balances with the cards they belong to", async () => {
+    const kept = await card("Airline Card");
+    const other = await card("Store Card");
+    await put("/api/settings", { name: `card_balance_cents:${kept}`, value: "12300" });
     const file = (await api("/api/export")).body;
 
     // Typed after the backup was taken, so the file knows nothing about it. The
     // restore puts profile ids back exactly as they were exported, and a key
-    // left behind here would be read as the opening balance of whichever card
-    // the file says owns that id.
-    await put("/api/settings", { name: `card_opening_balance_cents:${other.body.id}`, value: "45000" });
+    // left behind here would be read as the balance of whichever card the file
+    // says owns that id.
+    await put("/api/settings", { name: `card_balance_cents:${other}`, value: "45000" });
     expect((await post("/api/restore", file)).status).toBe(200);
 
     const byName = Object.fromEntries(
-      ((await api("/api/card-balances")).body as { name: string; opening_cents: number }[])
-        .map((c) => [c.name, c.opening_cents]),
+      ((await balances()) as { name: string; stated_cents: number; as_of: string | null }[])
+        .map((c) => [c.name, c.stated_cents]),
     );
     expect(byName).toEqual({ "Airline Card": 12300, "Store Card": 0 });
   });
 
   test("a split card charge is counted once, not twice", async () => {
-    const card = await post("/api/import-profiles", { name: "Airline Card", mapping, cash_account: false });
-    await post("/api/import", {
-      filename: "card.csv", profile_id: card.body.id,
-      rows: [{ txn_date: "2026-03-02", amount_cents: 18000, merchant: "COSTCO", description: "", category_id: null, source: "import" }],
-    });
+    const id = await card("Airline Card");
+    await importRows(id, [{ txn_date: "2026-03-02", amount_cents: 18000, merchant: "COSTCO" }]);
     const charge = (await api("/api/expenses")).body[0];
     expect((await post(`/api/expenses/${charge.id}/split`, {
       parts: [
@@ -2177,8 +2355,8 @@ describe("card balances", () => {
 
     // The parent and both parts are all in the table. Summing all three would
     // say the card is owed $360 for a $180 charge.
-    const [row] = (await api("/api/card-balances")).body;
-    expect(row.net_cents).toBe(18000);
+    const [row] = await balances();
+    expect(row.since_cents).toBe(18000);
     expect(row.txn_count).toBe(2);
   });
 });

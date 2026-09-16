@@ -48,13 +48,15 @@ export default function Settings() {
     eden.api["category-rules"]({ id: v.id }).put(v.body));
   const removeRule = useMutate((id: number) => eden.api["category-rules"]({ id }).delete());
   const removeProfile = useMutate((id: number) => eden.api["import-profiles"]({ id }).delete());
-  // The one field on a saved format worth changing after the fact: every profile
-  // that predates the column reads as checking, and a card has to be told once.
-  const setCashAccount = useMutate((v: { profile: ImportProfile; cash_account: boolean }) =>
+  // The two fields on a saved format worth changing after the fact: every profile
+  // that predates a column reads as the old default, and a card or a bills
+  // account has to be told once.
+  const setAccount = useMutate((v: { profile: ImportProfile; cash_account?: boolean; fixed_account?: boolean }) =>
     eden.api["import-profiles"]({ id: v.profile.id }).put({
       name: v.profile.name,
       mapping: v.profile.mapping,
-      cash_account: v.cash_account,
+      cash_account: v.cash_account ?? v.profile.cash_account,
+      fixed_account: v.fixed_account ?? v.profile.fixed_account,
     }));
 
   const [catDraft, setCatDraft] = useState<{ id: number | null; name: string; bucket: Bucket; icon: CategoryIconName | null } | null>(null);
@@ -309,6 +311,24 @@ export default function Settings() {
                           </Tooltip>
                         </span>
                       </TableHead>
+                      <TableHead>
+                        <span className="inline-flex items-center gap-1">
+                          Bills account
+                          <Tooltip>
+                            <TooltipTrigger
+                              aria-label="What the bills account means"
+                              className="text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground"
+                            >
+                              <CircleHelpIcon className="size-3.5" />
+                            </TooltipTrigger>
+                            <TooltipContent className="block max-w-80 py-2">
+                              On for the checking account your bills come out of, off for the one you spend
+                              from. Only matters once you have typed a balance for a second account on the
+                              dashboard; until then everything is one account. Ignored for a card.
+                            </TooltipContent>
+                          </Tooltip>
+                        </span>
+                      </TableHead>
                       <TableHead className="w-12" />
                     </TableRow>
                   </TableHeader>
@@ -327,8 +347,16 @@ export default function Settings() {
                         <TableCell>
                           <Switch
                             checked={p.cash_account}
-                            onCheckedChange={(v) => setCashAccount.mutate({ profile: p, cash_account: v })}
+                            onCheckedChange={(v) => setAccount.mutate({ profile: p, cash_account: v })}
                             aria-label={`${p.name} spending leaves the checking account`}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Switch
+                            checked={p.fixed_account}
+                            disabled={!p.cash_account}
+                            onCheckedChange={(v) => setAccount.mutate({ profile: p, fixed_account: v })}
+                            aria-label={`${p.name} is the bills account`}
                           />
                         </TableCell>
                         <TableCell>

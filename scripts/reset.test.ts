@@ -8,7 +8,7 @@ import { resetDb, sql } from "../services/api/test/setup";
 import { TABLES } from "@lumpy/db/tables";
 
 const { counts, DELETED_SETTING_PREFIXES, refusesDatabase, wipe, wipeOrder, ZEROED_SETTINGS } = await import("./reset");
-const { CARD_OPENING_PREFIX, DISMISSED_RECURRING, cardOpeningKey } = await import("../services/api/src/store");
+const { CARD_BALANCE_PREFIX, DISMISSED_RECURRING, cardBalanceKey } = await import("../services/api/src/store");
 
 const rowCount = async (t: string) =>
   Number(((await sql.unsafe(`SELECT COUNT(*) AS n FROM \`${t}\``)) as { n: number }[])[0]!.n);
@@ -63,25 +63,32 @@ test("a wipe empties the ledger, keeps the schema, and zeroes what was typed", a
   }
 });
 
-test("a wipe forgets every card's opening balance, because the ids start over", async () => {
+test("a wipe forgets every card's balance, because the ids start over", async () => {
   await resetDb();
   // The string is kept in two places, so this is the test that holds them together.
-  expect(DELETED_SETTING_PREFIXES).toContain(CARD_OPENING_PREFIX);
+  expect(DELETED_SETTING_PREFIXES).toContain(CARD_BALANCE_PREFIX);
   expect(DELETED_SETTING_PREFIXES).toContain(DISMISSED_RECURRING);
 
   await sql.unsafe(
     "INSERT INTO import_profiles (name, mapping, cash_account) VALUES ('Airline Card', '{}', FALSE)",
   );
-  await sql.unsafe("INSERT INTO settings (name, value) VALUES (?, '45000')", [cardOpeningKey(1)]);
+  await sql.unsafe("INSERT INTO settings (name, value) VALUES (?, '45000')", [cardBalanceKey(1)]);
   await sql.unsafe("INSERT INTO settings (name, value) VALUES (?, ?) ON DUPLICATE KEY UPDATE value = VALUES(value)",
     [DISMISSED_RECURRING, '["CITY TAX"]']);
+  // Deleted rather than zeroed, and for a different reason from the two above:
+  // the row existing at all is what tells the cash position this household keeps
+  // its bills in a second account, so a zero would be an empty bills account
+  // rather than no bills account.
+  await sql.unsafe("INSERT INTO settings (name, value) VALUES ('fixed_balance_cents', '60000') ON DUPLICATE KEY UPDATE value = VALUES(value)");
 
   await wipe();
 
-  // TRUNCATE hands id 1 out again, so a surviving key would be the opening
-  // balance of whichever card is created first after the reset.
-  const left = (await sql.unsafe("SELECT name FROM settings WHERE name = ?", [cardOpeningKey(1)])) as unknown[];
+  // TRUNCATE hands id 1 out again, so a surviving key would be the balance of
+  // whichever card is created first after the reset.
+  const left = (await sql.unsafe("SELECT name FROM settings WHERE name = ?", [cardBalanceKey(1)])) as unknown[];
   expect(left).toEqual([]);
+  const split = (await sql.unsafe("SELECT name FROM settings WHERE name = 'fixed_balance_cents'")) as unknown[];
+  expect(split).toEqual([]);
   // And the suggestions somebody ignored, whose charges this wipe just deleted.
   const ignored = (await sql.unsafe("SELECT name FROM settings WHERE name = ?", [DISMISSED_RECURRING])) as unknown[];
   expect(ignored).toEqual([]);

@@ -38,6 +38,7 @@ export function ImportWizard({ open, onOpenChange }: { open: boolean; onOpenChan
   const [profileId, setProfileId] = useState<string>(NONE);
   const [profileName, setProfileName] = useState("");
   const [cashAccount, setCashAccount] = useState(true);
+  const [fixedAccount, setFixedAccount] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [done, setDone] = useState<{ inserted: number; absorbed: number; skipped: number } | null>(null);
@@ -136,9 +137,19 @@ export function ImportWizard({ open, onOpenChange }: { open: boolean; onOpenChan
         // Importing next month's statement under the same name updates that saved
         // format rather than failing on the unique name or orphaning the batch.
         const existing = (profiles.data ?? []).find((p) => p.name.toLowerCase() === name.toLowerCase());
+        // A PUT replaces the whole row, so every column the dialog does not ask
+        // about has to be carried across or next month's statement silently
+        // clears it. `fixed_account` is only settable here on a format nobody has
+        // saved yet; an existing one keeps what Settings says.
+        const body = {
+          name,
+          mapping,
+          cash_account: cashAccount,
+          fixed_account: existing ? existing.fixed_account : cashAccount && fixedAccount,
+        };
         const saved = existing
-          ? await eden.api["import-profiles"]({ id: existing.id }).put({ name, mapping, cash_account: cashAccount })
-          : await eden.api["import-profiles"].post({ name, mapping, cash_account: cashAccount });
+          ? await eden.api["import-profiles"]({ id: existing.id }).put(body)
+          : await eden.api["import-profiles"].post(body);
         if (saved.error) throw ApiError.from(saved.error);
         savedProfileId = saved.data.id;
       }
@@ -451,6 +462,19 @@ export function ImportWizard({ open, onOpenChange }: { open: boolean; onOpenChan
                     On for a bank statement. Off for a credit card: those charges are spending on the day
                     they happen, but they do not leave checking until the card is paid, and the cash
                     position is the one number that has to know the difference.
+                  </FieldDescription>
+                </div>
+              </Field>
+            ) : null}
+
+            {profileId === NONE && cashAccount ? (
+              <Field orientation="horizontal">
+                <Switch id="profile-fixed" checked={fixedAccount} onCheckedChange={setFixedAccount} />
+                <div>
+                  <FieldLabel htmlFor="profile-fixed">This is the account the bills come out of</FieldLabel>
+                  <FieldDescription>
+                    Only for a household keeping bills in one checking account and everyday spending in
+                    another. Off is the everyday account, which is what one account is.
                   </FieldDescription>
                 </div>
               </Field>

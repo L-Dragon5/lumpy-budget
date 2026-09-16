@@ -32,7 +32,7 @@ const { sql } = await import("@lumpy/db");
 /** For the handful of tests that need a starting state no route can produce. */
 export { sql };
 const { seed } = await import("@lumpy/db/seed");
-const { CARD_OPENING_PREFIX, DISMISSED_RECURRING } = await import("../src/store");
+const { CARD_BALANCE_PREFIX, DISMISSED_RECURRING } = await import("../src/store");
 
 const TABLES = [
   "expenses", "import_batches", "import_profiles", "category_rules", "categories",
@@ -49,10 +49,14 @@ export async function resetDb({ withSeed = false } = {}) {
   await sql.unsafe(
     "UPDATE settings SET value = '0' WHERE name IN ('lumpy_opening_balance_cents', 'checking_balance_cents')",
   );
-  // Deleted, not zeroed: a card's opening balance is keyed by profile id, and
-  // TRUNCATE just started those ids over, so a key left here is read as the
-  // opening balance of the next test's first card.
-  await sql.unsafe("DELETE FROM settings WHERE LEFT(name, CHAR_LENGTH(?)) = ?", [CARD_OPENING_PREFIX, CARD_OPENING_PREFIX]);
+  // Deleted, not zeroed: a card's balance is keyed by profile id, and TRUNCATE
+  // just started those ids over, so a key left here is read as the balance of
+  // the next test's first card.
+  await sql.unsafe("DELETE FROM settings WHERE LEFT(name, CHAR_LENGTH(?)) = ?", [CARD_BALANCE_PREFIX, CARD_BALANCE_PREFIX]);
+  // Deleted for a third reason: the row existing at all is what tells the cash
+  // position this household keeps its bills in a second account, so zeroing it
+  // would leave every later test split in two.
+  await sql.unsafe("DELETE FROM settings WHERE name = 'fixed_balance_cents'");
   // Same reason: the expenses a dismissal was about were just truncated.
   await sql.unsafe("DELETE FROM settings WHERE name = ?", [DISMISSED_RECURRING]);
   if (withSeed) await seed();

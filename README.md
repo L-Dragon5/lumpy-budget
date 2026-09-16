@@ -66,9 +66,12 @@ the first expense in the fresh database is id 1. `_migrations` is left alone --
 emptying it would tell `migrate` to run `001_init.sql` against a schema that is
 already there -- and `settings` is zeroed rather than dropped, because the lumpy
 opening balance row is inserted by that migration and the reports read it. The
-exception is each card's opening balance, which is deleted: it is keyed by the
-card format's id, the truncate hands that id out again, and the first card set
-up afterwards would open with a balance somebody typed for another one. A
+exception is each card's balance, which is deleted: it is keyed by the card
+format's id, the truncate hands that id out again, and the first card set up
+afterwards would open with a balance somebody typed for another one. The bills
+account's balance is deleted for a different reason -- the row existing at all is
+what says this household has a second checking account, so a zero would be an
+empty bills account rather than no bills account. A
 database whose name ends in `_test` is refused outright: that one belongs to the
 test suite, which truncates it on every test.
 
@@ -114,9 +117,10 @@ whole thing runs in one transaction: a file the validator rejects, or one the
 database rejects, leaves what is already there untouched. Rows keep the ids they
 were exported with, which is what makes every foreign key in the file still point
 at the right record on the other side. Settings are written over rather than
-replaced, except the card opening balances: those hang off an import format's
-id, so they are replaced along with the formats, and the file's come back with
-them.
+replaced, except the card balances: those hang off an import format's id, so they
+are replaced along with the formats, and the file's come back with them. A
+backup carries a setting's value and not the day it was typed, so a restored card
+balance reads as having been typed on the day of the restore.
 
 The API is the same pair: `GET /api/export` and `POST /api/restore`. Called
 `/restore` rather than `/import` because `/api/import` is the CSV statement
@@ -427,20 +431,45 @@ spending on it leaves the checking account when it posts. On for a bank
 statement; off for a credit card, where a purchase is spending on the day it
 happens but is not money out of checking until the card is paid. Only the cash
 position and the card balances below read it -- every other number counts a card
-purchase on the day it happened, as it always has. It is one boolean rather than
-an accounts table on purpose: this is one household on one checking account, and
-the only question worth answering is whether a row has left that account yet.
+purchase on the day it happened, as it always has. It is two booleans rather than
+an accounts table on purpose: an import format is already the thing a statement
+arrives under, and the only questions worth answering are whether a row has left
+the bank yet and which of the two accounts it left.
 
-That boolean now answers a second question. A card statement writes purchases as
-charges and the payment as a credit, so the running sum of everything imported
-under a card format is the change in what the card is owed. Type in what the card
-owed before your first import and the dashboard says what it will ask for, beside
-the checking balance it deliberately leaves out of.
+**Two checking accounts.** A household that keeps its bills in one account and
+spends out of another is asking two different questions of two different
+balances: whether the bills account survives the next eleven days, and how much
+of the other one is free. Pooled, both answers are wrong in the same direction --
+the bills read as a claim on spending money that is already funded somewhere
+else.
 
-It is exactly as current as the last card statement you imported, so the tile
-prints that date. A month of charges nobody has imported is a month this number
-does not know about, and it is better to see the date than to read a stale
-balance as a quiet card.
+Add a balance for the bills account on the dashboard and the tile splits in two.
+That balance existing is the whole switch: a household with one account never
+sees a second tile, and deleting the balance pools them again. Bills due before
+the next paycheck are then charged to the bills account and to nothing else,
+counted once. Which account a charge came out of is the format it was imported
+under (**Settings -> Import formats -> Bills account**); a row typed by hand has
+no format and lands on the everyday account, which is the one a person spends
+against and so the safe place for an unknown.
+
+**What the cards will ask for.** A card statement writes purchases as charges and
+the payment as a credit, so the sum of everything imported under a card format is
+how the balance has moved. Type in what the card says it owes today -- the one
+number anybody can actually check -- and everything imported since is added on
+top. The tile's headline is the payoff number: what it would take to clear that
+card to zero.
+
+`settings.updated_at` is the day the balance was read, and only rows dated on or
+after that day are added. On or after, not after, because over-stating what a
+card is owed is the safe error in the same way the checking tile over-states what
+has been spent. With no balance ever typed, the tile falls back to the running
+sum of every row imported and says so: a card with statements in it is not a card
+that owes nothing.
+
+It is as current as the last thing you told it, so the tile prints both dates --
+when the balance was read, and the last statement imported. A month of charges
+nobody has imported is a month this number does not know about, and it is better
+to see the date than to read a stale balance as a quiet card.
 
 **What is actually in the account.** Everything else in the app is derived from
 a plan; the checking balance is the one number that says whether the account
@@ -606,6 +635,11 @@ eight the tail folds into one grey "Other" rather than repeating hues.
   categorize them, which opens that page on the short month's uncategorized
   rows (`/expenses?month=YYYY-MM&category=none`). The app does not guess which credit is the
   missing paycheck, for the same reason `bucketOf` holds them neutral.
-- A card balance is derived from the statements imported under that card format.
+- A card balance is what you last typed plus the statements imported since.
   Import the checking statement and not the card's, and the payment is visible
-  while the charges it paid for are not.
+  while the charges it paid for are not. Typing the balance off the issuer's site
+  is the fix, and the tile says how many days old that number is.
+- With two checking accounts, a charge is attributed by the format it was
+  imported under. A bill paid out of the everyday account by mistake still counts
+  against the everyday balance, which is right, but it is not flagged as a bill
+  that left the wrong account.

@@ -34,15 +34,20 @@ export const wipeOrder = (): string[] => Object.keys(TABLES);
 export const ZEROED_SETTINGS = ["lumpy_opening_balance_cents", "checking_balance_cents"];
 
 /**
- * Settings keyed by a row id, deleted rather than zeroed. A card's opening
- * balance is `card_opening_balance_cents:<profile id>` (`cardOpeningKey` in
+ * Settings keyed by a row id, deleted rather than zeroed. A card's balance is
+ * `card_balance_cents:<profile id>` (`cardBalanceKey` in
  * services/api/src/store.ts), and the TRUNCATE below starts those ids over: a key
- * left behind would be read as the opening balance of the first card created
- * after the reset, a number nobody typed for it. reset.test.ts holds this string
- * to the store's.
+ * left behind would be read as the balance of the first card created after the
+ * reset, a number nobody typed for it. reset.test.ts holds this string to the
+ * store's.
  */
 export const DELETED_SETTING_PREFIXES = [
-  "card_opening_balance_cents:",
+  "card_balance_cents:",
+  // Not keyed by an id either, and deleted rather than zeroed for a different
+  // reason: the presence of `fixed_balance_cents` is what tells the cash position
+  // this household keeps its bills in a second account. Zeroed, an emptied
+  // database would still claim a bills account with nothing in it.
+  "fixed_balance_cents",
   // Not keyed by an id: `dismissed_recurring` is the list of suggestions
   // somebody said no to, and the charges that produced them are what this wipe
   // is deleting. An empty database should propose everything again.

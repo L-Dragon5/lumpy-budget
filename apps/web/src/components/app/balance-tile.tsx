@@ -8,17 +8,33 @@ import { eden, useApi, useInvalidateAll } from "@/lib/api";
  * A stat tile whose number is a real account balance you keep up to date by
  * hand. Editing happens where the number is read, not on a settings page two
  * clicks away, because the point is to correct it the moment it looks wrong.
+ *
+ * `displayCents` is for the tiles whose headline is not the number you typed: a
+ * card shows what it would take to clear it, which is the balance you read off
+ * the issuer plus everything imported since. The editor still opens on the typed
+ * number, because that is the one a person can check.
  */
 export function BalanceTile({
   settingKey,
   label,
   caption,
   editCaption,
+  displayCents,
+  tone = "muted",
+  buttonLabel = "Update balance",
+  onRemove,
+  removeLabel = "Remove",
 }: {
   settingKey: string;
   label: string;
   caption?: ReactNode;
   editCaption?: string;
+  displayCents?: number;
+  tone?: "neutral" | "good" | "critical" | "muted";
+  buttonLabel?: string;
+  /** Offered inside the editor, not on the face: taking an account away is not a thing to misclick. */
+  onRemove?: () => Promise<void> | void;
+  removeLabel?: string;
 }) {
   const settings = useApi(["settings"], () => eden.api.settings.get());
   const invalidate = useInvalidateAll();
@@ -40,14 +56,27 @@ export function BalanceTile({
           }}
         />
         <p className="text-xs text-muted-foreground">{editCaption ?? "Whatever the account says right now."}</p>
+        {onRemove ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="-ml-2 self-start text-xs text-destructive"
+            onClick={async () => {
+              await onRemove();
+              setEditing(false);
+            }}
+          >
+            {removeLabel}
+          </Button>
+        ) : null}
       </div>
     );
   }
 
   return (
-    <StatTile label={label} cents={cents} tone="muted" caption={caption}>
+    <StatTile label={label} cents={displayCents ?? cents} tone={tone} caption={caption}>
       <Button variant="ghost" size="sm" className="mt-1 -ml-2 self-start text-xs" onClick={() => setEditing(true)}>
-        Update balance
+        {buttonLabel}
       </Button>
     </StatTile>
   );

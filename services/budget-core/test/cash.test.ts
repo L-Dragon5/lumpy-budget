@@ -88,3 +88,32 @@ test("a balance typed in today is not stale", () => {
   const pos = cashPosition({ paychecks: march(), today: "2026-03-18", balanceCents: 1, asOf: "2026-03-18" });
   expect(pos.days_stale).toBe(0);
 });
+
+test("an account that does not pay the bills is not asked to survive them", () => {
+  const input = { paychecks: march(), today: "2026-03-08", balanceCents: 100000, asOf: "2026-03-08" };
+  const bills = cashPosition(input);
+  const everyday = cashPosition({ ...input, paysBills: false });
+
+  // The same balance, the same day, the same plan. The only question that
+  // differs is whether the car loan on the 10th is a claim on this money -- and
+  // for a household with a second account holding the bills, it is not.
+  expect(bills.due_before_next_paycheck_cents).toBe(40000);
+  expect(everyday.due).toEqual([]);
+  expect(everyday.due_before_next_paycheck_cents).toBe(0);
+  expect(everyday.projected_cents).toBe(100000);
+  expect(everyday.short).toBe(false);
+  // Everything that is not about the bills still is: payday and the staleness
+  // warning are the same on both accounts.
+  expect(everyday.next_paycheck_date).toBe(bills.next_paycheck_date);
+  expect(everyday.next_paycheck_cents).toBe(bills.next_paycheck_cents);
+});
+
+test("an everyday account is never short on bills it does not pay", () => {
+  // Not enough for the car loan. Pooled, this tile would shout; split, the car
+  // loan is funded in the other account and this balance is just small.
+  const pos = cashPosition({
+    paychecks: march(), today: "2026-03-08", balanceCents: 2500, asOf: "2026-03-08", paysBills: false,
+  });
+  expect(pos.short).toBe(false);
+  expect(pos.projected_cents).toBe(2500);
+});

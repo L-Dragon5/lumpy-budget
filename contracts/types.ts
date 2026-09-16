@@ -400,6 +400,15 @@ export const importProfileInput = z.object({
    * Defaults true, which is what every profile that predates the column is.
    */
   cash_account: z.boolean().default(true),
+  /**
+   * Of the two checking accounts, is this the one the bills come out of?
+   *
+   * Ignored when `cash_account` is false -- a card is neither account. Defaults
+   * false, which is the everyday account and is what a household with one
+   * checking account has: the cash position only splits in two once a balance
+   * has been typed for the bills account.
+   */
+  fixed_account: z.boolean().default(false),
 });
 export const importProfile = z.object({ id }).and(importProfileInput);
 export type ImportProfileInput = z.infer<typeof importProfileInput>;
