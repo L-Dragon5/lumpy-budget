@@ -347,32 +347,30 @@ export function ImportWizard({ open, onOpenChange }: { open: boolean; onOpenChan
                 {uncategorized > 0 ? <Badge variant="outline">{uncategorized} uncategorized</Badge> : null}
                 <span className="text-muted-foreground">Showing the first 8 rows as they will be saved.</span>
               </div>
-              <div className="overflow-x-auto rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Merchant</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
+              <Table containerClassName="rounded-md border">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Merchant</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(result?.rows ?? []).slice(0, 8).map((r, i) => (
+                    <TableRow key={`${r.txn_date}-${r.merchant}-${i}`}>
+                      <TableCell>{r.txn_date}</TableCell>
+                      <TableCell className="max-w-64 truncate">{r.merchant}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {categoryName(r.category_id) ?? "—"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Money cents={r.amount_cents} className={r.amount_cents < 0 ? "text-[var(--good)]" : undefined} />
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(result?.rows ?? []).slice(0, 8).map((r, i) => (
-                      <TableRow key={`${r.txn_date}-${r.merchant}-${i}`}>
-                        <TableCell>{r.txn_date}</TableCell>
-                        <TableCell className="max-w-64 truncate">{r.merchant}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {categoryName(r.category_id) ?? "—"}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Money cents={r.amount_cents} className={r.amount_cents < 0 ? "text-[var(--good)]" : undefined} />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
 
             {proposals.length > 0 ? (
@@ -384,52 +382,50 @@ export function ImportWizard({ open, onOpenChange }: { open: boolean; onOpenChan
                     chose and takes the statement's date and merchant. Uncheck any that are really two charges.
                   </span>
                 </div>
-                <div className="overflow-x-auto rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-12">Merge</TableHead>
-                        <TableHead>You entered</TableHead>
-                        <TableHead>On the statement</TableHead>
-                        <TableHead className="text-right">Amount</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {proposals.map((p) => {
-                        const mine = byId.get(p.manual_id);
-                        const theirs = result?.rows[p.row_index];
-                        if (!mine || !theirs) return null;
-                        return (
-                          <TableRow key={p.manual_id}>
-                            <TableCell>
-                              <input
-                                type="checkbox"
-                                aria-label={`Merge ${mine.merchant} with ${theirs.merchant}`}
-                                className="size-4 accent-[var(--primary)]"
-                                checked={!declined.has(p.manual_id)}
-                                onChange={() => toggleMerge(p.manual_id)}
-                              />
-                            </TableCell>
-                            <TableCell className="max-w-64 truncate">
-                              {mine.merchant}
-                              <span className="ml-2 text-muted-foreground">{mine.txn_date}</span>
-                            </TableCell>
-                            <TableCell className="max-w-64 truncate">
-                              {theirs.merchant}
-                              <span className="ml-2 text-muted-foreground">
-                                {theirs.txn_date}
-                                {p.day_gap > 0 ? ` (${p.day_gap}d later)` : ""}
-                              </span>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Money cents={theirs.amount_cents} />
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
+                <Table containerClassName="rounded-md border">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12">Merge</TableHead>
+                      <TableHead>You entered</TableHead>
+                      <TableHead>On the statement</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {proposals.map((p) => {
+                      const mine = byId.get(p.manual_id);
+                      const theirs = result?.rows[p.row_index];
+                      if (!mine || !theirs) return null;
+                      return (
+                        <TableRow key={p.manual_id}>
+                          <TableCell>
+                            <input
+                              type="checkbox"
+                              aria-label={`Merge ${mine.merchant} with ${theirs.merchant}`}
+                              className="size-4 accent-[var(--primary)]"
+                              checked={!declined.has(p.manual_id)}
+                              onChange={() => toggleMerge(p.manual_id)}
+                            />
+                          </TableCell>
+                          <TableCell className="max-w-64 truncate">
+                            {mine.merchant}
+                            <span className="ml-2 text-muted-foreground">{mine.txn_date}</span>
+                          </TableCell>
+                          <TableCell className="max-w-64 truncate">
+                            {theirs.merchant}
+                            <span className="ml-2 text-muted-foreground">
+                              {theirs.txn_date}
+                              {p.day_gap > 0 ? ` (${p.day_gap}d later)` : ""}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Money cents={theirs.amount_cents} />
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
               </div>
             ) : null}
 

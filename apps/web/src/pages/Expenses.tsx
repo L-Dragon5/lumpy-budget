@@ -218,11 +218,8 @@ export default function Expenses() {
               </EmptyHeader>
             </Empty>
           ) : (
-            // A long month scrolls inside the card; the header stays put, and
-            // its bottom border is painted inside the cell so it does not
-            // scroll away with the first row.
-            <Table containerClassName="max-h-[65vh]">
-              <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-card [&_th]:shadow-[inset_0_-1px_0_var(--border)] [&_tr]:border-b-0">
+            <Table>
+              <TableHeader>
                 <TableRow>
                   <TableHead className="w-32">Date</TableHead>
                   <TableHead className="w-56">Category</TableHead>

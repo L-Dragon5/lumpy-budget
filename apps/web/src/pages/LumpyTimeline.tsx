@@ -158,63 +158,61 @@ export default function LumpyTimeline() {
           <CardTitle>Month by month</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Month</TableHead>
-                  <TableHead className="text-right">Start of month</TableHead>
-                  <TableHead className="text-right">Contribute</TableHead>
-                  <TableHead className="text-right">Paid out</TableHead>
-                  <TableHead className="text-right">End of month</TableHead>
-                  <TableHead>What comes due</TableHead>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Month</TableHead>
+                <TableHead className="text-right">Start of month</TableHead>
+                <TableHead className="text-right">Contribute</TableHead>
+                <TableHead className="text-right">Paid out</TableHead>
+                <TableHead className="text-right">End of month</TableHead>
+                <TableHead>What comes due</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {t.rows.map((r) => (
+                <TableRow key={r.month} className={r.short ? "bg-destructive/10" : ""}>
+                  <TableCell className="font-medium">{monthLabel(r.month)}</TableCell>
+                  <TableCell className="text-right">
+                    <Money cents={r.balance_start_cents} />
+                  </TableCell>
+                  <TableCell className="text-right text-muted-foreground">
+                    <Money cents={r.contribution_cents} />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {r.outflow_cents > 0 ? <Money cents={r.outflow_cents} /> : <span className="text-muted-foreground">—</span>}
+                  </TableCell>
+                  <TableCell className="text-right font-medium">
+                    <Money cents={r.balance_end_cents} tone={r.balance_end_cents < 0} />
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {r.due.map((d) => d.name).join(", ") || "—"}
+                    {r.short ? (
+                      <Badge variant="destructive" className="ml-2">
+                        short <Money cents={r.shortfall_cents} />
+                      </Badge>
+                    ) : null}
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {t.rows.map((r) => (
-                  <TableRow key={r.month} className={r.short ? "bg-destructive/10" : ""}>
-                    <TableCell className="font-medium">{monthLabel(r.month)}</TableCell>
-                    <TableCell className="text-right">
-                      <Money cents={r.balance_start_cents} />
-                    </TableCell>
-                    <TableCell className="text-right text-muted-foreground">
-                      <Money cents={r.contribution_cents} />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {r.outflow_cents > 0 ? <Money cents={r.outflow_cents} /> : <span className="text-muted-foreground">—</span>}
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      <Money cents={r.balance_end_cents} tone={r.balance_end_cents < 0} />
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {r.due.map((d) => d.name).join(", ") || "—"}
-                      {r.short ? (
-                        <Badge variant="destructive" className="ml-2">
-                          short <Money cents={r.shortfall_cents} />
-                        </Badge>
-                      ) : null}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-              <TableFooter>
-                <TableRow>
-                  <TableCell>12-month total</TableCell>
-                  <TableCell />
-                  <TableCell className="text-right">
-                    <Money cents={t.monthly_contribution_cents * 12} />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Money cents={t.total_outflow_cents} />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Money cents={t.rows[t.rows.length - 1]?.balance_end_cents ?? 0} />
-                  </TableCell>
-                  <TableCell />
-                </TableRow>
-              </TableFooter>
-            </Table>
-          </div>
+              ))}
+            </TableBody>
+            <TableFooter>
+              <TableRow>
+                <TableCell>12-month total</TableCell>
+                <TableCell />
+                <TableCell className="text-right">
+                  <Money cents={t.monthly_contribution_cents * 12} />
+                </TableCell>
+                <TableCell className="text-right">
+                  <Money cents={t.total_outflow_cents} />
+                </TableCell>
+                <TableCell className="text-right">
+                  <Money cents={t.rows[t.rows.length - 1]?.balance_end_cents ?? 0} />
+                </TableCell>
+                <TableCell />
+              </TableRow>
+            </TableFooter>
+          </Table>
         </CardContent>
       </Card>
     </>

@@ -9,7 +9,12 @@ function Table({
   return (
     <div
       data-slot="table-container"
-      className={cn("relative w-full overflow-x-auto", containerClassName)}
+      // A long table scrolls inside itself rather than making the page as long
+      // as the data. max-h, not h: a three-row table is still three rows tall.
+      className={cn(
+        "relative max-h-[65vh] w-full overflow-x-auto",
+        containerClassName
+      )}
     >
       <table
         data-slot="table"
@@ -24,7 +29,18 @@ function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
   return (
     <thead
       data-slot="table-header"
-      className={cn("[&_tr]:border-b", className)}
+      // Pinned to the top of the scrolling container. The rule under it is an
+      // inset shadow, not the row's border: Tailwind's preflight collapses
+      // borders, and a collapsed border belongs to the row, so it scrolls away
+      // under the sticky cell.
+      //
+      // ponytail: bg-card, because every table in the app sits on a Card or in
+      // a Dialog and --card and --popover are the same colour in both themes.
+      // If they ever diverge, pass the right one down instead.
+      className={cn(
+        "[&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-card [&_th]:shadow-[inset_0_-1px_0_var(--border)]",
+        className
+      )}
       {...props}
     />
   )

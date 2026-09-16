@@ -220,50 +220,48 @@ export default function Settings() {
                 </AddButton>
                 <MergeRulesButton />
               </div>
-              <div className="max-h-[32rem] overflow-y-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>If the text contains</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead className="text-right">Priority</TableHead>
-                      <TableHead className="w-20" />
+              <Table containerClassName="max-h-[32rem]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>If the text contains</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead className="text-right">Priority</TableHead>
+                    <TableHead className="w-20" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(rules.data ?? []).map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell className="font-mono text-sm">
+                        {r.pattern}
+                        {r.whole_word ? (
+                          <Badge variant="secondary" className="ml-2 font-sans">whole word</Badge>
+                        ) : null}
+                      </TableCell>
+                      <TableCell>{catName(r.category_id)}</TableCell>
+                      <TableCell className="text-right tabular text-muted-foreground">{r.priority}</TableCell>
+                      <TableCell>
+                        <div className="flex justify-end">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Edit ${r.pattern}`}
+                            onClick={() =>
+                              setRuleDraft({
+                                id: r.id, pattern: r.pattern, whole_word: r.whole_word,
+                                category_id: String(r.category_id), priority: String(r.priority),
+                              })
+                            }
+                          >
+                            <PencilIcon />
+                          </Button>
+                          <DeleteButton label={r.pattern} onConfirm={() => removeRule.mutate(r.id)} />
+                        </div>
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(rules.data ?? []).map((r) => (
-                      <TableRow key={r.id}>
-                        <TableCell className="font-mono text-sm">
-                          {r.pattern}
-                          {r.whole_word ? (
-                            <Badge variant="secondary" className="ml-2 font-sans">whole word</Badge>
-                          ) : null}
-                        </TableCell>
-                        <TableCell>{catName(r.category_id)}</TableCell>
-                        <TableCell className="text-right tabular text-muted-foreground">{r.priority}</TableCell>
-                        <TableCell>
-                          <div className="flex justify-end">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              aria-label={`Edit ${r.pattern}`}
-                              onClick={() =>
-                                setRuleDraft({
-                                  id: r.id, pattern: r.pattern, whole_word: r.whole_word,
-                                  category_id: String(r.category_id), priority: String(r.priority),
-                                })
-                              }
-                            >
-                              <PencilIcon />
-                            </Button>
-                            <DeleteButton label={r.pattern} onConfirm={() => removeRule.mutate(r.id)} />
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                  ))}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         </TabsContent>
