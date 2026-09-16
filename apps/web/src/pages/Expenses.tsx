@@ -80,7 +80,10 @@ export default function Expenses() {
   const all = expenses.data ?? [];
   const cats = categories.data ?? [];
   const totals = totalsByBucket(all, cats);
-  const out = OUT.reduce((a, b) => a + totals[b], 0);
+  // Two numbers rather than one: a month reads as its discretionary spending,
+  // which is the only part the month can still change, and the bills it could
+  // not. Their sum is money out, and OUT below is what the list shows.
+  const bills = totals.fixed + totals.lumpy;
   const notOut = totals.transfer + totals.income + totals.savings;
   const byId = categoryIndex(cats);
   const isOut = (e: Expense) => OUT.includes(bucketOf(e, byId));
@@ -214,8 +217,13 @@ export default function Expenses() {
             </Button>
           ) : null}
           <span className="text-muted-foreground">
-            Money out <Money cents={out} className="font-medium text-foreground" />
+            Discretionary <Money cents={totals.discretionary} className="font-medium text-foreground" />
           </span>
+          {bills !== 0 ? (
+            <span className="text-muted-foreground" title="Fixed bills and lumpy items. Money out, but not money this month chose.">
+              Bills <Money cents={bills} className="font-medium text-foreground" />
+            </span>
+          ) : null}
           {notOut === 0 ? null : category !== ALL ? (
             <span className="text-muted-foreground" title={NOT_OUT}>
               <Money cents={notOut} /> not money out
