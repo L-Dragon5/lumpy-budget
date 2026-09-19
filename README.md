@@ -220,6 +220,16 @@ the server, so the image matches its architecture and no registry is involved --
 tree that was tested here. Take a backup first if the pull carries a migration;
 the script does that for you.
 
+A stack manager with git built in -- Komodo is the container-native one -- does
+the same job from the other end: it clones this repo onto the server itself,
+writes the `.env` from its own UI, and redeploys on a push webhook. Two things
+carry over unchanged if you go that way, and one bites. `PROXY_NETWORK` and the
+`lumpy` alias still apply, the deploy key still applies, and **the stack has to
+actually run a build** -- this image is built from source, so a redeploy that only
+runs `up -d` changes nothing at all, silently, exactly as it would here without
+`--build`. `scripts/deploy.sh` and a timer keep working next to it, which makes it
+a safe thing to try on one stack before four.
+
 **Edit `.env` in Dockge, never `compose.yaml`.** `.env` is untracked, so the
 server owning it is the point. `compose.yaml` is tracked, and a UI edit to it
 leaves a dirty worktree that stops the next `git merge --ff-only` dead -- loudly,
