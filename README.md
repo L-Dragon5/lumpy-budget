@@ -52,24 +52,47 @@ with no second environment to keep in sync.
 
 ```bash
 cp .env.example .env               # MYSQL_ROOT_PASSWORD and TZ are both required
-docker compose up -d --build       # http://<server>:3001, or $PORT
+docker network ls                  # find the network your proxy is on
+docker compose up -d --build
 docker compose logs -f app
 ```
 
 Two containers: `mysql:8.4` with a named volume, and the app. The image builds
-`apps/web/dist` and the API serves it on its own port, so there is no nginx and
-no proxy -- `apps/web/src/lib/api.ts` asks `window.location.origin`, which is
-already how a local `bun run build` behaves. Migrations run on boot; they are
-forward-only and recorded in `_migrations`, so a rebuild applies whatever the new
-image added and does nothing otherwise.
+`apps/web/dist` and the API serves it on its own port, so there is no second
+container and nothing to proxy internally -- `apps/web/src/lib/api.ts` asks
+`window.location.origin`, which is already how a local `bun run build` behaves.
+Migrations run on boot; they are forward-only and recorded in `_migrations`, so a
+rebuild applies whatever the new image added and does nothing otherwise.
+
+### Behind Nginx Proxy Manager
+
+The app joins the proxy's own Docker network (`PROXY_NETWORK`, default `proxy`)
+under the alias **`lumpy`**, and publishes nothing but a loopback port for
+curling it on the server. In NPM, add a proxy host:
+
+| Field | Value |
+| --- | --- |
+| Domain Names | whatever you are serving it as |
+| Scheme | `http` |
+| Forward Hostname / IP | `lumpy` |
+| Forward Port | `3001` |
+| Websockets Support | off, nothing here uses them |
+| SSL | request a cert, and force it |
+
+The alias is per stack and deliberate. Convert a second app this way and its
+service will also be called `app`; two containers answering to `app` on one
+network is a proxy that round-robins between unrelated sites. `internal` is a
+second network holding only the database, which the proxy therefore cannot see.
+
+**Put an NPM Access List in front of it.** This app has no login (see Known
+limits), so the proxy is the only thing between the internet and your ledger.
+Basic auth, or an allow-list of LAN ranges, or don't give it a public DNS name at
+all.
 
 **`TZ` is not optional and must not be UTC unless you are.** MySQL dates rows on
 its own clock and the app compares those dates against its local today, so a UTC
 container files anything entered after 8pm under tomorrow. Compose refuses to
 start without it rather than guessing. The same value goes to both containers.
-
-**No login.** It is the same single-user app it is on localhost, so keep it on
-the LAN or behind whatever already fronts your homelab. Do not port-forward it.
 
 Backups work inside the container -- the image carries `mysqldump`, and
 `$HOME/lumpy-backups` is mounted at `./backups`:
@@ -79,9 +102,11 @@ docker compose exec app bun run backup     # -> ./backups/lumpy_budget-<stamp>.s
 docker compose exec -T db mysql -uroot -p"$MYSQL_ROOT_PASSWORD" < backups/<file>.sql
 ```
 
-To upgrade: `git pull && docker compose up -d --build`. Build on the server, so
-the image matches its architecture and no registry is involved. Run a backup
-first if the pull carries a migration.
+To upgrade: `git pull && docker compose up -d --build`. Without `--build` the old
+image is reused and the pull deploys nothing, silently. Build on the server, so
+the image matches its architecture and no registry is involved -- `bun.lock` is
+tracked and the build is `--frozen-lockfile`, so it resolves the tree that was
+tested here. Run a backup first if the pull carries a migration.
 
 The database also publishes `127.0.0.1:3307` for the case where you would rather
 develop against it than a local install: point `DATABASE_URL` at

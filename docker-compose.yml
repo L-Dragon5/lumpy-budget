@@ -2,11 +2,14 @@
 # This file is how the same code runs on the homelab:
 #
 #   cp .env.example .env && $EDITOR .env     # MYSQL_ROOT_PASSWORD and TZ are required
-#   docker compose up -d --build             # http://<server>:${PORT:-3001}
+#   docker network create proxy              # once per server, or name the one you have
+#   docker compose up -d --build
 #   docker compose exec app bun run backup   # -> ./backups/
 #
 # The API serves apps/web/dist on its own port, so there is no second container
-# and no proxy: apps/web/src/lib/api.ts talks to window.location.origin.
+# and no internal proxy: apps/web/src/lib/api.ts talks to window.location.origin.
+# Nginx Proxy Manager reaches it over the shared `proxy` network as `lumpy:3001`
+# -- see README, "Hosting it".
 services:
   db:
     image: mysql:8.4
@@ -18,6 +21,8 @@ services:
       # unless you are. On UTC, a row entered after 8pm local lands tomorrow.
       TZ: ${TZ:?set TZ in .env, e.g. America/New_York}
     volumes: ["dbdata:/var/lib/mysql"]
+    # Not on the proxy network: nothing outside this stack talks to the database.
+    networks: ["internal"]
     # Loopback only. Published at all so a host `bun run dev` can point at this
     # database instead of a local install; 3307 to never collide with one.
     ports: ["127.0.0.1:3307:3306"]
@@ -38,11 +43,31 @@ services:
       # Categorize page still works by hand.
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-}
-    ports: ["${PORT:-3001}:3001"]
+    # Loopback only: the proxy reaches the container over the shared network, so
+    # the port is here for `curl localhost:3001/api/summary` on the server and
+    # nothing else. Drop the line entirely to close it.
+    ports: ["127.0.0.1:${PORT:-3001}:3001"]
     volumes: ["./backups:/root/lumpy-backups"]
+    networks:
+      internal:
+      proxy:
+        # The name NPM forwards to, and the reason it is spelled out: every stack
+        # converted this way has a service called `app`, and on a shared network
+        # they would all answer to `app`. An alias per stack is what keeps the
+        # proxy pointed at one of them.
+        aliases: ["lumpy"]
     depends_on:
       db:
         condition: service_healthy
+
+networks:
+  internal:
+  # Nginx Proxy Manager's own network, created by whatever stack runs it -- hence
+  # external: this file joins it and never defines it. `docker network ls` names
+  # it; it is often <npm-project>_default.
+  proxy:
+    external: true
+    name: ${PROXY_NETWORK:-proxy}
 
 volumes:
   dbdata:
