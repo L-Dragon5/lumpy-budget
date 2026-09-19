@@ -47,7 +47,7 @@ time.
 ## Hosting it
 
 Development stays on the host: `bun run dev` against your own MySQL, exactly as
-above. `docker-compose.yml` is for the other machine, and it runs the same code
+above. `compose.yaml` is for the other machine, and it runs the same code
 with no second environment to keep in sync.
 
 ```bash
@@ -55,6 +55,22 @@ cp .env.example .env               # MYSQL_ROOT_PASSWORD and TZ are both require
 docker network ls                  # find the network your proxy is on
 docker compose up -d --build
 docker compose logs -f app
+```
+
+The file is `compose.yaml`, which is both the name the Compose spec prefers and
+the name stack managers like Dockge look for. Clone the repo into whatever
+directory yours watches (Dockge: `/opt/stacks/lumpy-budget`) and the stack shows
+up in its UI, with its logs and its env editor, because Dockge reads compose files
+off the disk rather than owning them.
+
+A private repo wants a **deploy key**, not a personal access token: it is
+read-only and scoped to this one repo, so a compromised server cannot push
+anywhere.
+
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/lumpy_deploy -C "lumpy-deploy@homelab" -N ""
+cat ~/.ssh/lumpy_deploy.pub    # -> repo Settings > Deploy keys, leave write off
+git clone git@github.com:<you>/lumpy-budget.git    # with that key in ~/.ssh/config
 ```
 
 Two containers: `mariadb:10.11` with a named volume, and the app. The version is
@@ -147,11 +163,67 @@ See "Moving data between environments".
 down` and a rebuild keep it; `docker compose down -v` deletes it, and that is the
 one command in this file that can lose your ledger.
 
-To upgrade: `git pull && docker compose up -d --build`. Without `--build` the old
-image is reused and the pull deploys nothing, silently. Build on the server, so
-the image matches its architecture and no registry is involved -- `bun.lock` is
-tracked and the build is `--frozen-lockfile`, so it resolves the tree that was
-tested here. Run a backup first if the pull carries a migration.
+### Deploying on a push
+
+`scripts/deploy.sh` is the whole upgrade: fetch, and if `origin` has moved, dump
+the database when the diff carries a migration, fast-forward, rebuild, restart,
+and prune the old layers. It exits 0 having done nothing when there is nothing
+new, which is what makes it safe on a timer.
+
+```bash
+scripts/deploy.sh              # deploy if origin moved
+scripts/deploy.sh --force      # rebuild at the current commit
+```
+
+A systemd timer turns that into push-to-deploy with a lag, and needs no inbound
+port, no webhook, no registry and no runner -- the server reaches out to GitHub,
+never the other way. Both files are yours to write with `sudo`:
+
+```ini
+# /etc/systemd/system/lumpy-deploy.service
+[Unit]
+Description=Deploy lumpy-budget if origin moved
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/stacks/lumpy-budget
+ExecStart=/opt/stacks/lumpy-budget/scripts/deploy.sh
+User=<the user in the docker group>
+```
+
+```ini
+# /etc/systemd/system/lumpy-deploy.timer
+[Unit]
+Description=Check for a new lumpy-budget every 5 minutes
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+[Install]
+WantedBy=timers.target
+```
+
+```bash
+sudo systemctl enable --now lumpy-deploy.timer
+systemctl list-timers lumpy-deploy.timer
+journalctl -u lumpy-deploy.service -f     # every deploy, and every no-op
+```
+
+Five minutes of lag buys the absence of an inbound deploy trigger. If that lag
+ever matters, the next step up is a GitHub Actions self-hosted runner on the
+server calling the same script -- still outbound-only, but it fires on the push
+itself. A webhook endpoint is the third option and the only one that opens a door
+inwards; it needs a secret and a listener, and it exists to save four minutes.
+
+Doing it by hand is still `git pull && docker compose up -d --build`. Without
+`--build` the old image is reused and the pull deploys nothing, silently. Build on
+the server, so the image matches its architecture and no registry is involved --
+`bun.lock` is tracked and the build is `--frozen-lockfile`, so it resolves the
+tree that was tested here. Take a backup first if the pull carries a migration;
+the script does that for you.
+
+**Edit `.env` in Dockge, never `compose.yaml`.** `.env` is untracked, so the
+server owning it is the point. `compose.yaml` is tracked, and a UI edit to it
+leaves a dirty worktree that stops the next `git merge --ff-only` dead -- loudly,
+in the deploy log, which is the intended failure but still a failure.
 
 The database also publishes `127.0.0.1:3307` for the case where you would rather
 develop against it than a local install: point `DATABASE_URL` at
