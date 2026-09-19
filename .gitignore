@@ -18,3 +18,5 @@ statements/
 # stays local. `bun run eval:build` rewrites all three together; without them
 # `bun run eval:classify` has nothing to score and says so.
 services/llm/eval/*.json
+
+backups/

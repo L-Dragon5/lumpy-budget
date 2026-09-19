@@ -11,6 +11,7 @@
     "migrate": "bun run services/db/src/migrate.ts",
     "seed": "bun run services/db/src/seed.ts",
     "api": "bun run --hot services/api/src/server.ts",
+    "start": "bun run services/api/src/server.ts",
     "web": "bun run --cwd apps/web dev",
     "dev": "bun run api & bun run web",
     "test": "bun test",

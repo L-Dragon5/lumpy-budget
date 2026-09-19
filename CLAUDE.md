@@ -402,6 +402,15 @@ Four places, in this order, or reads silently drop it:
   still one click on the expenses page, where what it catches is visible. The
   web page only offers a rule for a merchant seen more than once, because a rule
   for a one-off is a row that can never fire.
+- **The static handler is mounted in `server.ts`, never in `app.ts`.** `spa()`
+  (`services/api/src/static.ts`) is a `/*` wildcard, and `app.ts` is what
+  `apps/web` imports as `App` for Eden: a wildcard in that type is a route the
+  client can be talked into believing in. It is also why `spa()` 404s `/api/*`
+  itself -- an unknown API path has to read as missing JSON, not as index.html
+  with a 200 the client then fails to parse. Mounted only when `apps/web/dist`
+  exists, so development is unchanged and the container serves both on one port.
+  `services/api/test/static.test.ts` pins the precedence and the encoded-`..`
+  guard; it needs no database, which is why it does not import `setup.ts`.
 
 ## Two lanes
 
