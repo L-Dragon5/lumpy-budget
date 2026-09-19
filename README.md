@@ -57,7 +57,8 @@ docker compose up -d --build
 docker compose logs -f app
 ```
 
-Two containers: `mysql:8.4` with a named volume, and the app. The image builds
+Two containers: `mariadb:10.11` with a named volume, and the app. The version is
+deliberate -- it is the server the tests and migrations were written against. The image builds
 `apps/web/dist` and the API serves it on its own port, so there is no second
 container and nothing to proxy internally -- `apps/web/src/lib/api.ts` asks
 `window.location.origin`, which is already how a local `bun run build` behaves.
@@ -94,13 +95,57 @@ its own clock and the app compares those dates against its local today, so a UTC
 container files anything entered after 8pm under tomorrow. Compose refuses to
 start without it rather than guessing. The same value goes to both containers.
 
-Backups work inside the container -- the image carries `mysqldump`, and
-`$HOME/lumpy-backups` is mounted at `./backups`:
+### Getting at the database
+
+Containerised is not walled off. Four ways in, roughly in the order you will want
+them:
 
 ```bash
+# 1. A SQL prompt, no ports, no client to install.
+docker compose exec db mariadb -uroot -p"$MYSQL_ROOT_PASSWORD" lumpy_budget
+
+# 2. A real backup. The app image carries mysqldump and $HOME/lumpy-backups is
+#    mounted at ./backups, so the file lands outside the container.
 docker compose exec app bun run backup     # -> ./backups/lumpy_budget-<stamp>.sql
-docker compose exec -T db mysql -uroot -p"$MYSQL_ROOT_PASSWORD" < backups/<file>.sql
+
+# 3. Restore one, or any .sql file, over the running database.
+docker compose exec -T db mariadb -uroot -p"$MYSQL_ROOT_PASSWORD" < backups/<file>.sql
+
+# 4. A query's rows, tab-separated, without leaving the shell.
+docker compose exec db mariadb -uroot -p"$MYSQL_ROOT_PASSWORD" -B -e \
+  "select * from expenses order by txn_date desc limit 50" lumpy_budget
 ```
+
+For a GUI -- TablePlus, DBeaver, Sequel Ace -- the database publishes
+`127.0.0.1:3307` on the server, loopback only. From your laptop, tunnel to it
+over SSH and point the client at localhost:
+
+```bash
+ssh -N -L 3307:127.0.0.1:3307 you@homelab       # leave it running
+# then connect to 127.0.0.1:3307, user root, database lumpy_budget
+```
+
+That is the honest answer for editing rows by hand, and it is the same client you
+already use against the dev database. Three things to know before you do:
+
+- **Money is integer cents and dates are `DATE` strings.** `12.34` in
+  `amount_cents` is twelve cents, silently. A charge is positive, a credit is
+  negative.
+- **`expenses.dedupe_hash` is load-bearing.** It is what makes re-importing the
+  same statement a no-op. Change an amount, a date or a merchant by hand and the
+  hash no longer describes the row, so the next import of that statement adds it
+  again. Editing through the app recomputes it; editing in SQL does not.
+- **A split charge is a parent row plus children** (`parent_id`), and the parent
+  is hidden from every report rather than deleted. Deleting a parent by hand
+  orphans its parts.
+
+`/api/export` and `/api/restore` are the other route: whole-database JSON,
+readable, and `restore` puts the rows back with the ids they were exported with.
+See "Moving data between environments".
+
+**The data lives in the `dbdata` volume, not in the container.** `docker compose
+down` and a rebuild keep it; `docker compose down -v` deletes it, and that is the
+one command in this file that can lose your ledger.
 
 To upgrade: `git pull && docker compose up -d --build`. Without `--build` the old
 image is reused and the pull deploys nothing, silently. Build on the server, so

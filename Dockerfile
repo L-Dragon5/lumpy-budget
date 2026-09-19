@@ -3,8 +3,10 @@
 # ponytail: split out a slim runtime stage the day image size matters.
 FROM oven/bun:1
 
-# mysqldump, for `bun run backup` inside the container. The app itself talks to
-# MySQL through Bun's driver and needs none of this.
+# mysqldump, for `bun run backup` inside the container. Debian's default-mysql-*
+# is MariaDB's, which is the server this talks to -- a MySQL 8 client against
+# MariaDB, or the reverse, is where auth-plugin arguments start. The app itself
+# reaches the database through Bun's driver and needs none of this.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends default-mysql-client \
  && rm -rf /var/lib/apt/lists/*

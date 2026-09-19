@@ -12,10 +12,16 @@
 # -- see README, "Hosting it".
 services:
   db:
-    image: mysql:8.4
+    # MariaDB, not MySQL, and 10.11 specifically: it is what every test and every
+    # migration in this repo has ever run against (`select version()` on the dev
+    # box). The two are close enough that swapping them looks free and is not --
+    # they disagree about auth plugins, about what mysqldump emits, and about a
+    # few things in information_schema.
+    image: mariadb:10.11
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
+      # The image still reads the MYSQL_ prefix; .env keeps the familiar name.
+      MARIADB_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
       # MySQL dates rows on its own clock while the app compares those dates to
       # its local today, so both containers have to agree and neither can be UTC
       # unless you are. On UTC, a row entered after 8pm local lands tomorrow.
