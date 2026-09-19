@@ -1,0 +1,9 @@
+{
+  "name": "@lumpy/llm",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "dependencies": {
+    "@lumpy/contracts": "workspace:*"
+  }
+}

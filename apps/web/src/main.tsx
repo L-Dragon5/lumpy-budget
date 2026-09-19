@@ -12,6 +12,7 @@ import LumpyTimeline from "@/pages/LumpyTimeline";
 import Forecast from "@/pages/Forecast";
 import Savings from "@/pages/Savings";
 import Expenses from "@/pages/Expenses";
+import Categorize from "@/pages/Categorize";
 import Reports from "@/pages/Reports";
 import Settings from "@/pages/Settings";
 import NotFound from "@/pages/NotFound";
@@ -35,6 +36,7 @@ createRoot(document.getElementById("root")!).render(
             <Route path="forecast" element={<Forecast />} />
             <Route path="savings" element={<Savings />} />
             <Route path="expenses" element={<Expenses />} />
+            <Route path="categorize" element={<Categorize />} />
             <Route path="reports" element={<Reports />} />
             <Route path="settings" element={<Settings />} />
             <Route path="*" element={<NotFound />} />

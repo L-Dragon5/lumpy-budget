@@ -2,7 +2,10 @@ import type {
   Absorption, BackupTables, Category, CategoryRule, Expense, ExpenseInput, ExpenseSplitInput, FixedCost,
   IncomeStream, CategoryRuleInput, CategoryRuleMergeInput, ImportProfile, ImportProfileInput, LumpyItem,
   MergeResult, RestoreResult, RuleMergeResult, SavingsGoal,
+  CategorizeResult, CategoryAssignment, UncategorizedMerchant,
 } from "@lumpy/contracts";
+import { needleOf } from "@lumpy/contracts";
+import type { Example } from "@lumpy/llm";
 import { bulkInsert, byId, insert, rows, sql, update, type Executor } from "@lumpy/db";
 import { applyRules, dedupeKey, dedupeKeys, matchable, splitDedupeKey } from "@lumpy/csv-import";
 import * as core from "@lumpy/budget-core";
@@ -776,4 +779,168 @@ export async function mergeCategoryRules(tables: CategoryRuleMergeInput["tables"
   });
 
   return { added, updated, skipped };
+}
+
+// ------------------------------------------------------- classification
+
+/**
+ * How many merchants one look at the backlog is allowed to return.
+ *
+ * ponytail: a constant, not a query parameter. A household that has never
+ * categorised anything has a few hundred distinct merchants; the number exists
+ * so a database in a state nobody imagined cannot hand the browser a hundred
+ * thousand rows, not because anybody would tune it.
+ */
+const UNCATEGORIZED_LIMIT = 500;
+
+/**
+ * GROUP_CONCAT's separator, spliced into the SQL as a literal byte.
+ *
+ * `SEPARATOR` takes a string literal and not a placeholder, so this cannot be a
+ * parameter. It is a constant defined here, never anything a request carries.
+ * A unit separator is not a character a bank puts in a description, and
+ * `group_concat_max_len` cannot cut the first element short: a description is
+ * 500 characters at most and the default budget is 1024.
+ */
+const US = "\x1f";
+
+/**
+ * Every merchant nothing has categorised, one row each.
+ *
+ * Grouped on the merchant string exactly as imported, which is what a rule's
+ * pattern is matched against. Normalising first would fold
+ * `DD *DOORDASH POPEYESLO` into `DD *DOORDASH JERSEYMIK` and lose the only part
+ * of the string that says what was bought.
+ *
+ * `NOT_SPLIT_PARENT` is spelled out against the alias: a split parent is hidden
+ * from every report, so categorising one changes nothing and putting it in the
+ * list is asking a person to make a decision that has no effect.
+ *
+ * The collation folds case and trailing space, so `Kusshi` and `kusshi ` are
+ * one row here. That is the same rule `categorizeMerchants`'s `merchant = ?`
+ * follows, and the two agreeing is what stops a decision reaching rows this
+ * list never showed. It is also the MySQL trap migration 008 is written around,
+ * pointed the useful way for once.
+ *
+ * A raw statement, so it says `DATE_FORMAT` itself -- `rows()` is what turns a
+ * DATE into a `YYYY-MM-DD` string and nothing here goes through it.
+ */
+export async function uncategorizedMerchants(): Promise<UncategorizedMerchant[]> {
+  const found = (await sql.unsafe(
+    `SELECT e.merchant                                    AS merchant,
+            SUBSTRING_INDEX(
+              GROUP_CONCAT(e.description ORDER BY CHAR_LENGTH(e.description) DESC SEPARATOR '${US}'),
+              '${US}', 1)                                 AS description,
+            COUNT(*)                                      AS count,
+            SUM(e.amount_cents)                           AS total_cents,
+            DATE_FORMAT(MIN(e.txn_date), '%Y-%m-%d')      AS first_seen,
+            DATE_FORMAT(MAX(e.txn_date), '%Y-%m-%d')      AS last_seen
+       FROM expenses e
+      WHERE e.category_id IS NULL
+        AND NOT EXISTS (SELECT 1 FROM expenses c WHERE c.parent_id = e.id)
+      GROUP BY e.merchant
+      ORDER BY COUNT(*) DESC, ABS(SUM(e.amount_cents)) DESC
+      LIMIT ${UNCATEGORIZED_LIMIT}`,
+  )) as {
+    merchant: string; description: string | null; count: string | number;
+    total_cents: string | number; first_seen: string; last_seen: string;
+  }[];
+
+  // COUNT and SUM over BIGINT arrive as strings on some drivers, the same trap
+  // `cardBalances` documents. Every amount in this app is an integer of cents.
+  return found.map((r) => ({
+    merchant: r.merchant,
+    description: r.description ?? "",
+    count: Number(r.count) || 0,
+    total_cents: Number(r.total_cents) || 0,
+    first_seen: r.first_seen,
+    last_seen: r.last_seen,
+  }));
+}
+
+/**
+ * The household's own past decisions, for the classifier to copy.
+ *
+ * Which merchant belongs where is only half a judgement; the other half is
+ * convention, and a convention is not guessable. This ledger files an Uber
+ * under Travel and a parking garage under Transportation, a Venmo payment out
+ * under Misc and a Venmo cashout as a Transfer. Reading those off the rows
+ * beats writing them down here, where they would be one household's habits
+ * hard-coded into everybody's prompt.
+ *
+ * Busiest merchant per category first; `pickExamples` does the thinning, so the
+ * order this returns is the whole contract. Capped so a ledger with a hundred
+ * thousand rows still answers in one query.
+ */
+export async function categorizedExamples(): Promise<Example[]> {
+  const found = (await sql.unsafe(
+    `SELECT e.category_id AS category_id, e.merchant AS merchant
+       FROM expenses e
+      WHERE e.category_id IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM expenses c WHERE c.parent_id = e.id)
+      GROUP BY e.category_id, e.merchant
+      ORDER BY e.category_id ASC, COUNT(*) DESC, e.merchant ASC
+      LIMIT 2000`,
+  )) as { category_id: number | string; merchant: string }[];
+  return found.map((r) => ({ category_id: Number(r.category_id), merchant: r.merchant }));
+}
+
+/**
+ * Apply decisions a person approved.
+ *
+ * Three guarantees, and they are the reason this is a route of its own rather
+ * than the classifier writing what it proposed. It only ever fills a category
+ * in, never changes one: `category_id IS NULL` is in the WHERE, so a merchant
+ * categorised between the proposal and the approval keeps the category a person
+ * gave it. It writes nothing for a category that has been deleted since, and
+ * says so rather than guessing. And the whole batch is one transaction, so a
+ * rule that fails to insert does not leave rows pointing at it.
+ *
+ * `make_rule` writes the merchant string itself as the pattern, not
+ * `suggestRule`'s two-word head. This is applying a decision about one merchant;
+ * a needle widened on the way in would quietly claim merchants nobody looked at.
+ * The broader rule is still one click on the expenses page, where what it
+ * catches is visible.
+ */
+export async function categorizeMerchants(assignments: CategoryAssignment[]): Promise<CategorizeResult> {
+  const cats = await categories();
+  const known = new Set(cats.map((c) => c.id));
+  const skipped: CategorizeResult["skipped"] = [];
+
+  return sql.begin(async (tx: Executor) => {
+    const existingRules = await rows<CategoryRule>("category_rules", "", [], tx);
+    const haveNeedle = new Set(existingRules.map((r) => needleOf(r.pattern)));
+    let updated = 0;
+    let rules_created = 0;
+
+    for (const a of assignments) {
+      if (!known.has(a.category_id)) {
+        skipped.push({ merchant: a.merchant, reason: `category ${a.category_id} does not exist` });
+        continue;
+      }
+
+      const res = (await tx.unsafe(
+        `UPDATE expenses e
+            SET e.category_id = ?
+          WHERE e.merchant = ?
+            AND e.category_id IS NULL
+            AND NOT EXISTS (SELECT 1 FROM expenses c WHERE c.parent_id = e.id)`,
+        [a.category_id, a.merchant],
+      )) as unknown as { affectedRows?: number };
+      updated = updated + (Number(res?.affectedRows) || 0);
+
+      if (!a.make_rule) continue;
+      // `categoryRuleInput` caps a pattern at 160 characters. A merchant string
+      // can run to 200, and a prefix of a substring needle still matches the
+      // merchant it was cut from, so cutting beats refusing the rule.
+      const pattern = a.merchant.trim().slice(0, 160);
+      const needle = needleOf(pattern);
+      if (needle.length < 2 || haveNeedle.has(needle)) continue;
+      await insert("category_rules", { pattern, whole_word: false, category_id: a.category_id, priority: 100 }, tx);
+      haveNeedle.add(needle);
+      rules_created = rules_created + 1;
+    }
+
+    return { updated, rules_created, skipped };
+  });
 }

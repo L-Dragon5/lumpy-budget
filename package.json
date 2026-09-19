@@ -21,7 +21,10 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p apps/web/tsconfig.app.json",
     "check": "bun run typecheck && bun test && bun run scenarios",
     "build": "bun run --cwd apps/web build",
-    "reset": "bun run scripts/reset.ts"
+    "reset": "bun run scripts/reset.ts",
+    "eval:build": "bun run scripts/build-eval-cases.ts",
+    "eval:classify": "bun run services/llm/eval/run.ts",
+    "llm:models": "bun run scripts/llm-models.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",
@@ -29,6 +32,8 @@
   },
   "dependencies": {
     "@lumpy/budget-core": "workspace:*",
-    "@lumpy/db": "workspace:*"
+    "@lumpy/db": "workspace:*",
+    "@lumpy/llm": "workspace:*",
+    "@lumpy/contracts": "workspace:*"
   }
 }

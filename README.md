@@ -184,9 +184,11 @@ a flag somebody gets wrong.
 
 ```bash
 bun run check                 # typecheck + tests + scenarios; what the commit hook runs
-bun test                      # 253 tests, no network, under a second
+bun test                      # 449 tests, no network, under a second
 bun run scenarios             # whole-household fixtures, diffed against expectations
 bun run scenarios:update      # accept a change, after reading the diff
+bun run eval:build            # build the fixture from this database (gitignored)
+bun run eval:classify         # paid: the categorizer against that ground truth
 ```
 
 The commit hook lives in `.githooks/pre-commit` and is wired up with
@@ -199,8 +201,17 @@ parser, and the API against a separate `lumpy_budget_test` database.
 the engine and compared to a stored expectation, with invariants checked every
 run — a month's paychecks must sum to its income, every split must sum to its
 total, and the forecast's first month must be the month summary, since two ways
-to compute one number is one way to drift. There is no model in this app, so a prompt-eval suite would be
-theater; this is the honest equivalent, and it has already caught two real bugs.
+to compute one number is one way to drift. It has already caught two real bugs.
+
+**Eval lane** (`bun run eval:classify`): the one part of this app that is not
+deterministic. The merchant categorizer is scored against what this household
+actually filed -- 80 held-out merchants, threshold 85%, currently 95.0% on
+`gemini-3.5-flash-lite` -- because a prompt change can pass every unit test and
+still get ten points worse. The fixture is built from the live ledger and
+gitignored, so `bun run eval:build` comes first on a fresh clone. Paid, so it is not in
+`bun run check`; run it before shipping a prompt change. Everything around the
+model is in the gate lane instead: `services/llm/test` stubs the request and
+pins the plumbing.
 
 ## Talking to the API
 
@@ -240,12 +251,15 @@ services/budget-core/   the engine: pure functions, no DB, no HTTP, no I/O
                         forecast.ts runs the month forward, cash.ts reads the
                         balance against the next bills
 services/db/            Bun.sql client, numbered .sql migrations, seed data
-                        001_init.sql is the whole schema; next migration is 013
+                        001_init.sql is the whole schema; next migration is 019
 services/api/           Elysia routes; exports its own type, which Eden gives the web app
 services/csv-import/    CSV parse / normalize / dedupe; runs in the browser too
+services/llm/           the merchant categorizer: one HTTP call, everything else pure
+                        gate tests stub the request; eval/ scores a real model
 apps/web/               Vite + React + Tailwind v4 + shadcn/ui + React Bits
 scripts/demo.ts         fills a running instance through the public API
 scripts/backup.ts       mysqldump wrapper; the restore path the migrations do not have
+scripts/build-eval-cases.ts  rebuilds services/llm/eval/ from the live database
 ```
 
 Each service has its own tests and no shared mutable state, so two sessions can

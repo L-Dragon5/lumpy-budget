@@ -480,6 +480,94 @@ export const importBatch = z.object({
 });
 export type ImportBatch = z.infer<typeof importBatch>;
 
+// -------------------------------------------------------- classification
+
+/**
+ * One merchant that nothing has categorised, with everything a decision needs.
+ *
+ * Grouped by the merchant string exactly as it was imported, because that is
+ * what a rule's pattern is matched against and what the person reads in the
+ * list. Normalising here would merge `DD *DOORDASH POPEYESLO` into
+ * `DD *DOORDASH JERSEYMIK` and hide that one is chicken and the other is a sub.
+ *
+ * `total_cents` is signed like every other amount: positive is money out. A
+ * negative total is a credit, which is the whole reason the field is here --
+ * `bucketOf` reads an uncategorised credit as `transfer`, so a paycheck nobody
+ * categorised is invisible until somebody sees the minus sign.
+ */
+export const uncategorizedMerchant = z.object({
+  merchant: z.string(),
+  /** The longest description seen for this merchant, or "". The bank's own hint. */
+  description: z.string(),
+  count: z.number().int().positive(),
+  total_cents: cents,
+  first_seen: isoDate,
+  last_seen: isoDate,
+});
+export type UncategorizedMerchant = z.infer<typeof uncategorizedMerchant>;
+
+/**
+ * What the classifier thinks one merchant is.
+ *
+ * A proposal, never a write. `POST /api/classify` returns these and changes
+ * nothing; `POST /api/expenses/categorize` is the only thing that writes, and
+ * it takes what a person sent back, not what the model said. The two are
+ * separate routes for exactly that reason -- a model that hallucinates a
+ * category id cannot reach the ledger without passing through a review step.
+ */
+export const categoryProposal = uncategorizedMerchant.extend({
+  /** Always a category that exists here: an id the model invented is dropped, not stored. */
+  category_id: id,
+  /** The model's own 0-1 confidence, clamped. Sorting, not gating: the person decides. */
+  confidence: z.number().min(0).max(1),
+  /** One short line of why, shown beside the row. */
+  reason: z.string().max(200),
+});
+export type CategoryProposal = z.infer<typeof categoryProposal>;
+
+export const classifyResult = z.object({
+  proposals: z.array(categoryProposal),
+  /** Merchants that were asked about and got no usable answer. Never silently dropped. */
+  unresolved: z.array(uncategorizedMerchant),
+  /** The model that answered, echoed so a bad batch can be traced to one. */
+  model: z.string(),
+});
+export type ClassifyResult = z.infer<typeof classifyResult>;
+
+/**
+ * One accepted decision. `make_rule` writes a `category_rules` row as well, so
+ * the next import categorises this merchant without asking again.
+ *
+ * The pattern is the merchant string itself rather than `suggestRule`'s two-word
+ * head: this route is applying a decision about *this* merchant, and a widened
+ * needle would quietly claim merchants nobody looked at. A person who wants the
+ * broader rule writes it on the expenses page, where they can see what it
+ * catches.
+ */
+export const categoryAssignment = z.object({
+  merchant: z.string().min(1).max(200),
+  category_id: id,
+  make_rule: z.boolean().default(false),
+});
+export const categorizeInput = z.object({
+  assignments: z.array(categoryAssignment).min(1).max(1000),
+});
+export type CategoryAssignment = z.infer<typeof categoryAssignment>;
+export type CategorizeInput = z.infer<typeof categorizeInput>;
+
+/**
+ * `updated` counts rows, `rules_created` counts rules, and they do not match:
+ * one merchant with eight charges is eight rows and one rule, and a merchant
+ * whose rule already existed is rows with no rule at all.
+ */
+export const categorizeResult = z.object({
+  updated: z.number().int(),
+  rules_created: z.number().int(),
+  /** Assignments naming a category that no longer exists, reported rather than guessed at. */
+  skipped: z.array(z.object({ merchant: z.string(), reason: z.string() })),
+});
+export type CategorizeResult = z.infer<typeof categorizeResult>;
+
 // ------------------------------------------------------------------ backup
 
 export const settingRow = z.object({ name: z.string().min(1).max(60), value: z.string().max(500) });

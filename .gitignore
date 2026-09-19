@@ -13,3 +13,8 @@ statements/
 # schema, so they are re-included here. Dumps from `bun run backup` land in
 # ~/lumpy-backups and stay ignored.
 !services/db/migrations/*.sql
+
+# The eval fixture is built from the live ledger: real merchant strings, so it
+# stays local. `bun run eval:build` rewrites all three together; without them
+# `bun run eval:classify` has nothing to score and says so.
+services/llm/eval/*.json

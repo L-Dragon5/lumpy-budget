@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useLocation } from "react-router";
 import {
   BanknoteIcon, CalendarClockIcon, ChartColumnIcon, LayoutDashboardIcon, MoonIcon,
-  PiggyBankIcon, ReceiptIcon, RepeatIcon, SettingsIcon, SunIcon, TrendingUpIcon,
+  PiggyBankIcon, ReceiptIcon, RepeatIcon, SettingsIcon, SparklesIcon, SunIcon, TrendingUpIcon,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -23,6 +23,7 @@ const GROUPS: Item[][] = [
     { to: "/fixed-costs", label: "Fixed costs", icon: RepeatIcon },
     { to: "/lumpy", label: "Lumpy fund", icon: CalendarClockIcon },
     { to: "/expenses", label: "Expenses", icon: ReceiptIcon },
+    { to: "/categorize", label: "Categorize", icon: SparklesIcon },
   ],
   [
     { to: "/income", label: "Income", icon: BanknoteIcon },

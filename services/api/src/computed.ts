@@ -1,5 +1,9 @@
 import { Elysia } from "elysia";
-import { backup, bulkExpenseInput, incomeCalendarResult, isoDate, isoMonth, restoreResult, type Expense } from "@lumpy/contracts";
+import {
+  backup, bulkExpenseInput, categorizeInput, categorizeResult, classifyResult, incomeCalendarResult, isoDate,
+  isoMonth, restoreResult, uncategorizedMerchant, type Expense,
+} from "@lumpy/contracts";
+import { classify, LlmError, pickExamples } from "@lumpy/llm";
 import * as core from "@lumpy/budget-core";
 import { rows, sql, TABLES, type TableName } from "@lumpy/db";
 import { z } from "zod";
@@ -554,4 +558,58 @@ export const computed = new Elysia({ prefix: "/api" })
   .post("/restore", async ({ body }) => store.restore(body.tables), {
     body: backup,
     response: restoreResult,
+  })
+
+  /**
+   * The backlog, grouped. Free, deterministic, and useful on its own: this is
+   * the list a person works through by hand, with or without a model.
+   */
+  .get("/uncategorized-merchants", () => store.uncategorizedMerchants(), {
+    response: z.array(uncategorizedMerchant),
+  })
+
+  /**
+   * What a model thinks the backlog is. Writes nothing.
+   *
+   * Split from the route that writes on purpose. A proposal that named a
+   * category id out of thin air would otherwise reach the ledger with nobody
+   * having read it; here the worst a bad answer can do is put a wrong row in a
+   * table a person is looking at. `classify` already drops an id that does not
+   * exist, and `POST /expenses/categorize` checks again, because the thing
+   * coming back from the browser is not the thing that was sent to it.
+   *
+   * A missing key is 503 and says so: it is the server that is not configured,
+   * and a 500 would send somebody reading a stack trace instead of .env.
+   */
+  .post(
+    "/classify",
+    async ({ status }) => {
+      const [merchants, cats, examples] = await Promise.all([
+        store.uncategorizedMerchants(),
+        store.categories(),
+        store.categorizedExamples(),
+      ]);
+      if (merchants.length === 0) return { proposals: [], unresolved: [], model: "" };
+      try {
+        // The household's own filing, not a rule written into the prompt: see
+        // `store.categorizedExamples`.
+        return await classify(merchants, cats, pickExamples(examples, cats));
+      } catch (e) {
+        if (e instanceof LlmError) return status(503, { error: e.message });
+        throw e;
+      }
+    },
+    { response: { 200: classifyResult, 503: z.object({ error: z.string() }) } },
+  )
+
+  /**
+   * The only thing here that writes. Takes what a person approved, not what the
+   * model said.
+   *
+   * Beside `/expenses/:id` and never read as one: the router prefers the static
+   * segment, and a test pins that rather than the order these are registered in.
+   */
+  .post("/expenses/categorize", ({ body }) => store.categorizeMerchants(body.assignments), {
+    body: categorizeInput,
+    response: categorizeResult,
   });

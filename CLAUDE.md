@@ -29,6 +29,10 @@ The hook is not installed by cloning: `git config core.hooksPath .githooks`.
 ## Dependency direction
 
 `contracts` → `budget-core` → `db` → `api` → `apps/web`. Nothing points back up.
+`csv-import` and `llm` are siblings hanging off `contracts` alone; neither knows
+about the database. That is why `scripts/build-eval-cases.ts` lives in `scripts/`
+rather than beside the fixture it writes -- it reads the live database, and
+putting it inside `services/llm` would hang that package off `db`.
 
 - `contracts/types.ts` is the single source of shape. Zod schemas are used as
   Elysia body **and** response validators, so an undeclared column fails a test
@@ -352,11 +356,62 @@ Four places, in this order, or reads silently drop it:
   the batch to tell a card charge from money out of checking; batchless parts
   would be counted against the checking balance forever. Same trap
   `absorbManual` already documents.
+- **`POST /api/classify` proposes and `POST /api/expenses/categorize` writes,
+  and they are two routes on purpose.** A model that invents a category id must
+  not be able to reach the ledger without a person having looked at the row.
+  `readProposals` in `llm/src/classify.ts` drops an id that does not exist,
+  `categorizeMerchants` in `api/src/store.ts` checks again against the
+  categories it just read, and the UPDATE carries `category_id IS NULL` -- it
+  only ever fills a category in, so a merchant somebody categorised between the
+  proposal and the approval keeps the category a person gave it. A merchant that
+  came back with no usable answer lands in `unresolved`, never silently gone.
+- **`uncategorizedMerchants` groups on the merchant string and
+  `categorizeMerchants` matches on it, so the collation decides both.** MySQL
+  folds case and ignores trailing spaces, which makes `Kusshi` and `kusshi ` one
+  row in the list *and* one UPDATE -- the two agreeing is what stops an approval
+  reaching rows the list never showed. The same trap migration 008 is written
+  around, pointed the useful way for once. A test pins it.
+- **`GROUP_CONCAT ... SEPARATOR` takes a string literal, not a placeholder.**
+  The unit separator in `uncategorizedMerchants` is spliced into the SQL as a
+  constant for that reason; it is never anything a request carries. Passing it
+  as a parameter is a 1064 at runtime and passes typecheck.
+- **The classifier's conventions come off the ledger, not out of the prompt.**
+  `store.categorizedExamples` reads what this household already filed and
+  `pickExamples` thins it per category, because whether an Uber is Travel or
+  Transportation is a habit, not a fact. The prompt states only what is not a
+  habit: the sign rule, refund versus income, a card payment being a transfer.
+  Write a household's habit into the prompt and every other household gets
+  argued with.
+- **`services/llm/eval/cases.json` must stay disjoint from `examples.json`.** An
+  example that is also a case is a test passed by copying and a score that means
+  nothing. `bun run eval:build` writes both from one deterministic split and
+  prints the overlap, which must be 0. The three fixture files are gitignored --
+  real merchant strings off a real ledger -- so a fresh clone builds them before
+  the eval can run.
+- **The eval fixture drops a merchant filed under more than one category.** It
+  is ambiguous ground truth: `Bilt Rewards` is Housing on one row and Travel on
+  another, so it arrives as two cases of which at most one can be right, and as
+  an example it teaches the prompt a contradiction. Dropping the three in this
+  ledger moved the score 93.8% -> 95.0% with no prompt change, which is what says
+  it was measuring the ledger. The remaining misses are the same thing one level
+  down (`DD *DOORDASH WEGMANS` is Groceries, `DD *DOORDASH HARRISTEE` is Dining);
+  chasing those with prompt edits is chasing a coin flip.
+- **A rule written by the categorizer is the whole merchant string, not
+  `suggestRule`'s two-word head.** Approving a decision about one merchant must
+  not write a needle that claims merchants nobody looked at; the broader rule is
+  still one click on the expenses page, where what it catches is visible. The
+  web page only offers a rule for a merchant seen more than once, because a rule
+  for a one-off is a row that can never fire.
 
 ## Two lanes
 
 Gate (`bun test`, `bun run scenarios`): deterministic, local, free, sub-second.
-Scenarios are the eval lane — whole households through the engine with
-invariants checked every run (a month's paychecks sum to its income, every
-split sums to its total). There is no model in this app, so that is the honest
-equivalent of an eval suite.
+Scenarios are the deterministic half of the eval lane — whole households through
+the engine with invariants checked every run (a month's paychecks sum to its
+income, every split sums to its total).
+
+The paid half is `bun run eval:classify`: the merchant categorizer against 80
+held-out merchants and what this household actually filed, threshold 85%. Not in
+`bun run check` because it costs money and calls a real model. Everything around
+the model is in the gate lane -- `services/llm/test` stubs the request, so the
+prompt, the answer-reading and the chunking are all free and deterministic.
