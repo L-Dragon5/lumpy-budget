@@ -15,7 +15,7 @@ ENV HOME=/root
 WORKDIR /app
 
 COPY . .
-RUN bun install && bun run build
+RUN bun install --frozen-lockfile && bun run build
 
 EXPOSE 3001
 # Migrations are forward-only and recorded in _migrations, so a boot applies

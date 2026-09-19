@@ -4,9 +4,12 @@ dist/
 .env.local
 *.log
 .DS_Store
-bun.lock
 .playwright-mcp/
 statements/
+
+# bun.lock is tracked. It is text, it is what makes the Docker build resolve the
+# same versions the laptop did, and `--frozen-lockfile` in the Dockerfile turns a
+# drifted lockfile into a failed build instead of a silently different image.
 
 # The global ignore file excludes *.sql, which silently swallowed every migration
 # in this repo: a fresh clone had no schema to migrate. The migrations ARE the
