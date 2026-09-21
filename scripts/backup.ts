@@ -7,9 +7,12 @@
  * gets you back to a working database on a new machine.
  *
  * Run:  bun run backup            -> ~/lumpy-backups/lumpy_budget-<stamp>.sql
- *       bun run backup out.sql    -> that path instead
+ *       bun run backup out.sql    -> that path instead, and nothing is pruned
+ *
+ * A default-path run prunes the folder after the dump is proven complete: see
+ * `toPrune`. A failed dump deletes nothing, so it can never cost the last good one.
  */
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readdirSync, unlinkSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 /**
@@ -46,10 +49,39 @@ export const looksComplete = (tail: string): boolean => /Dump completed/i.test(t
 export const defaultPath = (db: string, now = new Date()): string =>
   join(process.env.HOME ?? ".", "lumpy-backups", `${db}-${now.toISOString().slice(0, 19).replace(/[:]/g, "-")}.sql`);
 
+/**
+ * Which of `names` (a directory listing) to delete: a dump is kept while it is
+ * younger than `maxAgeDays`, and the newest `keepAtLeast` are kept whatever their
+ * age, so a server that stopped backing up a year ago still has its last week.
+ *
+ * Age, not a count. Komodo's deploy Action retries a failed deploy every five
+ * minutes and each retry dumps first; "keep the last 30" would let a bad
+ * afternoon push out every backup older than two and a half hours. By age, a
+ * burst costs disk (a dump is a few hundred KB) and never history.
+ *
+ * Only names `defaultPath` could have written are candidates: a dump somebody
+ * named by hand, or any other file in the folder, is never touched. The stamp is
+ * read off the name rather than the file's mtime, because a copy or a restore
+ * from elsewhere resets mtime and would make an old dump look new.
+ */
+export function toPrune(names: string[], db: string, now: Date, maxAgeDays = 30, keepAtLeast = 7): string[] {
+  const shape = new RegExp(`^${db}-(\\d{4}-\\d{2}-\\d{2})T(\\d{2})-(\\d{2})-(\\d{2})\\.sql$`);
+  const dated = names.flatMap((name) => {
+    const m = shape.exec(name);
+    const at = m && Date.parse(`${m[1]}T${m[2]}:${m[3]}:${m[4]}Z`);
+    return at ? [{ name, at }] : [];
+  });
+  // Names sort chronologically (backup.test.ts pins it), so newest-first is a string sort.
+  dated.sort((a, b) => (a.name < b.name ? 1 : -1));
+  const cutoff = now.getTime() - maxAgeDays * 86_400_000;
+  return dated.slice(keepAtLeast).filter((d) => d.at < cutoff).map((d) => d.name);
+}
+
 if (import.meta.main) {
   const url = new URL(process.env.DATABASE_URL ?? "mysql://root@127.0.0.1:3306/lumpy_budget");
   const db = url.pathname.replace(/^\//, "");
-  const out = process.argv[2] ?? defaultPath(db);
+  const named = process.argv[2];
+  const out = named ?? defaultPath(db);
   mkdirSync(dirname(out), { recursive: true });
 
   let proc;
@@ -79,5 +111,12 @@ if (import.meta.main) {
 
   const mb = (bytes / 1_000_000).toFixed(2);
   console.log(`backed up ${db} -> ${out} (${mb} MB)`);
+
+  if (!named) {
+    const dir = dirname(out);
+    const gone = toPrune(readdirSync(dir), db, new Date());
+    for (const name of gone) unlinkSync(join(dir, name));
+    if (gone.length) console.log(`pruned ${gone.length} dump(s) older than 30 days: ${gone.join(", ")}`);
+  }
   console.log(`restore with:\n  mysql --host=${url.hostname} --port=${url.port || "3306"} --user=${decodeURIComponent(url.username) || "root"} < ${out}`);
 }

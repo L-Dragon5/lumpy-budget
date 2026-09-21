@@ -434,6 +434,15 @@ Four places, in this order, or reads silently drop it:
   inside the container -- which blocks every deploy, because the Komodo Stack's
   `pre_deploy` dump failing ends the deploy before it builds (README, "Deploying
   with Komodo").
+- **Backups are pruned by age, never by count.** `toPrune` in
+  `scripts/backup.ts` deletes a dump older than 30 days unless it is one of the
+  newest seven. The deploy Action retries a failed deploy every five minutes and
+  `pre_deploy` dumps each time, so a count would let one bad afternoon evict every
+  day-old backup. It only prunes after a dump proved complete, only on a
+  default-path run, and only names `defaultPath` could have written, dated from
+  the name rather than mtime. The `pre_deploy` guard is `ps --status running`,
+  not `ps -q`: a crash-looping app is `restarting`, `exec` into it fails, and
+  that failure would block the deploy that fixes it.
 - **No `grep -q` behind a pipe in a `pipefail` script.** `-q` exits on the first
   match, the writer takes SIGPIPE, and pipefail calls a pipeline that matched
   false. In the old `deploy.sh` that read a large diff full of migrations as none
@@ -453,7 +462,7 @@ held-out merchants and what this household actually filed, threshold 85%. Not in
 the model is in the gate lane -- `services/llm/test` stubs the request, so the
 prompt, the answer-reading and the chunking are all free and deterministic.
 
-The container has its own lane, `scripts/docker-smoke.sh`: seventeen checks
+The container has its own lane, `scripts/docker-smoke.sh`: eighteen checks
 against a real image, about a minute warm. Not in `bun run check` because it
 needs Docker and minutes, not milliseconds. Run it when the Dockerfile,
 `compose.yaml` or the Bun version changes. The last check stops the database to

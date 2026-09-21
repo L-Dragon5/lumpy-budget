@@ -122,6 +122,19 @@ q "delete from expenses; delete from fixed_costs; delete from lumpy_items"
 docker compose exec -T app sh -c "cat '$dump'" | docker compose exec -T db mariadb -uroot -p"$MYSQL_ROOT_PASSWORD"
 after=$(q "$fp")
 [ "$before" = "$after" ] && ok "wipe and restore round-trips ($before)" || fail "restore differs: $before vs $after"
+# A default-path run prunes; the unit tests cover which names, this covers that
+# the image really deletes them. HOME is moved to /tmp so the folder is not the
+# ./backups mount: on a server, that holds the real dumps.
+home=/tmp/smokehome
+docker compose exec -T app sh -c "mkdir -p $home/lumpy-backups && cd $home/lumpy-backups && \
+  touch keep-me.sql && for d in 1 2 3 4 5 6 7 8; do touch lumpy_budget-2020-01-0\${d}T00-00-00.sql; done"
+docker compose exec -T -e HOME=$home app bun run backup >/dev/null 2>&1 || fail "a default-path backup failed"
+left=$(docker compose exec -T app sh -c "ls $home/lumpy-backups | sort | tr '\n' ' '")
+case "$left" in
+  "keep-me.sql lumpy_budget-2020-01-03T00-00-00.sql "*"lumpy_budget-2020-01-08T00-00-00.sql lumpy_budget-20"??-*)
+    ok "a backup prunes old dumps, keeps the newest seven and anything it did not name" ;;
+  *) fail "after pruning the folder holds: $left" ;;
+esac
 
 # Last, because it takes the database away. The probe compose.yaml declares, run
 # by hand: a healthcheck that passes without MariaDB would call a dead app healthy.

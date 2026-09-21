@@ -73,14 +73,14 @@ rebuild applies whatever the new image added and does nothing otherwise.
 scripts/docker-smoke.sh        # ~1 minute warm; builds, boots, checks, tears down
 ```
 
-Seventeen checks against a real build of the image, as its own compose project on
+Eighteen checks against a real build of the image, as its own compose project on
 its own port, network and volume, so it is safe to run on the server beside the
 real stack: which Bun the image pulled (and a warning if it differs from the
 host's, since the tests ran on that one), a fresh database gets every
 migration, the app and its fallbacks serve, an encoded `..` stays inside `dist`,
 the app is loopback-only, NPM's network reaches `lumpy:3001` and cannot see the
 database, the app and MariaDB agree on today's date, a backup taken inside the
-container restores to the same rows, and the healthcheck Komodo reads says
+container restores to the same rows and prunes old dumps, and the healthcheck Komodo reads says
 healthy with the database up and fails with it stopped. Run it after touching
 the Dockerfile, `compose.yaml` or the Bun version, and before the server sees
 the change.
@@ -194,7 +194,7 @@ compose up`. The Stack settings that matter:
 | `post_deploy` | `docker image prune -f` | every build leaves the previous image behind until the disk notices |
 
 ```sh
-[ -z "$(docker compose -p lumpy-budget ps -q app)" ] || docker compose -p lumpy-budget exec -T app bun run backup
+[ -z "$(docker compose -p lumpy-budget ps --status running -q app)" ] || docker compose -p lumpy-budget exec -T app bun run backup
 ```
 
 Komodo runs `pre_deploy` before it builds, and a command that fails ends the
@@ -202,9 +202,13 @@ deploy there (`bin/periphery/src/api/compose.rs` in Komodo's source), so a
 backup that cannot finish means nothing is rebuilt and no migration runs. It
 backs up on every deploy, not only on a migration: a dump is seconds, and
 knowing which deploys carry one would take a diff Komodo does not hand the
-command. The guard skips the very first deploy, when nothing is running to back
-up. The dumps land in `/etc/komodo/stacks/lumpy-budget/backups`; prune them by
-hand now and then.
+command. The guard skips the dump when no app container is *running*: on the very
+first deploy there is none, and after a deploy that left the app crash-looping
+the container is `restarting`, where `exec` fails. Without `--status running` that
+failure would end every later deploy too, including the push that fixes it --
+and the deploy that broke it already took its dump. The dumps land in
+`/etc/komodo/stacks/lumpy-budget/backups`, and each one prunes the folder (see
+"Backing up").
 
 **Deployed means healthy, not started.** Komodo reports a deploy done once the
 containers start, and a crash-looping app is started over and over. The
@@ -249,6 +253,31 @@ takes a `pre_deploy` dump every five minutes. The Action takes one per push.
 `deployed_hash` only moves when a deploy succeeds, so a push that fails to build
 or whose backup fails is retried every tick until it deploys or the next push
 replaces it. `failure_alert` is what tells you; the Stack's update log says why.
+
+**A nightly Action backs up whether or not anything was pushed.** A dump per
+deploy protects migrations; it does nothing for a fortnight of typing between
+pushes. Same pattern, schedule `Every day at 03:00`, `schedule_alert` off,
+`failure_alert` on:
+
+```ts
+// Komodo > Actions > backup-lumpy-budget
+let code = "";
+await komodo.execute_stack_service_terminal(
+  {
+    stack: "lumpy-budget",
+    service: "app",
+    terminal: "nightly-backup",
+    command: "bun run backup",
+    // Always: a deploy replaces the container, and a terminal kept from the old
+    // one would be talking to a container that no longer exists.
+    init: { command: "sh", recreate: "Always" },
+  },
+  { onLine: (line) => console.log(line), onFinish: (c) => { code = c.trim(); } },
+);
+// A terminal reports its exit code rather than throwing, so a failed dump has to
+// be turned into a failed Action here, or failure_alert never hears of it.
+if (code !== "0") throw new Error(`backup exited ${code}`);
+```
 
 **Change `.env` in the Stack's Environment field, never `compose.yaml` on the
 server.** Komodo rewrites `.env` on every deploy, so a hand edit to it lasts until
@@ -316,9 +345,24 @@ Everything lives in one MySQL database on one machine, and months of hand-entere
 setup is not something the CSV importer can put back.
 
 ```bash
-bun run backup                # ~/lumpy-backups/lumpy_budget-<timestamp>.sql
-bun run backup /path/out.sql  # somewhere else
+bun run backup                # ~/lumpy-backups/lumpy_budget-<timestamp>.sql, then prune
+bun run backup /path/out.sql  # somewhere else, and nothing is pruned
 ```
+
+**A default-path backup prunes the folder after it succeeds**: a dump older
+than 30 days goes, unless it is one of the newest seven. By age rather than by
+count, because the deploy Action retries a failed deploy every five minutes and
+dumps each time -- "keep the last 30" would let one bad afternoon push out every
+backup older than two and a half hours. By age, a burst costs disk (a dump is a
+few hundred KB) and never history. Only files named the way the script names
+them are candidates, so a dump you named yourself, or anything else in the
+folder, is never touched; the age comes from the name, not the file's mtime,
+which a copy resets. A failed dump prunes nothing, so it cannot cost you the last
+good one. `toPrune` in `scripts/backup.ts` is the whole rule.
+
+The dumps sit on the same disk as the database. That covers a bad migration or a
+bad afternoon of edits, not a dead disk -- copy the folder somewhere else for
+that.
 
 That is a `mysqldump` with `--databases`, so the file carries its own
 `CREATE DATABASE` and restores on its own: the script prints the exact `mysql`

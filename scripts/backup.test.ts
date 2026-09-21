@@ -1,5 +1,5 @@
-import { expect, test } from "bun:test";
-import { defaultPath, dumpArgs, looksComplete } from "./backup";
+import { describe, expect, test } from "bun:test";
+import { defaultPath, dumpArgs, looksComplete, toPrune } from "./backup";
 
 test("every part of the connection URL reaches mysqldump", () => {
   const args = dumpArgs(new URL("mysql://joe:s3cret@db.local:3307/lumpy_budget"));
@@ -41,4 +41,48 @@ test("a file that is not a finished dump is rejected however plausible it looks"
   expect(looksComplete("[object ReadableStream]")).toBe(false);
   expect(looksComplete("CREATE TABLE `expenses` (...);\n")).toBe(false);
   expect(looksComplete("-- Dump completed on 2026-03-15 14:30:05\n")).toBe(true);
+});
+
+describe("toPrune", () => {
+  const now = new Date("2026-09-21T12:00:00Z");
+  // A dump `daysAgo` days before now, named exactly as defaultPath names it.
+  const dump = (daysAgo: number) => defaultPath("lumpy_budget", new Date(now.getTime() - daysAgo * 86_400_000)).split("/").at(-1)!;
+
+  test("deletes a dump past 30 days once seven newer ones exist", () => {
+    const names = [1, 2, 3, 4, 5, 6, 7, 31, 45].map(dump);
+    expect(toPrune(names, "lumpy_budget", now).sort()).toEqual([dump(31), dump(45)].sort());
+  });
+
+  test("keeps everything younger than 30 days, however many there are", () => {
+    // The retry storm: a failed deploy dumping every five minutes for a day.
+    const burst = Array.from({ length: 288 }, (_, i) => dump(i / 288));
+    const names = [...burst, dump(10), dump(29)];
+    expect(toPrune(names, "lumpy_budget", now)).toEqual([]);
+  });
+
+  test("keeps the newest seven even when every one of them is old", () => {
+    // A server that stopped backing up a long time ago still has its last week.
+    const names = [100, 101, 102, 103, 104, 105, 106, 107, 108].map(dump);
+    expect(toPrune(names, "lumpy_budget", now).sort()).toEqual([dump(107), dump(108)].sort());
+  });
+
+  test("never touches a file defaultPath could not have written", () => {
+    const names = [
+      "before-migration-019.sql",
+      "lumpy_budget-2020-01-01.sql",
+      "other_db-2020-01-01T00-00-00.sql",
+      "lumpy_budget-2020-01-01T00-00-00.sql.gz",
+      "lumpy_budget-2020-13-45T00-00-00.sql", // not a real date
+      ...[1, 2, 3, 4, 5, 6, 7].map(dump),
+    ];
+    expect(toPrune(names, "lumpy_budget", now)).toEqual([]);
+  });
+
+  test("reads the age off the name, in UTC, the way defaultPath writes it", () => {
+    // Exactly on the cutoff is kept; one second past it is not.
+    const recent = [1, 2, 3, 4, 5, 6, 7].map(dump);
+    const edge = "lumpy_budget-2026-08-22T12-00-00.sql";
+    const past = "lumpy_budget-2026-08-22T11-59-59.sql";
+    expect(toPrune([...recent, edge, past], "lumpy_budget", now)).toEqual([past]);
+  });
 });
