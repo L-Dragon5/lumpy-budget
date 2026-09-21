@@ -217,12 +217,38 @@ the server:
 docker inspect -f '{{.State.Health.Status}}' lumpy-budget-app-1    # healthy
 ```
 
-A push reaches the server one of two ways. A **webhook** (`webhook_enabled`,
-GitHub pointed at Komodo's `/listener/github/stack/<id>/deploy`) is instant, and
-needs GitHub to reach Komodo from outside. A **scheduled Procedure** that deploys
-the Stack every few minutes keeps the server outbound-only, and costs a
-`pre_deploy` dump and a cached build per run whether anything changed or not.
-Pick the webhook if Komodo is already reachable; do not open a port just for it.
+**A push reaches the server through a scheduled Action, not a webhook.** Komodo
+here is on the LAN only, so GitHub has no way to call it, and nothing should be
+opened up so that it can. The server asks instead: an Action that compares the
+commit Komodo last deployed with the one on `main`, on a schedule of `Every 5
+minutes`:
+
+```ts
+// Komodo > Actions > deploy-lumpy-budget
+const stack = "lumpy-budget";
+await komodo.write("RefreshStackCache", { stack });
+const { info } = await komodo.read("GetStack", { stack });
+if (info.latest_hash && info.latest_hash !== info.deployed_hash) {
+  console.log(`deploying ${info.deployed_hash} -> ${info.latest_hash}`);
+  await komodo.execute_and_poll("DeployStack", { stack });
+}
+```
+
+Set **`schedule_alert` off** on it and leave `failure_alert` on: the first
+defaults to true and would alert on every tick, which is 288 alerts a day that
+say nothing happened.
+
+It compares commits on purpose. `DeployStackIfChanged`, the built-in that looks
+like this job, diffs the compose file and any `config_files` against what was
+last deployed (`resolve_deploy_if_changed_action` in Komodo's
+`bin/core/src/api/execute/stack.rs`). This stack builds from source, so a push
+that changes code and not `compose.yaml` reads to it as "no changes detected"
+and never deploys. A plain `DeployStack` on the schedule would work, but it
+takes a `pre_deploy` dump every five minutes. The Action takes one per push.
+
+`deployed_hash` only moves when a deploy succeeds, so a push that fails to build
+or whose backup fails is retried every tick until it deploys or the next push
+replaces it. `failure_alert` is what tells you; the Stack's update log says why.
 
 **Change `.env` in the Stack's Environment field, never `compose.yaml` on the
 server.** Komodo rewrites `.env` on every deploy, so a hand edit to it lasts until
