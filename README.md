@@ -245,15 +245,45 @@ the server, so the image matches its architecture and no registry is involved --
 tree that was tested here. Take a backup first if the pull carries a migration;
 the script does that for you.
 
-A stack manager with git built in -- Komodo is the container-native one -- does
-the same job from the other end: it clones this repo onto the server itself,
-writes the `.env` from its own UI, and redeploys on a push webhook. Two things
-carry over unchanged if you go that way, and one bites. `PROXY_NETWORK` and the
-`lumpy` alias still apply, the deploy key still applies, and **the stack has to
-actually run a build** -- this image is built from source, so a redeploy that only
-runs `up -d` changes nothing at all, silently, exactly as it would here without
-`--build`. `scripts/deploy.sh` and a timer keep working next to it, which makes it
-a safe thing to try on one stack before four.
+### Deploying with Komodo
+
+A stack manager with git built in does the same job from the other end: Komodo
+clones this repo onto the server itself, writes `.env` from the Stack's
+Environment field (`env_file_path`, default `.env`), and redeploys when told to.
+`compose.yaml` needs no changes for it. The Stack settings that matter:
+
+| Setting | Value | Why |
+| --- | --- | --- |
+| Repo | `L-Dragon5/lumpy-budget`, branch `main` | |
+| `git_account` | empty | the repo is public; a private one needs a token here, not a deploy key -- Komodo clones over HTTPS |
+| Environment | `MYSQL_ROOT_PASSWORD`, `TZ`, `PROXY_NETWORK` | the first two are required by `compose.yaml`; the last names NPM's network |
+| `run_build` | **on** | off by default. The image is built from source, so without it a redeploy runs `up` on the old image and changes nothing, silently -- the same trap as `up -d` without `--build` |
+| `reclone` | **off** (default) | off means `git pull`. On deletes the folder every deploy, and `./backups` with it |
+| `pre_deploy` | see below | Komodo takes no backup before a migration; `deploy.sh` does |
+
+```sh
+[ -z "$(docker compose -p lumpy-budget ps -q app)" ] || docker compose -p lumpy-budget exec -T app bun run backup
+```
+
+`-p` is the Stack's project name, which defaults to the Stack's name. The guard
+skips the first deploy, when there is nothing to back up. Check once that a
+failing `pre_deploy` stops the deploy before you trust it with a migration.
+
+Two things are weaker than the timer. `poll_for_updates` watches images, not git,
+so a push reaches the server either through a webhook, which needs GitHub to reach
+Komodo from outside, or through a scheduled Procedure, which keeps the server
+outbound-only like the timer. And Komodo calls a deploy done when the containers
+start, not when the app answers a request that needs the database, so a crash
+loop looks like a success. `curl localhost:3001/api/categories` on the server is
+the check `deploy.sh` makes for you.
+
+Run one or the other, not both. Komodo keeps its own clone, but the volume is
+named after the compose project, not the directory: a Stack called
+`lumpy-budget` uses the same `lumpy-budget_dbdata` and the same containers as a
+`/opt/stacks/lumpy-budget` checkout, and the two would take turns rebuilding
+them. Switching over is therefore `sudo systemctl disable --now
+lumpy-deploy.timer`, a `bun run backup`, and naming the Stack `lumpy-budget` so it
+picks up the ledger where the old checkout left it.
 
 **Edit `.env` in Dockge, never `compose.yaml`.** `.env` is untracked, so the
 server owning it is the point. `compose.yaml` is tracked, and a UI edit to it
