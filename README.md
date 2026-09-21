@@ -81,6 +81,29 @@ container and nothing to proxy internally -- `apps/web/src/lib/api.ts` asks
 Migrations run on boot; they are forward-only and recorded in `_migrations`, so a
 rebuild applies whatever the new image added and does nothing otherwise.
 
+### Proving the image
+
+```bash
+scripts/docker-smoke.sh        # ~1 minute warm; builds, boots, checks, tears down
+```
+
+Fourteen checks against a real build of the image, as its own compose project on
+its own port, network and volume, so it is safe to run on the server beside the
+real stack: the image's Bun matches `bun --version`, a fresh database gets every
+migration, the app and its fallbacks serve, an encoded `..` stays inside `dist`,
+the app is loopback-only, NPM's network reaches `lumpy:3001` and cannot see the
+database, the app and MariaDB agree on today's date, and a backup taken inside the
+container restores to the same rows. Run it after touching the Dockerfile,
+`compose.yaml` or the Bun version, and before the server sees the change.
+
+Two of those checks exist because the first real run failed them. `FROM
+oven/bun:1` floated to 1.4.2 against a 1.3.10 laptop, so the Dockerfile pins the
+exact version and the smoke test fails the day they drift. And every backup
+failed: Debian's MariaDB 11.8 client demands TLS by default and `mariadb:10.11`
+has none, so the dump `deploy.sh` takes before a migration would have blocked
+every migration deploy. The image turns that default off; the traffic never
+leaves the stack's private network.
+
 ### Behind Nginx Proxy Manager
 
 The app joins the proxy's own Docker network (`PROXY_NETWORK`, default `proxy`)
@@ -167,8 +190,11 @@ one command in this file that can lose your ledger.
 
 `scripts/deploy.sh` is the whole upgrade: fetch, and if `origin` has moved, dump
 the database when the diff carries a migration, fast-forward, rebuild, restart,
-and prune the old layers. It exits 0 having done nothing when there is nothing
-new, which is what makes it safe on a timer.
+wait until the app answers a request that needs the database, and only then prune
+the old layers. "Deployed" means answering, not started -- a crash-looping
+container is started over and over. If it never answers, the script prints the
+app's last 40 log lines and exits 1. It exits 0 having done nothing when there is
+nothing new, which is what makes it safe on a timer.
 
 ```bash
 scripts/deploy.sh              # deploy if origin moved

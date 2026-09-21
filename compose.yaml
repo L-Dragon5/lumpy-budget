@@ -30,8 +30,9 @@ services:
     # Not on the proxy network: nothing outside this stack talks to the database.
     networks: ["internal"]
     # Loopback only. Published at all so a host `bun run dev` can point at this
-    # database instead of a local install; 3307 to never collide with one.
-    ports: ["127.0.0.1:3307:3306"]
+    # database instead of a local install; 3307 to never collide with one, and a
+    # variable so scripts/docker-smoke.sh can run beside the real stack.
+    ports: ["127.0.0.1:${DB_PORT:-3307}:3306"]
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD}"]
       interval: 5s

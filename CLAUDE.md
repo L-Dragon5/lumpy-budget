@@ -18,6 +18,7 @@ bun run --cwd apps/web lint      # oxlint; not part of `check`
 bun run backup                   # mysqldump to ~/lumpy-backups; run before a migration
 bun run reset                    # row counts only; --yes backs up, wipes, re-seeds
 bun run seed --no-rules          # categories without the merchant rules; --no-rules works on reset too
+scripts/docker-smoke.sh          # the image, end to end; needs Docker, not part of `check`
 ```
 
 `bun test` needs MySQL running: `services/api/test/*` hits a real
@@ -411,6 +412,18 @@ Four places, in this order, or reads silently drop it:
   exists, so development is unchanged and the container serves both on one port.
   `services/api/test/static.test.ts` pins the precedence and the encoded-`..`
   guard; it needs no database, which is why it does not import `setup.ts`.
+- **The image is pinned to the laptop, and the smoke test is what says so.**
+  `FROM oven/bun:1.3.10` matches `bun --version` here and `mariadb:10.11`
+  matches the dev server; bump either and bump the other side with it.
+  `scripts/docker-smoke.sh` fails first on a Bun mismatch. The image also writes
+  `skip-ssl` into the MariaDB client config: trixie ships an 11.8 client that
+  requires TLS by default, 10.11 has none, and without it `bun run backup` fails
+  inside the container -- which blocks every migration deploy, because
+  `deploy.sh` refuses to migrate without a dump.
+- **No `grep -q` behind a pipe in a `pipefail` script.** `-q` exits on the first
+  match, the writer takes SIGPIPE, and pipefail calls a pipeline that matched
+  false. In `deploy.sh` that read a large diff full of migrations as none and
+  skipped the backup: 0 of 10 on a 300k-line diff. Write `grep ... >/dev/null`.
 
 ## Two lanes
 
@@ -424,3 +437,8 @@ held-out merchants and what this household actually filed, threshold 85%. Not in
 `bun run check` because it costs money and calls a real model. Everything around
 the model is in the gate lane -- `services/llm/test` stubs the request, so the
 prompt, the answer-reading and the chunking are all free and deterministic.
+
+The container has its own lane, `scripts/docker-smoke.sh`: fourteen checks
+against a real image, about a minute warm. Not in `bun run check` because it
+needs Docker and minutes, not milliseconds. Run it when the Dockerfile,
+`compose.yaml`, `scripts/deploy.sh` or the Bun version changes.
