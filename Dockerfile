@@ -1,11 +1,11 @@
 # One stage on purpose: the web build imports the API's own route types, so the
 # build needs the whole workspace anyway, and a homelab has disk.
 # ponytail: split out a slim runtime stage the day image size matters.
-# Pinned to the Bun the repo is developed and tested on (`bun --version`). `:1`
-# floats, and the lockfile pins dependencies but not the runtime -- a first build
-# pulled 1.4.2 against a 1.3.10 laptop, and scripts/backup.ts works around two
-# Bun 1.3.10 bugs by name. Bump this with the laptop, not instead of it.
-FROM oven/bun:1.3.10
+# Floats on purpose: the server takes Bun patches without an edit here, and the
+# laptop follows with `bun upgrade`. The lockfile pins dependencies, not the
+# runtime, so the two can drift -- scripts/docker-smoke.sh prints the image's
+# Bun and warns when the laptop's differs.
+FROM oven/bun:1
 
 # mysqldump, for `bun run backup` inside the container. Debian's default-mysql-*
 # is MariaDB's, the same family as the server -- a MySQL 8 client against

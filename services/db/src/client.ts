@@ -82,31 +82,56 @@ export async function bulkInsert(table: TableName, data: Record<string, unknown>
   const spec = TABLES[table] as TableSpecLoose & { cols: string[] };
   const datetimes = new Set(spec.datetime ?? []);
   const cols = spec.cols;
-  const placeholders = `(${cols.map(() => "?").join(", ")})`;
+  const placeholders = `(${cols.map((c) => (datetimes.has(c) ? AT_UTC : "?")).join(", ")})`;
   for (let i = 0; i < data.length; i += 200) {
     const chunk = data.slice(i, i + 200);
     const q = `INSERT INTO ${ident(table)} (${cols.map(ident).join(", ")}) VALUES ${chunk.map(() => placeholders).join(", ")}`;
     await db.unsafe(
       q,
-      chunk.flatMap((r) => cols.map((c) => (datetimes.has(c) ? mysqlDatetime(r[c]) : serialize(r[c] ?? null)))),
+      chunk.flatMap((r) => cols.map((c) => (datetimes.has(c) ? utcWall(r[c]) : serialize(r[c] ?? null)))),
     );
   }
   return data.length;
 }
 
 /**
- * The inverse of how `coerce` reads a TIMESTAMP. The driver hands a TIMESTAMP
- * back as a Date built on the session clock and coerce() calls toISOString() on
- * it, so writing that instant back means formatting it on the same clock again.
- * Send the 'Z' string straight to MySQL and it is either rejected or read as
- * local, moving the row by the UTC offset.
+ * Every clock in SQL names its zone, because the session's zone belongs to the
+ * driver. Bun 1.3 left a MySQL session on SYSTEM; Bun 1.4 sets `time_zone =
+ * '+00:00'` on every connection it opens, reconnects included, and there is no
+ * option to change it (oven-sh/bun#40254). A TIMESTAMP is stored as UTC either
+ * way, so the rows are fine -- what moves is any SQL that turns one into a
+ * calendar day or a wall time, which then answers in whichever zone the driver
+ * picked. Both helpers below give the same answer under either session.
+ *
+ * AT_UTC is the write side: the value goes over as a UTC wall time and the
+ * database converts it into whatever the session is, so the stored instant is
+ * the one the export recorded. The version this replaced formatted the value
+ * with getHours(), on the process clock, which was right only while the session
+ * was also on the process clock -- a restore on Bun 1.4 moved every created_at
+ * back by the UTC offset.
  */
-const pad = (n: number): string => String(n).padStart(2, "0");
-export function mysqlDatetime(v: unknown): unknown {
-  if (typeof v !== "string") return v;
+const AT_UTC = "CONVERT_TZ(?, '+00:00', @@session.time_zone)";
+
+/** An ISO instant (what `coerce` emits for a TIMESTAMP) as a UTC wall time. */
+export function utcWall(v: unknown): unknown {
+  if (typeof v !== "string" && !(v instanceof Date)) return v;
   const d = new Date(v);
+  // Left as-is: CONVERT_TZ turns garbage into NULL, and a NOT NULL column then
+  // refuses it out loud instead of storing a guess.
   if (Number.isNaN(d.getTime())) return v;
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  return d.toISOString().slice(0, 19).replace("T", " ");
+}
+
+/**
+ * The calendar day a TIMESTAMP falls on, on the database machine's clock -- the
+ * clock the DATE columns were written on. Not DATE(col): under Bun 1.4 that is
+ * the UTC day, so a balance typed at 8pm local reads as typed tomorrow and the
+ * rest of today's spending drops out of it. `col` is SQL from this codebase,
+ * never a request, and is checked to be a (qualified) column name anyway.
+ */
+export function localDate(col: string): string {
+  if (!/^[a-z_][a-z0-9_]*(\.[a-z_][a-z0-9_]*)?$/.test(col)) throw new Error(`refusing unsafe column: ${col}`);
+  return `DATE(CONVERT_TZ(${col}, @@session.time_zone, 'SYSTEM'))`;
 }
 
 export async function update(table: TableName, id: number, data: Record<string, unknown>, db: Executor = sql): Promise<number> {

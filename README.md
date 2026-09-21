@@ -89,16 +89,15 @@ scripts/docker-smoke.sh        # ~1 minute warm; builds, boots, checks, tears do
 
 Fourteen checks against a real build of the image, as its own compose project on
 its own port, network and volume, so it is safe to run on the server beside the
-real stack: the image's Bun matches `bun --version`, a fresh database gets every
+real stack: which Bun the image pulled (and a warning if it differs from the
+host's, since the tests ran on that one), a fresh database gets every
 migration, the app and its fallbacks serve, an encoded `..` stays inside `dist`,
 the app is loopback-only, NPM's network reaches `lumpy:3001` and cannot see the
 database, the app and MariaDB agree on today's date, and a backup taken inside the
 container restores to the same rows. Run it after touching the Dockerfile,
 `compose.yaml` or the Bun version, and before the server sees the change.
 
-Two of those checks exist because the first real run failed them. `FROM
-oven/bun:1` floated to 1.4.2 against a 1.3.10 laptop, so the Dockerfile pins the
-exact version and the smoke test fails the day they drift. And every backup
+The backup checks exist because the first real run failed them. Every backup
 failed: Debian's MariaDB 11.8 client demands TLS by default and `mariadb:10.11`
 has none, so the dump `deploy.sh` takes before a migration would have blocked
 every migration deploy. The image turns that default off; the traffic never

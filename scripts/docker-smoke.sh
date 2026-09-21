@@ -1,14 +1,10 @@
 #!/usr/bin/env bash
 # The container, proven end to end: build, boot, serve, proxy, isolate, back up,
 # restore. Everything here is something the gate lane cannot see -- it runs on
-# the laptop's Bun and the laptop's MariaDB -- and two of these checks exist
-# because the first real run failed them:
-#
-#   - the Bun in the image was not the Bun the tests ran on (FROM oven/bun:1
-#     floated to 1.4.2 against a 1.3.10 laptop)
-#   - every backup failed: trixie's MariaDB 11.8 client demands TLS by default and
-#     mariadb:10.11 has none, so the dump deploy.sh takes before a migration would
-#     have blocked every migration
+# the laptop's Bun and the laptop's MariaDB. The backup checks exist because the
+# first real run failed them: trixie's MariaDB 11.8 client demands TLS by default
+# and mariadb:10.11 has none, so the dump deploy.sh takes before a migration would
+# have blocked every migration.
 #
 # Runs as its own compose project on its own network, port and volume, so it is
 # safe beside a real stack on the same server, and tears all of it down on exit.
@@ -43,9 +39,16 @@ docker network create "$PROXY_NETWORK" >/dev/null
 echo "building"
 docker compose build --progress quiet >/dev/null
 bun_in_image=$(docker compose run --rm --no-deps -T --entrypoint bun app --version)
-[ "$bun_in_image" = "$(bun --version)" ] \
-  && ok "image Bun $bun_in_image matches the laptop" \
-  || fail "image has Bun $bun_in_image, laptop has $(bun --version): bump the FROM in Dockerfile"
+# FROM oven/bun:1 floats, so drift is expected and not a failure -- but the tests
+# ran on the host's Bun, so it is worth saying. A server usually has no Bun at all.
+if ! command -v bun >/dev/null; then
+  ok "image runs Bun $bun_in_image (no Bun on this host to compare)"
+elif [ "$bun_in_image" = "$(bun --version)" ]; then
+  ok "image runs Bun $bun_in_image, same as this host"
+else
+  ok "image runs Bun $bun_in_image"
+  printf '  warn  this host has Bun %s, so the gate tests ran on a different runtime: bun upgrade\n' "$(bun --version)"
+fi
 
 echo "booting"
 docker compose up -d >/dev/null 2>&1
@@ -81,12 +84,25 @@ docker run --rm --network "$PROXY_NETWORK" busybox:1.36 nc -z -w 2 db 3306 2>/de
   && fail "the database is reachable from the proxy network" || ok "the database is not on the proxy network"
 
 echo "clocks"
-app_day=$(docker compose exec -T app bun -e 'import {todayISO} from "@lumpy/budget-core"; console.log(todayISO())')
-db_day=$(docker compose exec -T db mariadb -uroot -p"$MYSQL_ROOT_PASSWORD" -N -e 'select curdate()')
+q() { docker compose exec -T db mariadb -uroot -p"$MYSQL_ROOT_PASSWORD" -N lumpy_budget -e "$1"; }
+in_app() { docker compose exec -T app bun -e "$1"; }
+app_day=$(in_app 'import {todayISO} from "@lumpy/budget-core"; console.log(todayISO())')
+db_day=$(q 'select curdate()')
 [ "$app_day" = "$db_day" ] && ok "app and database agree it is $app_day" || fail "app says $app_day, database says $db_day"
+# The check above asks the mariadb CLI, whose session is SYSTEM. The app's own
+# driver is what matters, and Bun 1.4 puts its sessions on UTC: a balance typed
+# at 23:30 last night must still be as of last night, through the real route.
+# Pinned to 23:30 rather than "now" so this fails at any hour, not only after 8pm.
+yesterday=$(in_app 'import {addDays,todayISO} from "@lumpy/budget-core"; console.log(addDays(todayISO(), -1))')
+late=$(in_app "console.log(new Date('${yesterday}T23:30:00').toISOString().slice(0, 19).replace('T', ' '))")
+curl -sf -X PUT "$base/api/settings" -H 'content-type: application/json' \
+  -d '{"name":"checking_balance_cents","value":"100000"}' >/dev/null
+q "update settings set updated_at = convert_tz('$late', '+00:00', @@session.time_zone) where name = 'checking_balance_cents'"
+as_of=$(in_app 'const r = await fetch("http://localhost:3001/api/cash-position"); console.log((await r.json()).as_of)')
+[ "$as_of" = "$yesterday" ] && ok "a balance typed at 23:30 last night is as of last night" \
+  || fail "a balance typed at 23:30 on $yesterday reads as of $as_of: the driver's session clock is leaking into SQL"
 
 echo "backup"
-q() { docker compose exec -T db mariadb -uroot -p"$MYSQL_ROOT_PASSWORD" -N lumpy_budget -e "$1"; }
 docker compose exec -T app bun run demo >/dev/null 2>&1
 fp="select count(*), sum(amount_cents), max(txn_date), (select count(*) from fixed_costs), (select count(*) from lumpy_items) from expenses"
 before=$(q "$fp")

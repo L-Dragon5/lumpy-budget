@@ -6,7 +6,7 @@ import type {
 } from "@lumpy/contracts";
 import { needleOf } from "@lumpy/contracts";
 import type { Example } from "@lumpy/llm";
-import { bulkInsert, byId, insert, rows, sql, update, type Executor } from "@lumpy/db";
+import { bulkInsert, byId, insert, localDate, rows, sql, update, type Executor } from "@lumpy/db";
 import { applyRules, dedupeKey, dedupeKeys, matchable, splitDedupeKey } from "@lumpy/csv-import";
 import * as core from "@lumpy/budget-core";
 
@@ -179,16 +179,17 @@ export type CardBalance = {
 export async function cardBalances(today: string = core.todayISO()): Promise<CardBalance[]> {
   const found = (await sql.unsafe(
     // DATE_FORMAT because this is a raw statement: `rows()` is what coerces a
-    // DATE into a YYYY-MM-DD string and nothing here goes through it. DATE() on
-    // updated_at for the same reason `settingRow` does it: a TIMESTAMP written
-    // at 8pm local is already tomorrow in UTC, and this compares it to a DATE.
+    // DATE into a YYYY-MM-DD string and nothing here goes through it. localDate()
+    // on updated_at for the same reason `settingRow` uses it: this compares a
+    // TIMESTAMP's day to a DATE column, and a bare DATE() is the UTC day under
+    // Bun 1.4 -- the as-of day's charges would drop out and understate the card.
     `SELECT p.id                                     AS profile_id,
             p.name                                   AS name,
             s.value                                  AS stated,
-            DATE_FORMAT(DATE(s.updated_at), '%Y-%m-%d') AS as_of,
-            COALESCE(SUM(CASE WHEN s.updated_at IS NULL OR e.txn_date >= DATE(s.updated_at)
+            DATE_FORMAT(${localDate("s.updated_at")}, '%Y-%m-%d') AS as_of,
+            COALESCE(SUM(CASE WHEN s.updated_at IS NULL OR e.txn_date >= ${localDate("s.updated_at")}
                               THEN e.amount_cents END), 0)  AS since_cents,
-            COUNT(CASE WHEN s.updated_at IS NULL OR e.txn_date >= DATE(s.updated_at)
+            COUNT(CASE WHEN s.updated_at IS NULL OR e.txn_date >= ${localDate("s.updated_at")}
                        THEN e.id END)                       AS since_count,
             COUNT(e.id)                              AS txn_count,
             DATE_FORMAT(MAX(e.txn_date), '%Y-%m-%d') AS last_txn_date
@@ -243,12 +244,14 @@ export async function setting(name: string, fallback = "0"): Promise<string> {
  *
  * `updated_on` is computed by the database rather than sliced off the ISO string:
  * a TIMESTAMP set at 8pm local is already the next day in UTC, and comparing that
- * against a DATE column would silently drop a whole day of spending. DATE() reads
- * it on the same clock the DATE columns were written with.
+ * against a DATE column would silently drop a whole day of spending. localDate()
+ * reads it on the clock the DATE columns were written with -- the machine's, by
+ * name, because a bare DATE() reads the session's and Bun 1.4 sets that to UTC.
+ * This feeds the as-of day of both checking tiles and the lumpy fund's "since".
  */
 export async function settingRow(name: string): Promise<{ value: string; updated_at: string; updated_on: string } | null> {
   const out = (await sql.unsafe(
-    "SELECT value, updated_at, DATE_FORMAT(DATE(updated_at), '%Y-%m-%d') AS updated_on FROM settings WHERE name = ?",
+    `SELECT value, updated_at, DATE_FORMAT(${localDate("updated_at")}, '%Y-%m-%d') AS updated_on FROM settings WHERE name = ?`,
     [name],
   )) as { value: string; updated_at: Date | string; updated_on: string }[];
   const row = out[0];

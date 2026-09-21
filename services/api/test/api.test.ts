@@ -5,6 +5,21 @@ import { matchManual } from "@lumpy/csv-import";
 // 8pm local an ISO string sliced off toISOString() is already tomorrow.
 import { addDays, todayISO } from "@lumpy/budget-core";
 
+/**
+ * Moves a setting's TIMESTAMP to 23:30 local on `day`: the 8pm-to-midnight
+ * window, where the local day and the UTC day disagree. Bun 1.4 pins every MySQL
+ * session to UTC, so a bare DATE(updated_at) reads that as the next day -- and a
+ * test that only ever types a balance "now" catches it only if it runs late at
+ * night. Written through CONVERT_TZ so the stored instant is right whatever the
+ * session is. On a machine whose clock is UTC the two days agree and this proves
+ * nothing; everywhere else it proves it every run.
+ */
+const typedLateOn = (name: string, day: string) =>
+  sql.unsafe("UPDATE settings SET updated_at = CONVERT_TZ(?, '+00:00', @@session.time_zone) WHERE name = ?", [
+    new Date(`${day}T23:30:00`).toISOString().slice(0, 19).replace("T", " "),
+    name,
+  ]);
+
 const semiMonthly = {
   name: "Day job", amount_cents: 300000, frequency: "semimonthly",
   anchor_date: null, day_1: 15, day_2: 0, day_of_month: null, active: true,
@@ -1743,6 +1758,24 @@ describe("cash position", () => {
     expect(res.body.spent_since_count).toBe(2);
   });
 
+  test("a balance typed late in the evening still counts that evening's spending", async () => {
+    await put("/api/settings", { name: "checking_balance_cents", value: "180000" });
+    const day = inDays(-1);
+    await typedLateOn("checking_balance_cents", day);
+    const cats = (await api("/api/categories")).body as { id: number; bucket: string }[];
+    const groceries = cats.find((c) => c.bucket === "discretionary")!.id;
+    await post("/api/expenses", {
+      txn_date: day, amount_cents: 4300, merchant: "Dinner", description: "",
+      category_id: groceries, source: "manual",
+    });
+
+    const res = await api("/api/cash-position");
+    // Read as the UTC day, the balance would be as of today and last night's
+    // dinner would vanish from it: a checking balance that looks $43 richer.
+    expect(res.body.as_of).toBe(day);
+    expect(res.body.spent_since_cents).toBe(4300);
+  });
+
   test("a paycheck landing is not spending recorded since", async () => {
     // Before migration 013 the seeded Income category was `transfer`, which kept
     // deposits out of this sum. Moving it to `income` must not let them back in:
@@ -2293,6 +2326,22 @@ describe("card balances", () => {
     const [row] = await balances();
     expect(row.as_of).toBe(addDays(todayISO(), -9));
     expect(row.days_stale).toBe(9);
+  });
+
+  test("a balance typed late in the evening is as of that evening, not tomorrow", async () => {
+    const id = await card("Store Card");
+    const day = addDays(todayISO(), -2);
+    await put("/api/settings", { name: `card_balance_cents:${id}`, value: "45000" });
+    await typedLateOn(`card_balance_cents:${id}`, day);
+    await importRows(id, [
+      // On the as-of day, so counted -- and dropped if the as-of day reads as the
+      // UTC one, which understates what the card is owed.
+      { txn_date: day, amount_cents: 2500, merchant: "SHELL" },
+      { txn_date: addDays(day, -1), amount_cents: 9900, merchant: "BEFORE" },
+    ]);
+
+    const [row] = await balances();
+    expect(row).toMatchObject({ as_of: day, days_stale: 2, since_cents: 2500, since_count: 1, balance_cents: 47500 });
   });
 
   test("a payment credited since the balance was read brings it down", async () => {

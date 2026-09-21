@@ -77,10 +77,10 @@ Four places, in this order, or reads silently drop it:
 - **Validation failures are 422 in Elysia's shape, not 400.** The shape is
   recorded in `services/api/test/fixtures/validation-error.json` and asserted.
 - **`settings` is not in `TABLES`.** It is queried by hand in `store.ts`, so the
-  four-place checklist above does not apply to it. `updated_on` is computed with
-  SQL `DATE()` rather than sliced off an ISO string: a TIMESTAMP written at 8pm
-  local is already tomorrow in UTC, and comparing that to a DATE column drops a
-  day of rows.
+  four-place checklist above does not apply to it. `updated_on` is computed in
+  SQL with `localDate()` (`db/src/client.ts`) rather than sliced off an ISO
+  string: a TIMESTAMP written at 8pm local is already tomorrow in UTC, and
+  comparing that to a DATE column drops a day of rows.
 - **`/api/import` is the CSV statement importer; `/api/restore` is the backup
   loader.** One adds rows, the other replaces every table. The names collide in
   conversation, not in the router; do not rename either into the other.
@@ -412,10 +412,23 @@ Four places, in this order, or reads silently drop it:
   exists, so development is unchanged and the container serves both on one port.
   `services/api/test/static.test.ts` pins the precedence and the encoded-`..`
   guard; it needs no database, which is why it does not import `setup.ts`.
-- **The image is pinned to the laptop, and the smoke test is what says so.**
-  `FROM oven/bun:1.3.10` matches `bun --version` here and `mariadb:10.11`
-  matches the dev server; bump either and bump the other side with it.
-  `scripts/docker-smoke.sh` fails first on a Bun mismatch. The image also writes
+- **Bun's MySQL sessions run on UTC, so no SQL may lean on the session clock.**
+  Bun 1.4 sets `time_zone = '+00:00'` on every connection and there is no option
+  to change it. TIMESTAMPs are stored as UTC and come back as the right instant,
+  but a bare `DATE(ts)`, `CURDATE()` or `NOW()` answers in UTC -- after 8pm local
+  that is tomorrow, and the as-of day of every balance tile moves with it,
+  dropping that day's spending. A timestamp's local day is `localDate(col)`, and
+  a timestamp written from an ISO string goes through `CONVERT_TZ(?, '+00:00',
+  @@session.time_zone)` (`bulkInsert`). The two "late in the evening" tests pin
+  a balance to 23:30 local so they fail at any hour, not only at night, and
+  `scripts/docker-smoke.sh` asks the same question through the running image.
+- **The image's Bun floats; its database does not.** `FROM oven/bun:1` takes
+  Bun patches on every build, deliberately, and `scripts/docker-smoke.sh` warns
+  when the host's `bun --version` has fallen behind -- the gate tests ran on
+  that one. `mariadb:10.11` is pinned to the dev server; bump both together.
+  `scripts/backup.ts` names two Bun 1.3.10 bugs it works around, and the smoke
+  test's backup round trip is what says the workarounds still hold on whatever
+  Bun the image pulled. The image also writes
   `skip-ssl` into the MariaDB client config: trixie ships an 11.8 client that
   requires TLS by default, 10.11 has none, and without it `bun run backup` fails
   inside the container -- which blocks every migration deploy, because

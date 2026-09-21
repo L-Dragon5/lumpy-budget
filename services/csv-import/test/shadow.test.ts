@@ -130,7 +130,16 @@ describe("shadowedRules agrees with applyRules", () => {
       out.push({ id, pattern, whole_word: rand() < 0.4, category_id: id, priority: pick([10, 20, 20, 30]) });
     }
     // Handed over out of order: the priority/id sort is part of what is tested.
-    return out.sort(() => rand() - 0.5);
+    // Fisher-Yates, not sort(() => rand() - 0.5): how often a sort calls its
+    // comparator is the engine's business, so that shuffle drew a different
+    // number of values on every JavaScriptCore -- 72434 on Bun 1.3.10, 72984 on
+    // 1.4.2 -- and "seeded" silently meant a different corpus per runtime. This
+    // draws exactly one value per position everywhere.
+    for (let i = out.length - 1; i > 0; i--) {
+      const j = int(0, i);
+      [out[i], out[j]] = [out[j]!, out[i]!];
+    }
+    return out;
   };
 
   const winner = (rules: CategoryRule[], merchant: string, description: string) =>
@@ -169,9 +178,11 @@ describe("shadowedRules agrees with applyRules", () => {
       }
     }
     // Guard against a generator that stopped producing the interesting cases
-    // (at seed 20260910: 8966 live, 1596 dead, 219 behind a whole-word rule,
-    // 23491 fuzzed haystacks). Mutating `covers` to try only the first
-    // occurrence of A in B is caught here and by none of the cases above.
+    // (at seed 20260910, identical on Bun 1.3.10 and 1.4.2 since the shuffle
+    // became Fisher-Yates: 8903 live, 1526 dead, 210 behind a whole-word rule,
+    // 22576 fuzzed haystacks). Mutating `covers` to try only the first occurrence
+    // of A in B fails a witness above on this corpus; on the one before it, only
+    // these floors caught it, which is what they are for.
     expect(live).toBeGreaterThan(1000);
     expect(dead).toBeGreaterThan(1000);
     expect(deadBehindWholeWord).toBeGreaterThan(200);
