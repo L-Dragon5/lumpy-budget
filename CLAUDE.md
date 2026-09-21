@@ -431,12 +431,14 @@ Four places, in this order, or reads silently drop it:
   Bun the image pulled. The image also writes
   `skip-ssl` into the MariaDB client config: trixie ships an 11.8 client that
   requires TLS by default, 10.11 has none, and without it `bun run backup` fails
-  inside the container -- which blocks every migration deploy, because
-  `deploy.sh` refuses to migrate without a dump.
+  inside the container -- which blocks every deploy, because the Komodo Stack's
+  `pre_deploy` dump failing ends the deploy before it builds (README, "Deploying
+  with Komodo").
 - **No `grep -q` behind a pipe in a `pipefail` script.** `-q` exits on the first
   match, the writer takes SIGPIPE, and pipefail calls a pipeline that matched
-  false. In `deploy.sh` that read a large diff full of migrations as none and
-  skipped the backup: 0 of 10 on a 300k-line diff. Write `grep ... >/dev/null`.
+  false. In the old `deploy.sh` that read a large diff full of migrations as none
+  and skipped the backup: 0 of 10 on a 300k-line diff; it flaked
+  `scripts/docker-smoke.sh` too. Write `grep ... >/dev/null`.
 
 ## Two lanes
 
@@ -451,7 +453,8 @@ held-out merchants and what this household actually filed, threshold 85%. Not in
 the model is in the gate lane -- `services/llm/test` stubs the request, so the
 prompt, the answer-reading and the chunking are all free and deterministic.
 
-The container has its own lane, `scripts/docker-smoke.sh`: fourteen checks
+The container has its own lane, `scripts/docker-smoke.sh`: seventeen checks
 against a real image, about a minute warm. Not in `bun run check` because it
 needs Docker and minutes, not milliseconds. Run it when the Dockerfile,
-`compose.yaml`, `scripts/deploy.sh` or the Bun version changes.
+`compose.yaml` or the Bun version changes. The last check stops the database to
+prove the healthcheck Komodo reads can fail.

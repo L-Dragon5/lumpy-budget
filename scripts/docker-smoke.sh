@@ -3,8 +3,8 @@
 # restore. Everything here is something the gate lane cannot see -- it runs on
 # the laptop's Bun and the laptop's MariaDB. The backup checks exist because the
 # first real run failed them: trixie's MariaDB 11.8 client demands TLS by default
-# and mariadb:10.11 has none, so the dump deploy.sh takes before a migration would
-# have blocked every migration.
+# and mariadb:10.11 has none, so the dump Komodo's pre_deploy takes before a
+# deploy would have blocked every migration.
 #
 # Runs as its own compose project on its own network, port and volume, so it is
 # safe beside a real stack on the same server, and tears all of it down on exit.
@@ -60,6 +60,12 @@ curl -sf "$base/api/categories" >/dev/null && ok "app answers a database-backed 
   docker compose logs --tail 40 app; fail "app never answered"; }
 docker compose logs app | grep "applied 001_init.sql" >/dev/null && ok "a fresh database gets every migration" \
   || fail "migrations did not run from 001"
+# Komodo reads this, not the curl above: it is the only thing that tells it a
+# deploy did not take. The first probe fires one interval (15s) after start.
+app_id=$(docker compose ps -q app)
+health() { docker inspect -f '{{.State.Health.Status}}' "$app_id"; }
+for _ in $(seq 1 25); do [ "$(health)" = healthy ] && break; sleep 2; done
+[ "$(health)" = healthy ] && ok "the app's healthcheck reports healthy" || fail "healthcheck says $(health)"
 
 echo "serving"
 code() { curl -s -o /dev/null -w '%{http_code}' "$base$1"; }
@@ -116,6 +122,15 @@ q "delete from expenses; delete from fixed_costs; delete from lumpy_items"
 docker compose exec -T app sh -c "cat '$dump'" | docker compose exec -T db mariadb -uroot -p"$MYSQL_ROOT_PASSWORD"
 after=$(q "$fp")
 [ "$before" = "$after" ] && ok "wipe and restore round-trips ($before)" || fail "restore differs: $before vs $after"
+
+# Last, because it takes the database away. The probe compose.yaml declares, run
+# by hand: a healthcheck that passes without MariaDB would call a dead app healthy.
+# timeout 5 is the healthcheck's own timeout, and a hang counts as a failure too.
+echo "health"
+probe=$(docker inspect -f '{{index .Config.Healthcheck.Test 3}}' "$app_id")
+docker compose stop db >/dev/null 2>&1
+docker compose exec -T app timeout 5 bun -e "$probe" >/dev/null 2>&1 \
+  && fail "the healthcheck passes with the database stopped" || ok "the healthcheck fails without the database"
 
 echo
 echo "$pass checks passed"

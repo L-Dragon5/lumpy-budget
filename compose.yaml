@@ -1,5 +1,6 @@
 # Development stays on the host: `bun run dev` against your own MySQL, unchanged.
-# This file is how the same code runs on the homelab:
+# This file is how the same code runs on the homelab, where a Komodo Stack owns it
+# (README, "Deploying with Komodo"). By hand, anywhere else:
 #
 #   cp .env.example .env && $EDITOR .env     # MYSQL_ROOT_PASSWORD and TZ are required
 #   docker network create proxy              # once per server, or name the one you have
@@ -66,6 +67,17 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # "Up" is not "working": a blank app that cannot reach MariaDB still serves
+    # index.html. So the question needs the database, and it is asked with bun
+    # because the image has no curl. Komodo shows the result as the container's
+    # health, which is the only thing that tells it a deploy did not take.
+    # start_period covers migrations on boot. No start_interval: Engine 20.10.
+    healthcheck:
+      test: ["CMD", "bun", "-e", "const r = await fetch('http://localhost:3001/api/categories'); process.exit(r.ok ? 0 : 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
 
 networks:
   internal:

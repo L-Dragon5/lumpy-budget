@@ -15,8 +15,8 @@ FROM oven/bun:1
 # skip-ssl: trixie's client is MariaDB 11.8, and since 11.4 a MariaDB client
 # requires TLS by default. mariadb:10.11 has none configured, so without this
 # every backup fails with "SSL is required, but the server does not support it"
-# -- and so does the dump deploy.sh takes before a migration, which then (rightly)
-# refuses to migrate. The traffic never leaves the stack's private network, so
+# -- and so does the dump the Komodo Stack's pre_deploy takes, which then (rightly)
+# stops the deploy before a migration can run. The traffic never leaves the stack's private network, so
 # there is nothing for TLS to protect. Image-only: the laptop's client is untouched.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends default-mysql-client \
