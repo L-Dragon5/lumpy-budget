@@ -474,7 +474,7 @@ held-out merchants and what this household actually filed, threshold 85%. Not in
 the model is in the gate lane -- `services/llm/test` stubs the request, so the
 prompt, the answer-reading and the chunking are all free and deterministic.
 
-The container has its own lane, `scripts/docker-smoke.sh`: eighteen checks
+The container has its own lane, `scripts/docker-smoke.sh`: seventeen checks
 against a real image, about a minute warm. Not in `bun run check` because it
 needs Docker and minutes, not milliseconds. Run it when the Dockerfile,
 `compose.yaml` or the Bun version changes. The last check stops the database to

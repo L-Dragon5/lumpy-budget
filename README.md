@@ -54,7 +54,6 @@ same file works by hand:
 
 ```bash
 cp .env.example .env               # MYSQL_ROOT_PASSWORD and TZ are both required
-docker network ls                  # find the network your proxy is on
 docker compose up -d --build
 docker compose logs -f app
 ```
@@ -73,13 +72,12 @@ rebuild applies whatever the new image added and does nothing otherwise.
 scripts/docker-smoke.sh        # ~1 minute warm; builds, boots, checks, tears down
 ```
 
-Eighteen checks against a real build of the image, as its own compose project on
+Seventeen checks against a real build of the image, as its own compose project on
 its own port, network and volume, so it is safe to run on the server beside the
 real stack: which Bun the image pulled (and a warning if it differs from the
 host's, since the tests ran on that one), a fresh database gets every
 migration, the app and its fallbacks serve, an encoded `..` stays inside `dist`,
-the app is loopback-only, NPM's network reaches `lumpy:3001` and cannot see the
-database, the app and MariaDB agree on today's date, a backup taken inside the
+the app answers on the LAN and the database does not, the app and MariaDB agree on today's date, a backup taken inside the
 container restores to the same rows and prunes old dumps, and the healthcheck Komodo reads says
 healthy with the database up and fails with it stopped. Run it after touching
 the Dockerfile, `compose.yaml` or the Bun version, and before the server sees
@@ -93,28 +91,27 @@ private network.
 
 ### Behind Nginx Proxy Manager
 
-The app joins the proxy's own Docker network (`PROXY_NETWORK`, default `proxy`)
-under the alias **`lumpy`**, and publishes nothing but a loopback port for
-curling it on the server. In NPM, add a proxy host:
+NPM runs on another VM, so there is no Docker network to share: the app
+publishes `PORT` (default 3001) on every interface of this host and NPM forwards
+to it over the LAN. The database publishes on loopback only, so the LAN never
+sees it. In NPM, add a proxy host:
 
 | Field | Value |
 | --- | --- |
 | Domain Names | whatever you are serving it as |
 | Scheme | `http` |
-| Forward Hostname / IP | `lumpy` |
+| Forward Hostname / IP | this VM's LAN IP |
 | Forward Port | `3001` |
 | Websockets Support | off, nothing here uses them |
 | SSL | request a cert, and force it |
 
-The alias is per stack and deliberate. Convert a second app this way and its
-service will also be called `app`; two containers answering to `app` on one
-network is a proxy that round-robins between unrelated sites. `internal` is a
-second network holding only the database, which the proxy therefore cannot see.
+A second app on the same VM needs its own `PORT`; two stacks cannot both
+publish 3001.
 
-**Put an NPM Access List in front of it.** This app has no login (see Known
-limits), so the proxy is the only thing between the internet and your ledger.
-Basic auth, or an allow-list of LAN ranges, or don't give it a public DNS name at
-all.
+**Anyone on the LAN can open it directly, past NPM.** Deliberate: the LAN is
+trusted. This app has no login (see Known limits), so what keeps it off the
+internet is NPM: put an Access List on the proxy host (basic auth, or an
+allow-list of LAN ranges), or don't give it a public DNS name at all.
 
 **`TZ` is not optional and must not be UTC unless you are.** MySQL dates rows on
 its own clock and the app compares those dates against its local today, so a UTC
@@ -187,7 +184,7 @@ compose up`. The Stack settings that matter:
 | Repo | `L-Dragon5/lumpy-budget`, branch `main` | |
 | `git_account` | empty | the repo is public; a private one needs a token here -- Komodo clones over HTTPS, not with an SSH deploy key |
 | `project_name` | `lumpy-budget` | the volume is `<project>_dbdata`. Empty means the Stack's name, so renaming the Stack would start an empty database beside your ledger |
-| Environment | `MYSQL_ROOT_PASSWORD`, `TZ`, `PROXY_NETWORK` | the first two are required by `compose.yaml`; the last names NPM's network |
+| Environment | `MYSQL_ROOT_PASSWORD`, `TZ`, optionally `PORT` | the first two are required by `compose.yaml`; `PORT` is what NPM forwards to, default 3001 |
 | `run_build` | **on** | off by default. The image is built from source, so without it a redeploy runs `up` on the old image and changes nothing, silently |
 | `reclone` | **off** (default) | off means `git pull`. On deletes the folder every deploy, and `./backups` with it |
 | `pre_deploy` | the backup below | migrations run on boot and are forward-only, so the dump is the only way back |

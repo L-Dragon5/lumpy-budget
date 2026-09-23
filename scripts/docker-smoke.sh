@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
-# The container, proven end to end: build, boot, serve, proxy, isolate, back up,
+# The container, proven end to end: build, boot, serve, expose, isolate, back up,
 # restore. Everything here is something the gate lane cannot see -- it runs on
 # the laptop's Bun and the laptop's MariaDB. The backup checks exist because the
 # first real run failed them: trixie's MariaDB 11.8 client demands TLS by default
 # and mariadb:10.11 has none, so the dump Komodo's pre_deploy takes before a
 # deploy would have blocked every migration.
 #
-# Runs as its own compose project on its own network, port and volume, so it is
+# Runs as its own compose project on its own network, ports and volume, so it is
 # safe beside a real stack on the same server, and tears all of it down on exit.
 #
 #   scripts/docker-smoke.sh          # ~1 min warm, a few cold
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-export COMPOSE_PROJECT_NAME=lumpysmoke PROXY_NETWORK=lumpysmoke-proxy
+export COMPOSE_PROJECT_NAME=lumpysmoke
 export PORT=3097 DB_PORT=3397 MYSQL_ROOT_PASSWORD=smoke$RANDOM TZ=America/New_York
 export GEMINI_API_KEY= GEMINI_MODEL=
 unset COMPOSE_FILE
@@ -29,12 +29,9 @@ fail() { printf '  FAIL  %s\n' "$*"; exit 1; }
 cleanup() {
   # -v removes this project's volume only: lumpysmoke_dbdata, created above.
   docker compose down -v --remove-orphans >/dev/null 2>&1 || true
-  docker network rm "$PROXY_NETWORK" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 cleanup
-
-docker network create "$PROXY_NETWORK" >/dev/null
 
 echo "building"
 docker compose build --progress quiet >/dev/null
@@ -78,16 +75,15 @@ body() { curl -s "$base$1"; }
 body /%2e%2e%2fpackage.json | grep '"workspaces"' >/dev/null && fail "an encoded .. read package.json" \
   || ok "an encoded .. stays inside dist"
 
+# NPM is on another VM, so the LAN address is how it gets in, and the database
+# must not be reachable the same way.
 echo "networks"
 lan=$(ipconfig getifaddr en0 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}')
-if [ -n "$lan" ]; then
-  curl -s -m 3 -o /dev/null "http://$lan:$PORT/" && fail "the app answers on the LAN at $lan" \
-    || ok "the app is loopback-only, not on $lan"
-fi
-docker run --rm --network "$PROXY_NETWORK" busybox:1.36 wget -qO- http://lumpy:3001/api/categories >/dev/null \
-  && ok "the proxy network reaches the app as lumpy:3001" || fail "lumpy:3001 unreachable from the proxy network"
-docker run --rm --network "$PROXY_NETWORK" busybox:1.36 nc -z -w 2 db 3306 2>/dev/null \
-  && fail "the database is reachable from the proxy network" || ok "the database is not on the proxy network"
+[ -n "$lan" ] || fail "no LAN address found to test against"
+curl -sf -m 3 "http://$lan:$PORT/api/categories" >/dev/null && ok "the app answers on the LAN at $lan:$PORT" \
+  || fail "the app does not answer on the LAN at $lan:$PORT"
+nc -z -w 2 "$lan" "$DB_PORT" 2>/dev/null && fail "the database answers on the LAN at $lan:$DB_PORT" \
+  || ok "the database is loopback-only, not on $lan"
 
 echo "clocks"
 q() { docker compose exec -T db mariadb -uroot -p"$MYSQL_ROOT_PASSWORD" -N lumpy_budget -e "$1"; }
