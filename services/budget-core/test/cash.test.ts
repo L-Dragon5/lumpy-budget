@@ -118,19 +118,19 @@ test("an everyday account is never short on bills it does not pay", () => {
   expect(pos.projected_cents).toBe(2500);
 });
 
-test("an account is stale once its newest transaction is more than two weeks old", () => {
+test("an account is stale once its newest transaction is more than a month old", () => {
   const today = "2026-03-20";
   const [a, b] = importFreshness(
     [
-      { profile_id: 1, name: "Checking", last_txn_date: "2026-03-06" }, // exactly 14: not yet
-      { profile_id: 2, name: "Card", last_txn_date: "2026-03-05" }, // 15
+      { profile_id: 1, name: "Checking", last_txn_date: "2026-02-18" }, // exactly 30: not yet
+      { profile_id: 2, name: "Card", last_txn_date: "2026-02-17" }, // 31
     ],
     today,
   );
-  expect(STALE_IMPORT_DAYS).toBe(14);
+  expect(STALE_IMPORT_DAYS).toBe(30);
   // Stalest first: the account most out of date is the one the dashboard names.
-  expect([a!.name, a!.days_behind, a!.stale]).toEqual(["Card", 15, true]);
-  expect([b!.name, b!.days_behind, b!.stale]).toEqual(["Checking", 14, false]);
+  expect([a!.name, a!.days_behind, a!.stale]).toEqual(["Card", 31, true]);
+  expect([b!.name, b!.days_behind, b!.stale]).toEqual(["Checking", 30, false]);
 });
 
 test("a transaction dated after today is not evidence the import is ahead", () => {

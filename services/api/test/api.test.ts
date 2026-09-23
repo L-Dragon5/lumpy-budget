@@ -1889,7 +1889,7 @@ describe("two checking accounts", () => {
       });
     };
     await post("/api/import-profiles", { name: "Never used", mapping, cash_account: true });
-    await importAt("Checking", [addDays(todayISO(), -40), addDays(todayISO(), -20)]);
+    await importAt("Checking", [addDays(todayISO(), -50), addDays(todayISO(), -35)]);
     await importAt("Card", [addDays(todayISO(), -3)]);
 
     const res = await api("/api/import-freshness");
@@ -1897,7 +1897,7 @@ describe("two checking accounts", () => {
     // The format with no imports has nothing to be behind on, so it is absent.
     expect(res.body.map((r: { name: string; days_behind: number; stale: boolean; last_txn_date: string }) =>
       [r.name, r.days_behind, r.stale, r.last_txn_date])).toEqual([
-      ["Checking", 20, true, addDays(todayISO(), -20)],
+      ["Checking", 35, true, addDays(todayISO(), -35)],
       ["Card", 3, false, addDays(todayISO(), -3)],
     ]);
   });

@@ -91,7 +91,7 @@ export default function Dashboard() {
           <AlertTitle>
             {stale.length === 1
               ? `${stale[0]!.name} has nothing newer than ${dateLabelFull(stale[0]!.last_txn_date)}`
-              : `${stale.length} accounts are over two weeks behind`}
+              : `${stale.length} accounts are over a month behind`}
           </AlertTitle>
           <AlertDescription>
             <p>

@@ -109,8 +109,8 @@ export function cashPosition(input: CashInputs): CashPosition {
 export type ImportSource = { profile_id: number; name: string; last_txn_date: ISODate };
 export type ImportFreshness = ImportSource & { days_behind: number; stale: boolean };
 
-/** Two weeks: a statement exported every other Friday never trips it. */
-export const STALE_IMPORT_DAYS = 14;
+/** A month: a household that exports one statement a month never trips it. */
+export const STALE_IMPORT_DAYS = 30;
 
 /**
  * How far behind each account's imports are.

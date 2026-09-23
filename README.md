@@ -817,7 +817,7 @@ premium now instead of after a second surprise.
 **Statements that have fallen behind.** Every spending number is only as
 current as the last import, and three weeks of missing spending reads as money
 left to spend. The dashboard names each import format whose newest transaction
-is more than 14 days old (`STALE_IMPORT_DAYS`). It measures from the newest
+is more than 30 days old (`STALE_IMPORT_DAYS`). It measures from the newest
 transaction, not the day of the import, because re-importing an old statement
 makes nothing current. A format with no imports at all is left out.
 
