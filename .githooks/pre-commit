@@ -1,9 +1,4 @@
 #!/bin/sh
 # Gate lane: deterministic, local, free. Nothing here calls out to a network.
-set -e
-echo "pre-commit: typecheck"
-bun run typecheck
-echo "pre-commit: tests"
-bun test
-echo "pre-commit: scenarios"
-bun run scenarios
+# `bun run check` is the definition; typecheck runs beside the tests, not before.
+exec bun run check

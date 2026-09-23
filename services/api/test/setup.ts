@@ -39,10 +39,34 @@ const TABLES = [
   "income_streams", "fixed_costs", "lumpy_items", "savings_goals",
 ];
 
+/**
+ * The tables a test has written to since they were last truncated. TRUNCATE is
+ * DDL and costs ~1.5ms whether the table is empty or not; most tests touch two
+ * or three of nine, so truncating only those is most of the suite's runtime.
+ * AUTO_INCREMENT > 1 means something was inserted since the last TRUNCATE --
+ * even a row that was deleted again, whose id would otherwise not restart and
+ * would move every id-keyed setting. The row check is the backstop for a table
+ * whose counter reads stale; MariaDB reads it live.
+ */
+async function dirtyTables(): Promise<string[]> {
+  const ai = await sql.unsafe(
+    `SELECT TABLE_NAME AS t FROM information_schema.TABLES
+      WHERE TABLE_SCHEMA = DATABASE() AND AUTO_INCREMENT > 1`,
+  ) as { t: string }[];
+  const touched = new Set(ai.map((r) => r.t));
+  const [rows] = await sql.unsafe(
+    `SELECT ${TABLES.map((t) => `EXISTS(SELECT 1 FROM \`${t}\`) AS \`${t}\``).join(", ")}`,
+  ) as Record<string, number | boolean>[];
+  return TABLES.filter((t) => touched.has(t) || Number(rows![t]) === 1);
+}
+
 export async function resetDb({ withSeed = false } = {}) {
-  await sql.unsafe("SET FOREIGN_KEY_CHECKS = 0");
-  for (const t of TABLES) await sql.unsafe(`TRUNCATE TABLE \`${t}\``);
-  await sql.unsafe("SET FOREIGN_KEY_CHECKS = 1");
+  const dirty = await dirtyTables();
+  if (dirty.length) {
+    await sql.unsafe("SET FOREIGN_KEY_CHECKS = 0");
+    for (const t of dirty) await sql.unsafe(`TRUNCATE TABLE \`${t}\``);
+    await sql.unsafe("SET FOREIGN_KEY_CHECKS = 1");
+  }
   // settings is not truncated -- it is a key/value table shared with the
   // migrations -- so the hand-kept balances are zeroed instead, or one test's
   // typed-in balance is the next test's starting state.

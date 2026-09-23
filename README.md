@@ -452,7 +452,7 @@ a flag somebody gets wrong.
 
 ```bash
 bun run check                 # typecheck + tests + scenarios; what the commit hook runs
-bun test                      # 449 tests, no network, under a second
+bun test                      # 461 tests, no network, about three seconds
 bun run scenarios             # whole-household fixtures, diffed against expectations
 bun run scenarios:update      # accept a change, after reading the diff
 bun run eval:build            # build the fixture from this database (gitignored)

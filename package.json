@@ -20,7 +20,7 @@
     "demo": "bun run scripts/demo.ts",
     "backup": "bun run scripts/backup.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p apps/web/tsconfig.app.json",
-    "check": "bun run typecheck && bun test && bun run scenarios",
+    "check": "sh -c 'bun run typecheck & tc=$!; bun test && bun run scenarios; t=$?; wait $tc && exit $t'",
     "build": "bun run --cwd apps/web build",
     "reset": "bun run scripts/reset.ts",
     "eval:build": "bun run scripts/build-eval-cases.ts",

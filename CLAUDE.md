@@ -24,6 +24,10 @@ scripts/docker-smoke.sh          # the image, end to end; needs Docker, not part
 `bun test` needs MySQL running: `services/api/test/*` hits a real
 `lumpy_budget_test` database (`TEST_DATABASE_URL`), migrates it, and TRUNCATEs
 between tests. budget-core and csv-import tests are pure.
+`resetDb()` truncates only tables whose `AUTO_INCREMENT` moved or that hold rows
+(TRUNCATE is ~1.5ms each, empty or not). A table a test writes to must be in its
+`TABLES` list, or it is never reset at all. `check` runs typecheck beside the
+tests, not before; both are incremental (`node_modules/.tmp/*.tsbuildinfo`).
 
 The hook is not installed by cloning: `git config core.hooksPath .githooks`.
 
