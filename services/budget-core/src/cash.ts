@@ -104,3 +104,35 @@ export function cashPosition(input: CashInputs): CashPosition {
     short: input.balanceCents - dueTotal < 0,
   };
 }
+
+/** One import format and the newest transaction any of its statements carried. */
+export type ImportSource = { profile_id: number; name: string; last_txn_date: ISODate };
+export type ImportFreshness = ImportSource & { days_behind: number; stale: boolean };
+
+/** Two weeks: a statement exported every other Friday never trips it. */
+export const STALE_IMPORT_DAYS = 14;
+
+/**
+ * How far behind each account's imports are.
+ *
+ * Every spending number in the app is only as current as the last statement:
+ * "available to spend" three weeks after the last import is a plan with three
+ * weeks of spending missing from it, and it looks exactly like good news. This
+ * is what says so. Measured from the newest transaction, not the day of the
+ * import, because re-importing an old statement today makes nothing current. A
+ * row dated ahead of today counts as today: it is not evidence of the future.
+ * Stalest first, so the account most out of date is the one named.
+ */
+export function importFreshness(
+  sources: ImportSource[],
+  today: ISODate,
+  staleAfterDays: number = STALE_IMPORT_DAYS,
+): ImportFreshness[] {
+  d.assertDate(today);
+  return sources
+    .map((s) => {
+      const days_behind = Math.max(0, d.diffDays(s.last_txn_date, today));
+      return { ...s, days_behind, stale: days_behind > staleAfterDays };
+    })
+    .sort((a, b) => b.days_behind - a.days_behind || a.profile_id - b.profile_id);
+}

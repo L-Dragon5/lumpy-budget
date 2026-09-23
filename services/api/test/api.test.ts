@@ -1843,6 +1843,65 @@ describe("two checking accounts", () => {
       day_1: null, day_2: null, day_of_month: null, active: true,
     });
 
+  test("a bill that left the everyday account is flagged on the fixed-cost report", async () => {
+    const cats = (await api("/api/categories")).body as { id: number; bucket: string }[];
+    const fixedCat = cats.find((c) => c.bucket === "fixed")!.id;
+    const shopCat = cats.find((c) => c.bucket === "discretionary")!.id;
+    const through = todayISO().slice(0, 7);
+    const flagged = async () =>
+      ((await api(`/api/fixed-cost-actuals?through=${through}&months=3`)).body.wrong_account as {
+        merchant: string; amount_cents: number; category_name: string | null;
+      }[]);
+    const importTo = async (profileId: number, merchant: string, category_id: number) =>
+      post("/api/import", {
+        filename: `${merchant}.csv`,
+        profile_id: profileId,
+        rows: [{ txn_date: todayISO(), amount_cents: 21000, merchant, description: "", category_id, source: "import" }],
+      });
+
+    const everyday = (await post("/api/import-profiles", { name: "Everyday Bank", mapping, cash_account: true })).body.id;
+    await importTo(everyday, "NATIONAL GRID", fixedCat);
+    // One checking account: every bill leaves it, so none is out of place.
+    expect(await flagged()).toEqual([]);
+
+    const bills = (await post("/api/import-profiles", {
+      name: "Bills Bank", mapping, cash_account: true, fixed_account: true,
+    })).body.id;
+    await importTo(bills, "LANDLORD", fixedCat);
+    await importTo(everyday, "WEGMANS", shopCat);
+    const rows = await flagged();
+    // The utility off the everyday account, and only it: the rent left the right
+    // account and the groceries are what the everyday account is for.
+    expect(rows.map((r) => r.merchant)).toEqual(["NATIONAL GRID"]);
+    expect(rows[0]!.amount_cents).toBe(21000);
+    expect(rows[0]!.category_name).not.toBeNull();
+  });
+
+  test("import freshness names each account by its newest transaction, stalest first", async () => {
+    const importAt = async (name: string, dates: string[]) => {
+      const id = (await post("/api/import-profiles", { name, mapping, cash_account: true })).body.id;
+      await post("/api/import", {
+        filename: `${name}.csv`,
+        profile_id: id,
+        rows: dates.map((txn_date, i) => ({
+          txn_date, amount_cents: 1000 + i, merchant: `${name} ${i}`, description: "", category_id: null, source: "import",
+        })),
+      });
+    };
+    await post("/api/import-profiles", { name: "Never used", mapping, cash_account: true });
+    await importAt("Checking", [addDays(todayISO(), -40), addDays(todayISO(), -20)]);
+    await importAt("Card", [addDays(todayISO(), -3)]);
+
+    const res = await api("/api/import-freshness");
+    expect(res.status).toBe(200);
+    // The format with no imports has nothing to be behind on, so it is absent.
+    expect(res.body.map((r: { name: string; days_behind: number; stale: boolean; last_txn_date: string }) =>
+      [r.name, r.days_behind, r.stale, r.last_txn_date])).toEqual([
+      ["Checking", 20, true, addDays(todayISO(), -20)],
+      ["Card", 3, false, addDays(todayISO(), -3)],
+    ]);
+  });
+
   test("one account until a balance is typed for a second", async () => {
     await put("/api/settings", { name: "checking_balance_cents", value: "180000" });
     await weeklyPay();

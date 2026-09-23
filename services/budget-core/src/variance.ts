@@ -3,7 +3,7 @@ import type { Category, Expense, FixedCost } from "@lumpy/contracts";
 import { divRound, sum, type Cents } from "./money";
 import * as d from "./dates";
 import type { ISOMonth } from "./dates";
-import { categoryIndex } from "./reports";
+import { bucketOf, categoryIndex } from "./reports";
 
 export type MonthActual = { month: ISOMonth; amount_cents: Cents };
 
@@ -218,4 +218,45 @@ export function fixedCostVariance(
       Math.abs(b.delta_cents) - Math.abs(a.delta_cents) ||
       a.cost_names.join().localeCompare(b.cost_names.join()),
   );
+}
+
+/**
+ * Bills that left the everyday account, in a household that pays its bills from
+ * a second one.
+ *
+ * `/cash-position` already charges such a row to the everyday balance, which is
+ * right -- that is where the money left -- but says nothing about it, so the
+ * bills account sits over-funded and the everyday one short with no sign why.
+ * This is the sign. `everydayBatches` is the imports off the everyday checking
+ * account; the caller passes null when there is no bills account at all, and
+ * then nothing is out of place.
+ *
+ * A bill is the `fixed` bucket, the same reading `bucketOf` gives every other
+ * report. A row with no batch was typed by hand and its account is unknown, so it
+ * is never flagged: a guess here is a badge that cries wolf. A refund (a credit)
+ * is not a bill leaving anywhere. Unlike the variance window this one runs up to
+ * the end of `through`: a bill that just left the wrong account is the one worth
+ * moving money for today, not next month.
+ */
+export function billsFromEverydayAccount(
+  expenses: Expense[],
+  categories: Category[],
+  everydayBatches: ReadonlySet<number> | null,
+  opts: VarianceWindow,
+): Expense[] {
+  if (everydayBatches === null || everydayBatches.size === 0) return [];
+  const from = d.monthStart(varianceWindow(opts)[0]!);
+  const to = d.monthEnd(opts.through);
+  const byId = categoryIndex(categories);
+  return expenses
+    .filter(
+      (e) =>
+        e.amount_cents > 0 &&
+        e.import_batch_id !== null &&
+        everydayBatches.has(e.import_batch_id) &&
+        d.compare(e.txn_date, from) >= 0 &&
+        d.compare(e.txn_date, to) <= 0 &&
+        bucketOf(e, byId) === "fixed",
+    )
+    .sort((a, b) => d.compare(b.txn_date, a.txn_date) || b.id - a.id);
 }

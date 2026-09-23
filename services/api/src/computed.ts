@@ -442,6 +442,9 @@ export const computed = new Elysia({ prefix: "/api" })
    */
   .get("/card-balances", () => store.cardBalances())
 
+  /** How far behind each account's statements are. See budget-core/cash.ts. */
+  .get("/import-freshness", async () => core.importFreshness(await store.importSources(), core.todayISO()))
+
   /**
    * Lumpy bills the statements show as already paid, waiting to be recorded.
    *
@@ -505,10 +508,13 @@ export const computed = new Elysia({ prefix: "/api" })
     async ({ query }) => {
       const through = query.through ?? core.todayISO().slice(0, 7);
       const months = clamp(query.months, 3, 1, 24);
-      const [costs, cats] = await Promise.all([store.fixedCosts(), store.categories()]);
+      const [costs, cats, everyday] = await Promise.all([
+        store.fixedCosts(), store.categories(), store.everydayBatchIds(),
+      ]);
       // One month of slack on each end so a bill posted a day late still lands in its month.
       const start = core.monthStart(core.addMonths(through, -(months + 1)));
       const expenses = await store.expensesBetween(start, core.monthEnd(through));
+      const byId = core.categoryIndex(cats);
       return {
         through,
         months,
@@ -516,6 +522,17 @@ export const computed = new Elysia({ prefix: "/api" })
         // about the window, not a fault of every bill in it.
         months_without_statements: core.monthsWithoutStatements(expenses, { through, months }),
         rows: core.fixedCostVariance(costs, cats, expenses, { through, months }),
+        // Bills that left the everyday account when a bills account exists.
+        // Empty for a household with one account. See variance.ts.
+        wrong_account: core
+          .billsFromEverydayAccount(expenses, cats, everyday, { through, months })
+          .map((e) => ({
+            id: e.id,
+            txn_date: e.txn_date,
+            merchant: e.merchant,
+            amount_cents: e.amount_cents,
+            category_name: e.category_id === null ? null : byId.get(e.category_id)?.name ?? null,
+          })),
       };
     },
     { query: z.object({ through: isoMonth.optional(), months: num }) },

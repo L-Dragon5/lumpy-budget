@@ -734,6 +734,13 @@ under (**Settings -> Import formats -> Bills account**); a row typed by hand has
 no format and lands on the everyday account, which is the one a person spends
 against and so the safe place for an unknown.
 
+A bill that comes in on the everyday statement anyway is flagged at the top of
+the fixed costs page, with the total the bills account is still holding for it.
+A bill is the `fixed` bucket. The flag appears as soon as any format is marked
+**Bills account**, whether or not a balance has been typed, and it covers the
+report's three months plus the current one. A hand-typed bill is never flagged:
+nothing says which account it left.
+
 **What the cards will ask for.** A card statement writes purchases as charges and
 the payment as a credit, so the sum of everything imported under a card format is
 how the balance has moved. Type in what the card says it owes today -- the one
@@ -803,7 +810,16 @@ and offers one button that rolls the item to its next occurrence and takes the
 charge off the balance. Nothing is written until it is pressed, which is what
 lets the match be a pattern rather than a proof, and the row shows what was
 actually charged next to what was planned, so a bill that went up is visible in
-the same glance.
+the same glance. When the two differ, a second button records the payment and takes
+the charged amount as the plan, so the fund starts saving for this year's
+premium now instead of after a second surprise.
+
+**Statements that have fallen behind.** Every spending number is only as
+current as the last import, and three weeks of missing spending reads as money
+left to spend. The dashboard names each import format whose newest transaction
+is more than 14 days old (`STALE_IMPORT_DAYS`). It measures from the newest
+transaction, not the day of the import, because re-importing an old statement
+makes nothing current. A format with no imports at all is left out.
 
 **A hand-kept balance says when it went stale.** The lumpy fund's balance is
 typed in by a person, and the schedule heals itself where the balance cannot: a
@@ -922,6 +938,6 @@ eight the tail folds into one grey "Other" rather than repeating hues.
   while the charges it paid for are not. Typing the balance off the issuer's site
   is the fix, and the tile says how many days old that number is.
 - With two checking accounts, a charge is attributed by the format it was
-  imported under. A bill paid out of the everyday account by mistake still counts
-  against the everyday balance, which is right, but it is not flagged as a bill
-  that left the wrong account.
+  imported under. A bill paid out of the everyday account is flagged on the fixed
+  costs page but not moved: the app does not know whether the fix is a transfer
+  or re-pointing the payment.

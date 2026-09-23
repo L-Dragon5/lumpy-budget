@@ -109,6 +109,39 @@ export async function fixedBatchIds(): Promise<Set<number>> {
 }
 
 /**
+ * Import batches off the everyday checking account, or null when no format is
+ * flagged as the bills account -- a household with one checking account has no
+ * "wrong" account for a bill to leave. Read by `/fixed-cost-actuals` alone, to
+ * flag bills paid from here (`billsFromEverydayAccount`). Same `cash_account =
+ * TRUE` guard as `fixedBatchIds`, for the same reason.
+ */
+export async function everydayBatchIds(): Promise<Set<number> | null> {
+  const rows = (await sql.unsafe(
+    `SELECT b.id, p.fixed_account AS fixed FROM import_profiles p
+       LEFT JOIN import_batches b ON b.profile_id = p.id
+      WHERE p.cash_account = TRUE`,
+  )) as { id: number | null; fixed: number | boolean }[];
+  if (!rows.some((r) => Number(r.fixed) === 1)) return null;
+  return new Set(rows.filter((r) => Number(r.fixed) !== 1 && r.id !== null).map((r) => Number(r.id)));
+}
+
+/**
+ * Every import format that has ever brought in a row, with the newest date it
+ * brought. A format with no imports is left out: it has nothing to be behind on.
+ * Raw SQL, so the date is DATE_FORMAT'd here rather than by `rows()`.
+ */
+export async function importSources(): Promise<core.ImportSource[]> {
+  const found = (await sql.unsafe(
+    `SELECT p.id AS profile_id, p.name AS name, DATE_FORMAT(MAX(e.txn_date), '%Y-%m-%d') AS last_txn_date
+       FROM import_profiles p
+       JOIN import_batches b ON b.profile_id = p.id
+       JOIN expenses e       ON e.import_batch_id = b.id
+      GROUP BY p.id, p.name`,
+  )) as { profile_id: number; name: string; last_txn_date: string }[];
+  return found.map((r) => ({ profile_id: Number(r.profile_id), name: r.name, last_txn_date: r.last_txn_date }));
+}
+
+/**
  * Where a card's balance is kept. One `settings` row per card, keyed by profile
  * id, so adding a card adds no schema and deleting one leaves a row nothing
  * reads rather than a dangling foreign key.

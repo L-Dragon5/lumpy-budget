@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { fixedCost, stream } from "../fixtures/factories";
 import { allocateMonth } from "../src/fixed";
-import { cashPosition } from "../src/cash";
+import { cashPosition, importFreshness, STALE_IMPORT_DAYS } from "../src/cash";
 
 // Biweekly pay on the 6th and 20th of March, rent on the 1st, car loan on the 10th.
 const streams = [stream({ name: "Job", amount_cents: 200000, frequency: "biweekly", anchor_date: "2026-03-06" })];
@@ -116,4 +116,30 @@ test("an everyday account is never short on bills it does not pay", () => {
   });
   expect(pos.short).toBe(false);
   expect(pos.projected_cents).toBe(2500);
+});
+
+test("an account is stale once its newest transaction is more than two weeks old", () => {
+  const today = "2026-03-20";
+  const [a, b] = importFreshness(
+    [
+      { profile_id: 1, name: "Checking", last_txn_date: "2026-03-06" }, // exactly 14: not yet
+      { profile_id: 2, name: "Card", last_txn_date: "2026-03-05" }, // 15
+    ],
+    today,
+  );
+  expect(STALE_IMPORT_DAYS).toBe(14);
+  // Stalest first: the account most out of date is the one the dashboard names.
+  expect([a!.name, a!.days_behind, a!.stale]).toEqual(["Card", 15, true]);
+  expect([b!.name, b!.days_behind, b!.stale]).toEqual(["Checking", 14, false]);
+});
+
+test("a transaction dated after today is not evidence the import is ahead", () => {
+  const [r] = importFreshness([{ profile_id: 1, name: "Checking", last_txn_date: "2026-03-25" }], "2026-03-20");
+  expect(r!.days_behind).toBe(0);
+  expect(r!.stale).toBe(false);
+});
+
+test("the threshold is an argument", () => {
+  const [r] = importFreshness([{ profile_id: 1, name: "C", last_txn_date: "2026-03-10" }], "2026-03-20", 7);
+  expect(r!.stale).toBe(true);
 });

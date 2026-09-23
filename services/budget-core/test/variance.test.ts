@@ -1,6 +1,7 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
+import type { Expense } from "@lumpy/contracts";
 import { category, expense, fixedCost } from "../fixtures/factories";
-import { fixedCostVariance, monthsWithoutStatements, varianceWindow } from "../src/variance";
+import { billsFromEverydayAccount, fixedCostVariance, monthsWithoutStatements, varianceWindow } from "../src/variance";
 
 const utilities = category({ name: "Utilities", bucket: "fixed" });
 const rentCat = category({ name: "Rent", bucket: "fixed" });
@@ -234,4 +235,46 @@ test("the window is three complete months, ending before `through`", () => {
   expect(varianceWindow({ through: "2026-03", months: 3 })).toEqual(["2025-12", "2026-01", "2026-02"]);
   expect(varianceWindow({ through: "2026-03" })).toEqual(["2025-12", "2026-01", "2026-02"]);
   expect(varianceWindow({ through: "2026-03", months: 1 })).toEqual(["2026-02"]);
+});
+
+describe("billsFromEverydayAccount", () => {
+  const EVERYDAY = 7;
+  const BILLS = 8;
+  const everyday = new Set([EVERYDAY]);
+  const opts = { through: "2026-03", months: 3 } as const;
+  const bill = (p: Partial<Expense>) =>
+    expense({ txn_date: "2026-02-04", amount_cents: 14000, category_id: utilities.id, import_batch_id: EVERYDAY, ...p });
+
+  test("a bill imported off the everyday account is flagged; one off the bills account is not", () => {
+    const wrong = bill({ id: 1 });
+    const right = bill({ id: 2, import_batch_id: BILLS });
+    expect(billsFromEverydayAccount([wrong, right], cats, everyday, opts).map((e) => e.id)).toEqual([1]);
+  });
+
+  test("with no bills account nothing is out of place", () => {
+    expect(billsFromEverydayAccount([bill({ id: 1 })], cats, null, opts)).toEqual([]);
+    expect(billsFromEverydayAccount([bill({ id: 1 })], cats, new Set(), opts)).toEqual([]);
+  });
+
+  test("a hand-typed bill has no known account and is never flagged", () => {
+    expect(billsFromEverydayAccount([bill({ import_batch_id: null })], cats, everyday, opts)).toEqual([]);
+  });
+
+  test("only the fixed bucket: groceries off the everyday account are the point of it", () => {
+    expect(billsFromEverydayAccount([bill({ category_id: groceries.id })], cats, everyday, opts)).toEqual([]);
+  });
+
+  test("a refund is not a bill leaving the account", () => {
+    expect(billsFromEverydayAccount([bill({ amount_cents: -14000 })], cats, everyday, opts)).toEqual([]);
+  });
+
+  test("the window runs from the variance window's first day through the end of `through`, newest first", () => {
+    const rows = [
+      bill({ id: 1, txn_date: "2025-11-30" }), // before the window
+      bill({ id: 2, txn_date: "2025-12-01" }), // first day
+      bill({ id: 3, txn_date: "2026-03-31" }), // `through` itself counts here
+      bill({ id: 4, txn_date: "2026-04-01" }), // after
+    ];
+    expect(billsFromEverydayAccount(rows, cats, everyday, opts).map((e) => e.id)).toEqual([3, 2]);
+  });
 });

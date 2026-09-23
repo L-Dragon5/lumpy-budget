@@ -8,6 +8,7 @@ import { Suspense, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { pageTitle } from "@/lib/pageTitle";
+import { Loading } from "@/components/app/page";
 
 type Item = { to: string; label: string; icon: LucideIcon; end?: boolean };
 
@@ -120,7 +121,7 @@ export default function App() {
       </header>
 
       <main className="mx-auto w-full min-w-0 max-w-7xl px-4 py-6">
-        <Suspense fallback={null}>
+        <Suspense fallback={<Loading rows={4} />}>
           <Outlet />
         </Suspense>
       </main>

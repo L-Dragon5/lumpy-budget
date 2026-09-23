@@ -23,6 +23,7 @@ export default function Dashboard() {
   const [month, setMonth] = useState(thisMonth());
   const [view, setView] = useState<"month" | "period">("month");
   const summary = useApi(["summary", month], () => eden.api.summary.get({ query: { month } }));
+  const freshness = useApi(["import-freshness"], () => eden.api["import-freshness"].get());
   const timeline = useApi(["lumpy-timeline", month], () =>
     eden.api["lumpy-timeline"].get({ query: { start: month, months: 12 } }));
 
@@ -35,6 +36,7 @@ export default function Dashboard() {
   const spentShare = s.planned_free_cents > 0
     ? Math.min(100, (s.spent.discretionary / s.planned_free_cents) * 100)
     : 100;
+  const stale = (freshness.data ?? []).filter((f) => f.stale);
   const upcoming = (timeline.data?.rows ?? []).flatMap((r) => r.due).slice(0, 4);
   // The clock is read here, once: budget-core never reads one, which is what
   // makes the pace arithmetic testable and the scenarios reproducible.
@@ -78,6 +80,27 @@ export default function Dashboard() {
           <AlertTriangleIcon />
           <AlertTitle>{s.unfunded.length} bill(s) have no paycheck to come out of</AlertTitle>
           <AlertDescription>{s.unfunded.map((u) => u.name).join(", ")}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      {stale.length > 0 ? (
+        // Every number below is only as current as the last statement, and a
+        // missing three weeks of spending reads as good news, not as a gap.
+        <Alert className="mb-4">
+          <AlertTriangleIcon />
+          <AlertTitle>
+            {stale.length === 1
+              ? `${stale[0]!.name} has nothing newer than ${dateLabelFull(stale[0]!.last_txn_date)}`
+              : `${stale.length} accounts are over two weeks behind`}
+          </AlertTitle>
+          <AlertDescription>
+            <p>
+              {stale.length === 1
+                ? `${stale[0]!.days_behind} days of spending may be missing from what is available.`
+                : `${stale.map((f) => `${f.name} (${f.days_behind} days)`).join(", ")}. Spending since then is missing from what is available.`}{" "}
+              <Link className="underline" to="/expenses">Import a statement</Link>.
+            </p>
+          </AlertDescription>
         </Alert>
       ) : null}
 

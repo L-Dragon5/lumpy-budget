@@ -96,7 +96,12 @@ export default function LumpyFund() {
    * says so -- with the balance still showing what the account really holds,
    * which is the safer half to be stale.
    */
-  const markPaid = async (row: NonNullable<typeof paid.data>["rows"][number]) => {
+  /**
+   * `replan` also takes the charged amount as the plan: the insurance that went
+   * up 12% this year is the best guess at next year's, and the fund should
+   * start saving for that number today rather than after a second surprise.
+   */
+  const markPaid = async (row: NonNullable<typeof paid.data>["rows"][number], replan = false) => {
     setPaying(row.item.id);
     setPayError(null);
     try {
@@ -104,6 +109,7 @@ export default function LumpyFund() {
       const rolled = await eden.api["lumpy-items"]({ id: row.item.id }).put({
         ...rest,
         next_due_date: row.rolls_to,
+        ...(replan ? { amount_cents: row.expense.amount_cents } : {}),
       });
       if (rolled.error) throw ApiError.from(rolled.error);
       const saved = await eden.api.settings.put({
@@ -305,7 +311,7 @@ export default function LumpyFund() {
                       ) : null}
                     </TableCell>
                     <TableCell>
-                      <div className="flex justify-end">
+                      <div className="flex flex-col items-end gap-1">
                         <Button
                           variant="outline"
                           size="sm"
@@ -314,6 +320,16 @@ export default function LumpyFund() {
                         >
                           {paying === row.item.id ? "Recording..." : "Record payment"}
                         </Button>
+                        {row.delta_cents !== 0 ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={paying !== null}
+                            onClick={() => markPaid(row, true)}
+                          >
+                            Record, and plan {money(row.expense.amount_cents, { cents: false })} next time
+                          </Button>
+                        ) : null}
                       </div>
                     </TableCell>
                   </TableRow>

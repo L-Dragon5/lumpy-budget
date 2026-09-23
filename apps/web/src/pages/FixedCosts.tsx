@@ -17,7 +17,7 @@ import { Money } from "@/components/app/money";
 import { Loading, LoadError, MonthNav, PageHeader } from "@/components/app/page";
 import { toast } from "sonner";
 import { eden, errorText, useApi, useMutate } from "@/lib/api";
-import { monthLabel, money, ordinal, thisMonth } from "@/lib/format";
+import { dateLabel, merchantTitle, monthLabel, money, ordinal, thisMonth } from "@/lib/format";
 
 type Draft = {
   name: string;
@@ -112,6 +112,7 @@ export default function FixedCosts() {
   const monthlyTotal = rows.filter((c) => c.active).reduce((a, c) => a + c.amount_cents, 0);
   const variance = actuals.data?.rows ?? [];
   const noStatements = actuals.data?.months_without_statements ?? [];
+  const wrongAccount = actuals.data?.wrong_account ?? [];
   const categoryOf = (id: number | null) =>
     id === null ? null : (categories.data ?? []).find((c) => c.id === id) ?? null;
 
@@ -131,6 +132,32 @@ export default function FixedCosts() {
           <AlertTitle>No income to cover {alloc.unfunded.length} bill(s)</AlertTitle>
           <AlertDescription>
             {alloc.unfunded.map((u) => u.name).join(", ")} — add an income stream so these can be assigned.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {wrongAccount.length > 0 ? (
+        // Already counted against the everyday balance, which is right; this is
+        // the reason that balance is short and the bills account long.
+        <Alert className="mb-4">
+          <AlertTriangleIcon />
+          <AlertTitle>
+            {wrongAccount.length === 1 ? "A bill" : `${wrongAccount.length} bills`} left the everyday account
+          </AlertTitle>
+          <AlertDescription>
+            <p>
+              {wrongAccount.length === 1 ? "It" : "They"} came in on the everyday statement, so the bills account is
+              still holding the {money(wrongAccount.reduce((a, r) => a + r.amount_cents, 0))} set aside for{" "}
+              {wrongAccount.length === 1 ? "it" : "them"}. Move that across, or re-point the payment.
+            </p>
+            <ul className="mt-1">
+              {wrongAccount.map((r) => (
+                <li key={r.id}>
+                  {dateLabel(r.txn_date)} · {merchantTitle(r.merchant)} · {money(r.amount_cents)}
+                  {r.category_name ? <span className="text-muted-foreground"> ({r.category_name})</span> : null}
+                </li>
+              ))}
+            </ul>
           </AlertDescription>
         </Alert>
       ) : null}
