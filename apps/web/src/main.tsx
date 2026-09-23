@@ -1,22 +1,26 @@
-import { StrictMode } from "react";
+import { StrictMode, lazy } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router";
 import { Toaster } from "@/components/ui/sonner";
 import App from "./App";
 import Dashboard from "@/pages/Dashboard";
-import Income from "@/pages/Income";
-import FixedCosts from "@/pages/FixedCosts";
-import LumpyFund from "@/pages/LumpyFund";
-import LumpyTimeline from "@/pages/LumpyTimeline";
-import Forecast from "@/pages/Forecast";
-import Savings from "@/pages/Savings";
-import Expenses from "@/pages/Expenses";
-import Categorize from "@/pages/Categorize";
-import Reports from "@/pages/Reports";
-import Settings from "@/pages/Settings";
-import NotFound from "@/pages/NotFound";
 import "./index.css";
+
+// The dashboard is where every visit lands, so it ships in the entry chunk; each
+// other page (and recharts, which only Reports and the timeline use) loads on
+// first visit. `<Suspense>` around the outlet in App.tsx keeps the sidebar up.
+const Income = lazy(() => import("@/pages/Income"));
+const FixedCosts = lazy(() => import("@/pages/FixedCosts"));
+const LumpyFund = lazy(() => import("@/pages/LumpyFund"));
+const LumpyTimeline = lazy(() => import("@/pages/LumpyTimeline"));
+const Forecast = lazy(() => import("@/pages/Forecast"));
+const Savings = lazy(() => import("@/pages/Savings"));
+const Expenses = lazy(() => import("@/pages/Expenses"));
+const Categorize = lazy(() => import("@/pages/Categorize"));
+const Reports = lazy(() => import("@/pages/Reports"));
+const Settings = lazy(() => import("@/pages/Settings"));
+const NotFound = lazy(() => import("@/pages/NotFound"));
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { refetchOnWindowFocus: false, retry: false } },

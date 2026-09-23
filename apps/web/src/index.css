@@ -148,3 +148,19 @@
 }
 /* Numbers that sit in a column must line up; standalone figures keep proportional glyphs. */
 .tabular { font-variant-numeric: tabular-nums; }
+
+/* The sidebar wordmark: a three-stop gradient drifting across the text and back. */
+.wordmark {
+  background-image: linear-gradient(to right, #2a78d6, #1baf7a, #2a78d6, #2a78d6);
+  background-size: 300% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: wordmark-drift 9s linear infinite alternate;
+}
+@keyframes wordmark-drift {
+  to { background-position: 100% 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wordmark { animation: none; }
+}

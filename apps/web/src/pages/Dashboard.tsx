@@ -14,7 +14,6 @@ import { CardBalances } from "@/components/app/card-balances";
 import { CheckingBalances } from "@/components/app/checking-balances";
 import { StatTile } from "@/components/app/stat-tile";
 import { Loading, LoadError, MonthNav, PageHeader } from "@/components/app/page";
-import AnimatedContent from "@/components/AnimatedContent";
 import { eden, useApi } from "@/lib/api";
 import { dateLabel, dateLabelFull, money, monthLabel, thisMonth } from "@/lib/format";
 import { periodPace, todayISO } from "@lumpy/budget-core";
@@ -93,7 +92,7 @@ export default function Dashboard() {
         </Alert>
       ) : null}
 
-      <AnimatedContent distance={24} duration={0.5}>
+      <div className="animate-in fade-in slide-in-from-bottom-6 duration-500 ease-out">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatTile
             label="Available to spend"
@@ -153,7 +152,7 @@ export default function Dashboard() {
           <StatTile label="Spent so far" cents={s.spent.discretionary} tone="muted" caption={`${money(s.spent.total)} across all spending`} />
           <StatTile label="Planned free cash" cents={s.planned_free_cents} tone={s.planned_free_cents < 0 ? "critical" : "neutral"} caption="Before any spending." />
         </div>
-      </AnimatedContent>
+      </div>
 
       <div className="mt-6">
         <Card>

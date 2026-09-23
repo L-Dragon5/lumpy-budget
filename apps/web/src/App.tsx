@@ -4,10 +4,9 @@ import {
   PiggyBankIcon, ReceiptIcon, RepeatIcon, SettingsIcon, SparklesIcon, SunIcon, TrendingUpIcon,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import GradientText from "@/components/GradientText";
 import { pageTitle } from "@/lib/pageTitle";
 
 type Item = { to: string; label: string; icon: LucideIcon; end?: boolean };
@@ -52,6 +51,9 @@ function NavItem({ item }: { item: Item }) {
   );
 }
 
+/** The brand's gradient drifts back and forth; `.wordmark` in index.css is the whole animation. */
+const Wordmark = () => <span className="wordmark">Lumpy</span>;
+
 function useTheme() {
   const [dark, setDark] = useState(() => {
     const saved = localStorage.getItem("lumpy-theme");
@@ -75,9 +77,7 @@ export default function App() {
 
       <aside className="sticky top-0 z-40 hidden h-svh w-56 shrink-0 flex-col gap-1 border-r bg-background px-3 py-4 md:flex">
         <NavLink to="/" className="px-3 pb-3 text-lg font-semibold tracking-tight">
-          <GradientText colors={["#2a78d6", "#1baf7a", "#2a78d6"]} animationSpeed={9}>
-            Lumpy
-          </GradientText>
+          <Wordmark />
         </NavLink>
         {GROUPS.map((group, i) => (
           <nav key={group[0].to} className={cn("flex flex-col gap-1", i > 0 && "mt-4 border-t pt-4")}>
@@ -100,9 +100,7 @@ export default function App() {
       <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur md:hidden">
         <div className="flex items-center gap-2 px-4 py-3">
           <NavLink to="/" className="text-lg font-semibold tracking-tight">
-            <GradientText colors={["#2a78d6", "#1baf7a", "#2a78d6"]} animationSpeed={9}>
-              Lumpy
-            </GradientText>
+            <Wordmark />
           </NavLink>
           <Button
             variant="ghost"
@@ -122,7 +120,9 @@ export default function App() {
       </header>
 
       <main className="mx-auto w-full min-w-0 max-w-7xl px-4 py-6">
-        <Outlet />
+        <Suspense fallback={null}>
+          <Outlet />
+        </Suspense>
       </main>
     </div>
   );
