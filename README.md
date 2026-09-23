@@ -863,6 +863,22 @@ banks that write spending as negative, and `MM/DD` versus `DD/MM` (settled by
 scanning the column for a value over 12, not by guessing). Rows it cannot read
 are reported by line number instead of being silently dropped.
 
+**Alliant PDFs.** Alliant Credit Union only publishes PDF statements, so the
+wizard reads those as well: pick one or several PDFs and they become the same
+`Date, Description, Amount, Details` table a CSV would have been, checking account
+only, and go through mapping, preview and import unchanged. Each statement is
+checked against its own running balance first, and one row that does not add up
+stops the import and names the row. It never shorts a month without saying so.
+The wizard picks the saved format the last PDF was imported under, so choose it
+once (`acu-checking` here) and every later PDF is one click. pdf.js is a separate
+1.6MB chunk that loads only when a PDF is picked. The parser is
+`services/csv-import/src/alliant.ts`, a port of the old `acu-to-csv.py`, and has
+to match that script's output exactly. The merchant is part of the duplicate
+hash, so a different spelling would import every month again.
+`alliant.test.ts` compares the two over the real statements whenever
+`statements/` is on disk. Another bank's PDF is refused with a pointer to its
+CSV export.
+
 Save the column mapping under a name and next month's statement from the same
 bank is one click. Categorization runs on merchant keyword rules, lowest
 priority number first; anything unmatched lands in a review queue on the

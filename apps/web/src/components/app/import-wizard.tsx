@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { ImportMapping } from "@lumpy/contracts";
 import { addDays } from "@lumpy/budget-core";
 import {
-  applyRules, guessMapping, matchManual, normalize, parseCsv, MATCH_WINDOW_DAYS,
+  alliantTable, applyRules, guessMapping, isAlliant, matchManual, normalize, parseCsv, toCsv, MATCH_WINDOW_DAYS,
   type ParsedCsv,
 } from "@lumpy/csv-import";
 import { CheckCircle2Icon, FileTextIcon, TriangleAlertIcon } from "lucide-react";
@@ -29,6 +29,7 @@ export function ImportWizard({ open, onOpenChange }: { open: boolean; onOpenChan
   const categories = useApi(["categories"], () => eden.api.categories.get());
   const rules = useApi(["category-rules"], () => eden.api["category-rules"].get());
   const profiles = useApi(["import-profiles"], () => eden.api["import-profiles"].get());
+  const batches = useApi(["import-batches"], () => eden.api["import-batches"].get());
   const invalidate = useInvalidateAll();
 
   const [filename, setFilename] = useState("");
@@ -51,17 +52,59 @@ export function ImportWizard({ open, onOpenChange }: { open: boolean; onOpenChan
     setDeclined(new Set());
   };
 
-  const loadFile = async (file: File) => {
-    const text = await file.text();
+  const loadText = (text: string, name: string, formatName = name.replace(/\.(csv|pdf)$/i, "")) => {
     const parsed = parseCsv(text);
     setRawText(text);
-    setFilename(file.name);
+    setFilename(name);
     setCsv(parsed);
     setMapping(guessMapping(parsed));
-    setProfileName(file.name.replace(/\.csv$/i, ""));
+    setProfileName(formatName);
     setDone(null);
     setError(null);
     setDeclined(new Set());
+  };
+
+  const loadFiles = async (files: File[]) => {
+    setError(null);
+    const pdfs = files.filter((f) => /\.pdf$/i.test(f.name) || f.type === "application/pdf");
+    if (pdfs.length === 0) return loadText(await files[0]!.text(), files[0]!.name);
+    if (pdfs.length !== files.length) {
+      setError(new Error("Pick one CSV, or one or more PDF statements, not both."));
+      return;
+    }
+    setBusy(true);
+    try {
+      // pdf.js is most of a megabyte; it loads the first time a PDF is picked.
+      const { pdfLines } = await import("@lumpy/csv-import/pdf");
+      const tables: ParsedCsv[] = [];
+      for (const f of pdfs) {
+        const lines = await pdfLines(new Uint8Array(await f.arrayBuffer()));
+        if (!isAlliant(lines)) {
+          throw new Error(`${f.name} is not an Alliant statement. Only Alliant PDFs can be read; export a CSV from any other bank.`);
+        }
+        const { table, problems } = alliantTable(lines);
+        // The statement's own running balance is the proof nothing was misread.
+        // A row that breaks it stops the import rather than shorting a month.
+        if (problems.length > 0) throw new Error(`${f.name} did not read cleanly: ${problems.join("; ")}`);
+        tables.push(table);
+      }
+      const rows = tables.flatMap((t) => t.rows).sort((a, b) => a.Date!.localeCompare(b.Date!));
+      if (rows.length === 0) throw new Error("No checking transactions in that statement.");
+      const name = pdfs.length === 1 ? pdfs[0]!.name : `${pdfs.length} statements, ${pdfs[0]!.name} to ${pdfs[pdfs.length - 1]!.name}`;
+      // Named for the account, not the file: "acu-august" is next month's wrong name.
+      loadText(toCsv({ headers: tables[0]!.headers, rows }), name, "alliant-checking");
+      // The format the last PDF was imported under is the one this PDF wants.
+      const last = (batches.data ?? []).find((b) => /\.pdf$/i.test(b.filename) && b.profile_id !== null);
+      const profile = (profiles.data ?? []).find((p) => p.id === last?.profile_id);
+      if (profile) {
+        setProfileId(String(profile.id));
+        setMapping(profile.mapping);
+      }
+    } catch (e) {
+      setError(e);
+    } finally {
+      setBusy(false);
+    }
   };
 
   // Re-parse whenever skip_rows changes: the header row moves with it.
@@ -185,7 +228,7 @@ export function ImportWizard({ open, onOpenChange }: { open: boolean; onOpenChan
         <DialogHeader>
           <DialogTitle>Import a statement</DialogTitle>
           <DialogDescription>
-            Any CSV a bank or card will export. Nothing is saved until you press Import.
+            Any CSV a bank or card will export, or an Alliant PDF. Nothing is saved until you press Import.
           </DialogDescription>
         </DialogHeader>
 
@@ -215,21 +258,26 @@ export function ImportWizard({ open, onOpenChange }: { open: boolean; onOpenChan
         ) : !csv ? (
           <div className="flex flex-col gap-4 py-6">
             <Field>
-              <FieldLabel htmlFor="csv-file">CSV file</FieldLabel>
+              <FieldLabel htmlFor="csv-file">Statement file</FieldLabel>
               <Input
                 id="csv-file"
                 type="file"
-                accept=".csv,text/csv"
+                accept=".csv,text/csv,.pdf,application/pdf"
+                multiple
+                disabled={busy}
                 onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) void loadFile(file);
+                  const files = [...(e.target.files ?? [])];
+                  if (files.length > 0) void loadFiles(files);
                 }}
               />
               <FieldDescription>
                 Chase, Amex, Capital One and plain bank exports all work. Columns are matched automatically and
-                you can correct them on the next step.
+                you can correct them on the next step. Alliant statements can be the PDF itself, several at once,
+                and each is checked against its own running balance before anything is shown.
               </FieldDescription>
             </Field>
+            {busy ? <p className="text-sm text-muted-foreground">Reading the statement...</p> : null}
+            {error ? <FormError error={error} /> : null}
             {(profiles.data ?? []).length > 0 ? (
               <p className="text-sm text-muted-foreground">
                 <FileTextIcon className="mr-1 inline size-3.5" />

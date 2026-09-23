@@ -5,7 +5,14 @@
   "main": "src/index.ts",
   "dependencies": {
     "@lumpy/contracts": "workspace:*",
-    "papaparse": "^5.4.1"
+    "papaparse": "^5.4.1",
+    "unpdf": "^1.8.1"
   },
-  "devDependencies": { "@types/papaparse": "^5.3.14" }
+  "devDependencies": {
+    "@types/papaparse": "^5.3.14"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./pdf": "./src/pdf.ts"
+  }
 }

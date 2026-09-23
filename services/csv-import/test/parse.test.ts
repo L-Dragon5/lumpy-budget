@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { detectDateFormat, parseAmountCents, parseCsv, parseDate } from "../src/parse";
+import { detectDateFormat, parseAmountCents, parseCsv, parseDate, toCsv } from "../src/parse";
 
 test("csv survives quoted commas, embedded newlines and a BOM", () => {
   const text = '﻿"Date","Description","Amount"\n' +
@@ -63,4 +63,15 @@ test("date order is settled by the column, not by a guess", () => {
   expect(detectDateFormat(["01/05/2026", "02/06/2026"])).toBe("MM/DD/YYYY"); // ambiguous: US default
   expect(detectDateFormat(["01-05-2026"])).toBe("MM-DD-YYYY");
   expect(detectDateFormat([])).toBe("auto");
+});
+
+test("toCsv round-trips through parseCsv, commas and quotes included", () => {
+  const table = {
+    headers: ["Date", "Description", "Amount", "Details"],
+    rows: [
+      { Date: "2026-08-05", Description: 'UMB, NA "WIRE"', Amount: "-2500.00", Details: "line one" },
+      { Date: "2026-08-06", Description: "PLAIN", Amount: "12.00", Details: "" },
+    ],
+  };
+  expect(parseCsv(toCsv(table))).toEqual(table);
 });

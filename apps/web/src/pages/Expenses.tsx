@@ -191,7 +191,7 @@ export default function Expenses() {
             <MonthNav month={month} onChange={setMonth} />
             <Button variant="outline" onClick={() => setImporting(true)}>
               <UploadIcon data-icon="inline-start" />
-              Import CSV
+              Import statement
             </Button>
           </>
         }

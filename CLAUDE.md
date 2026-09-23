@@ -152,6 +152,14 @@ Four places, in this order, or reads silently drop it:
   `matchesPattern` lives there. The differential test at the bottom of
   `csv-import/test/shadow.test.ts` runs both functions over 3000 generated rule
   sets; change either one and that test is what tells you they disagree.
+- **`alliant.ts` reproduces `statements/acu-to-csv.py` quirks and all.**
+  The counterparty is part of the dedupe hash, and the months already imported
+  were hashed from that script's output. Two quirks are pinned by tests and
+  must stay: a row that starts with `TYPE:` keeps its whole body (the CO:
+  fallback never fires), and removing the amount from the text also removes it
+  from inside the balance's digits. The real-statement test in `alliant.test.ts`
+  compares the two outputs; it skips on a clone without `statements/`. pdf.js
+  lives behind `@lumpy/csv-import/pdf` so only a PDF upload loads it.
 - **`001_init.sql` is the whole schema and keeps that name deliberately.** An
   existing database already records it as applied, so it skips the file and
   stays where it is; a fresh one gets everything in one pass. Rename it and

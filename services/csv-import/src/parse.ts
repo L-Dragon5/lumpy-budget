@@ -20,6 +20,14 @@ export function parseCsv(text: string, skipRows = 0): ParsedCsv {
   return { headers, rows };
 }
 
+/**
+ * The inverse of `parseCsv`, for a table that did not start as a CSV (a PDF
+ * statement): the wizard keeps the raw text to re-parse when "header rows to
+ * skip" changes, so a table has to be text to go down the same path.
+ */
+export const toCsv = (t: ParsedCsv): string =>
+  Papa.unparse({ fields: t.headers, data: t.rows.map((r) => t.headers.map((h) => r[h] ?? "")) });
+
 export type DateFormat = ImportMapping["date_format"];
 
 /** "$1,234.56" and "(12.34)" both appear in the wild. Parsed as integers so no float ever touches money. */
