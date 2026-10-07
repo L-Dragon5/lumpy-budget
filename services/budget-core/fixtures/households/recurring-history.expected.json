@@ -77,13 +77,19 @@
     {
       "window": "2026-03-27..2026-04-09",
       "income_cents": 210000,
-      "planned_free_cents": 195950,
+      "planned_free_cents": 35950,
       "spent_discretionary_cents": 0,
       "carryover_cents": 0,
-      "available_cents": 195950
+      "available_cents": 35950
     }
   ],
   "unfunded": [],
+  "periods_vs_month": {
+    "held_last_month_cents": 160000,
+    "held_for_next_month_cents": 160000,
+    "unfunded_cents": 0,
+    "spent_outside_periods_cents": 25700
+  },
   "savings_goals": [
     {
       "name": "Emergency",

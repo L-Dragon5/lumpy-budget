@@ -336,8 +336,12 @@ export async function budgetInputs(month: string, lumpyMode: "steady" | "recomme
     streams(), fixedCosts(), lumpyItems(), savingsGoals(), categories(),
     setting("lumpy_opening_balance_cents", "0"),
   ]);
-  // From the previous month: monthSummary carries last month's overspend and has to see it.
-  const expenses = await expensesBetween(core.monthStart(core.addMonths(month, -1)), core.monthEnd(month));
+  // From the previous month, which the carryover reads, through the end of the
+  // last paycheck period, which runs past month end to the next payday.
+  const expenses = await expensesBetween(
+    core.monthStart(core.addMonths(month, -1)),
+    core.addDays(core.monthEnd(month), core.PERIOD_HORIZON_DAYS),
+  );
   return {
     streams: s, fixedCosts: f, lumpyItems: l, savingsGoals: g, categories: c, expenses, month, lumpyMode,
     lumpyOpeningBalanceCents: Number(opening) || 0,

@@ -118,29 +118,35 @@
     {
       "window": "2026-03-05..2026-03-14",
       "income_cents": 185000,
-      "planned_free_cents": 46532,
+      "planned_free_cents": -45468,
       "spent_discretionary_cents": 15665,
       "carryover_cents": 0,
-      "available_cents": 30867
+      "available_cents": -61133
     },
     {
       "window": "2026-03-15..2026-03-30",
       "income_cents": 312500,
-      "planned_free_cents": 168891,
+      "planned_free_cents": -72909,
       "spent_discretionary_cents": 21279,
       "carryover_cents": 0,
-      "available_cents": 147612
+      "available_cents": -94188
     },
     {
       "window": "2026-03-31..2026-04-04",
       "income_cents": 312500,
-      "planned_free_cents": 222690,
+      "planned_free_cents": 170290,
       "spent_discretionary_cents": 99999,
       "carryover_cents": 0,
-      "available_cents": 122691
+      "available_cents": 70291
     }
   ],
   "unfunded": [],
+  "periods_vs_month": {
+    "held_last_month_cents": 386200,
+    "held_for_next_month_cents": 386200,
+    "unfunded_cents": 0,
+    "spent_outside_periods_cents": -81257
+  },
   "savings_goals": [
     {
       "name": "Emergency fund",
@@ -462,10 +468,10 @@
     {
       "window": "2026-03-05..2026-03-14",
       "day": "6/10",
-      "on_track_cents": 27919,
-      "delta_cents": -12254,
-      "daily_left_cents": 6173,
-      "status": "under"
+      "on_track_cents": -27281,
+      "delta_cents": 42946,
+      "daily_left_cents": -12227,
+      "status": "over"
     },
     {
       "window": "2026-03-15..2026-03-30",

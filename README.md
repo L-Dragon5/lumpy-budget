@@ -563,6 +563,15 @@ October's *own* result, not counting September, so a bad month is paid back once
 and then forgotten. A surplus never carries. A previous month with no transactions
 at all was never imported, so it carries nothing.
 
+**The paycheck view is cash flow, the month is the calendar, and the gap is named.**
+A paycheck's period runs until the next payday, into next month if it has to, and
+it holds every bill that paycheck sets aside. That includes next month's rent
+when the 15th is the last paycheck early enough to cover it. So the periods do not
+add up to the month. Under the paycheck list the dashboard says by exactly how much:
+bills last month's paychecks paid, next month's bills these paychecks hold, and
+spending dated before the first payday or after month end. The scenario lane checks
+that sum to the cent.
+
 **A re-imported statement is a no-op.** Every expense carries a unique hash of
 its date, amount, normalized merchant, and which occurrence of those it is, so
 overlapping statements insert only what is new. Imports are grouped in batches

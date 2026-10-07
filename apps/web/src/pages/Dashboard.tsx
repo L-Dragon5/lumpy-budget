@@ -246,8 +246,10 @@ export default function Dashboard() {
                     {p.holds.length > 0 ? (
                       <div className="mt-2 flex flex-wrap gap-1">
                         {p.holds.map((h) => (
-                          <Badge key={h.fixed_cost_id} variant="secondary">
+                          <Badge key={`${h.fixed_cost_id}-${h.due_date}`} variant="secondary">
                             {h.name} {money(h.amount_cents, { cents: false })}
+                            {/* A late paycheck sets next month's early bills aside; say which month. */}
+                            {h.due_date.slice(0, 7) !== month ? ` for ${monthLabel(h.due_date.slice(0, 7))}` : null}
                           </Badge>
                         ))}
                       </div>
@@ -296,6 +298,7 @@ export default function Dashboard() {
                   </div>
                   );
                 })}
+                <PeriodsVsMonth s={s} />
               </div>
             )}
           </CardContent>
@@ -362,5 +365,33 @@ export default function Dashboard() {
         </Card>
       </div>
     </>
+  );
+}
+
+/**
+ * The paychecks are cash flow and the month is the calendar, so they do not sum to
+ * each other. This says by exactly how much and why, from `periods_vs_month`.
+ */
+function PeriodsVsMonth({ s }: { s: { available_cents: number; periods: { available_cents: number }[]; periods_vs_month: Record<
+  "held_last_month_cents" | "held_for_next_month_cents" | "unfunded_cents" | "spent_outside_periods_cents", number
+> } }) {
+  const g = s.periods_vs_month;
+  const total = s.periods.reduce((a, p) => a + p.available_cents, 0);
+  if (total === s.available_cents) return null;
+  const parts = [
+    [g.held_last_month_cents, "of this month's bills came out of last month's paychecks"],
+    [-g.held_for_next_month_cents, "of next month's bills come out of these"],
+    [g.unfunded_cents, "of bills no paycheck can reach"],
+    [g.spent_outside_periods_cents, "of spending falls outside these paychecks' dates"],
+  ] as const;
+  return (
+    <p className="text-sm text-muted-foreground">
+      These paychecks come to <Money cents={total} />, against <Money cents={s.available_cents} /> for the month:{" "}
+      {parts
+        .filter(([c]) => c !== 0)
+        .map(([c, why]) => `${money(c, { sign: true })} ${why}`)
+        .join("; ")}
+      .
+    </p>
   );
 }

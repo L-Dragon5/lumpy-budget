@@ -112,6 +112,12 @@
     }
   ],
   "unfunded": [],
+  "periods_vs_month": {
+    "held_last_month_cents": 0,
+    "held_for_next_month_cents": 0,
+    "unfunded_cents": 0,
+    "spent_outside_periods_cents": -15000
+  },
   "savings_goals": [
     {
       "name": "Down payment",

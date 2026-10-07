@@ -61,7 +61,27 @@ export type MonthSummary = {
   periods: PeriodSummary[];
   savings_breakdown: { name: string; amount_cents: Cents }[];
   unfunded: { name: string; amount_cents: Cents }[];
+  /**
+   * Why the paycheck periods do not sum to the month. The month asks what this
+   * calendar month costs; a period asks what one paycheck has to cover until the
+   * next. They differ by exactly these, and the scenario lane checks that:
+   * sum(periods.available) = available + held_last_month + unfunded
+   *   - held_for_next_month + spent_outside_periods. Zero-sum when there are no periods.
+   */
+  periods_vs_month: {
+    /** This month's bills set aside from last month's paychecks: in the month, in no period. */
+    held_last_month_cents: Cents;
+    /** Next month's bills these paychecks set aside: in a period, not in the month. */
+    held_for_next_month_cents: Cents;
+    /** Bills no paycheck can reach: in the month, in no period. */
+    unfunded_cents: Cents;
+    /** The month's discretionary spending minus the periods'. Before the first payday, or past month end. */
+    spent_outside_periods_cents: Cents;
+  };
 };
+
+/** How far past month end the last period may run, and so how far `expenses` has to reach. */
+export const PERIOD_HORIZON_DAYS = 45;
 
 /**
  * The whole month in one object. Only discretionary spending is subtracted from
@@ -84,24 +104,39 @@ export function monthSummary(input: BudgetInputs): MonthSummary {
   return ownMonth(input, prevAvailable < 0 ? prevAvailable : 0);
 }
 
-function ownMonth(input: BudgetInputs, carry: Cents): MonthSummary {
-  const { streams, fixedCosts, lumpyItems, savingsGoals, expenses, categories, month } = input;
-  const mode = input.lumpyMode ?? "recommended";
-
+/** The month's paycheck allocation, with the same lumpy and savings figures its own summary uses. */
+function planMonth(input: BudgetInputs, month: ISOMonth) {
+  const { streams, fixedCosts, lumpyItems, savingsGoals } = input;
   const income = monthlyActual(streams, month);
-  const normalized = monthlyNormalized(streams, month);
-  const lumpy = mode === "steady"
+  const lumpy = (input.lumpyMode ?? "recommended") === "steady"
     ? steadyMonthlyTotal(lumpyItems, month)
     : recommendedMonthlyTotal(lumpyItems, month, input.lumpyOpeningBalanceCents ?? 0);
   const savings = savingsMonthlyTotal(savingsGoals, income);
+  const alloc = allocateMonth({ streams, fixedCosts, month, lumpyMonthlyCents: lumpy, savingsMonthlyCents: savings });
+  return { income, lumpy, savings, alloc };
+}
 
-  const alloc = allocateMonth({
-    streams,
-    fixedCosts,
-    month,
-    lumpyMonthlyCents: lumpy,
-    savingsMonthlyCents: savings,
+/** Same date and stream can be two paychecks (a clamp onto Feb 28), so the key counts them. */
+function paycheckKeys(paychecks: PaycheckPlan[]): string[] {
+  const seen = new Map<string, number>();
+  return paychecks.map((p) => {
+    const k = `${p.date}|${p.stream_id}`;
+    const n = seen.get(k) ?? 0;
+    seen.set(k, n + 1);
+    return `${k}|${n}`;
   });
+}
+
+function ownMonth(input: BudgetInputs, carry: Cents): MonthSummary {
+  const { streams, fixedCosts, lumpyItems, savingsGoals, expenses, categories, month } = input;
+
+  const normalized = monthlyNormalized(streams, month);
+  const { income, lumpy, savings, alloc } = planMonth(input, month);
+  // A late-month paycheck is what pays next month's early bills, and next month's
+  // allocation is the one that says so. Without these its period reads as free money.
+  const nextPlan = planMonth(input, d.addMonths(month, 1)).alloc.paychecks.filter((p) => p.prior_month);
+  const nextKeys = paycheckKeys(nextPlan);
+  const heldForNext = new Map(nextPlan.map((p, i) => [nextKeys[i]!, p.holds]));
 
   // Only bills actually due this month count against this month.
   const fixedDue = sum(fixedCosts.filter((f) => f.active).map((f) => f.amount_cents));
@@ -112,6 +147,17 @@ function ownMonth(input: BudgetInputs, carry: Cents): MonthSummary {
   const spent = totalsByBucket(monthExpenses, categories);
 
   const plannedFree = income - fixedDue - lumpy - savings;
+  const periods = periodSummaries(input, alloc.paychecks, carry, heldForNext);
+  const total = (k: keyof PeriodSummary) => sum(periods.map((p) => p[k] as number));
+  const holdsIn = (ps: PaycheckPlan[]) => sum(ps.map((p) => p.hold_total_cents));
+  const periodsVsMonth = periods.length === 0
+    ? { held_last_month_cents: 0, held_for_next_month_cents: 0, unfunded_cents: 0, spent_outside_periods_cents: 0 }
+    : {
+        held_last_month_cents: holdsIn(alloc.paychecks.filter((p) => p.prior_month)),
+        held_for_next_month_cents: total("fixed_cents") - holdsIn(alloc.paychecks.filter((p) => !p.prior_month)),
+        unfunded_cents: sum(alloc.unfunded.map((h) => h.amount_cents)),
+        spent_outside_periods_cents: spent.discretionary - total("spent_discretionary_cents"),
+      };
 
   return {
     month,
@@ -129,27 +175,37 @@ function ownMonth(input: BudgetInputs, carry: Cents): MonthSummary {
     carryover_from: d.addMonths(month, -1),
     available_cents: plannedFree + carry - spent.discretionary,
     paychecks: alloc.paychecks,
-    periods: periodSummaries(input, alloc.paychecks, carry),
+    periods,
     savings_breakdown: monthlySavings(savingsGoals, income).map((g) => ({
       name: g.goal.name,
       amount_cents: g.amount_cents,
     })),
     unfunded: alloc.unfunded.map((h) => ({ name: h.name, amount_cents: h.amount_cents })),
+    periods_vs_month: periodsVsMonth,
   };
 }
 
 /**
  * One row per paycheck in the month. A period runs from the day the money lands
- * until the day before the next paycheck, which is how the money is really spent.
- * The first period takes the month's carryover, so the periods add up to the month.
+ * until the day before the next paycheck, which is how the money is really spent,
+ * and it holds every bill that paycheck sets aside, next month's included
+ * (`heldForNext`, keyed by `paycheckKeys`). That is cash flow, not the calendar
+ * month, so the periods do not sum to the month: `periods_vs_month` says by how
+ * much. The first period takes the month's carryover.
  */
-export function periodSummaries(input: BudgetInputs, paychecks: PaycheckPlan[], carry: Cents = 0): PeriodSummary[] {
+export function periodSummaries(
+  input: BudgetInputs,
+  paychecks: PaycheckPlan[],
+  carry: Cents = 0,
+  heldForNext: Map<string, PaycheckPlan["holds"]> = new Map(),
+): PeriodSummary[] {
   const { streams, expenses, categories, month } = input;
   const byId = categoryIndex(categories);
   const inMonth = paychecks.filter((p) => !p.prior_month);
+  const keys = paycheckKeys(inMonth);
 
   // Look ahead so the last period of the month ends at the next real paycheck.
-  const horizon = d.addDays(d.monthEnd(month), 45);
+  const horizon = d.addDays(d.monthEnd(month), PERIOD_HORIZON_DAYS);
   const future = allOccurrences(streams.filter((s) => s.active), d.monthStart(month), horizon);
 
   return inMonth.map((p, i) => {
@@ -160,7 +216,9 @@ export function periodSummaries(input: BudgetInputs, paychecks: PaycheckPlan[], 
         .filter((e) => inWindow(e, p.date, end) && bucketOf(e, byId) === "discretionary")
         .map((e) => e.amount_cents),
     );
-    const plannedFree = p.free_cents;
+    const nextHolds = heldForNext.get(keys[i]!) ?? [];
+    const nextTotal = sum(nextHolds.map((h) => h.amount_cents));
+    const plannedFree = p.free_cents - nextTotal;
     const carryover = i === 0 ? carry : 0;
     return {
       label: `${p.stream_name} ${p.date}`,
@@ -168,15 +226,15 @@ export function periodSummaries(input: BudgetInputs, paychecks: PaycheckPlan[], 
       end,
       stream_name: p.stream_name,
       income_cents: p.amount_cents,
-      fixed_cents: p.hold_total_cents,
+      fixed_cents: p.hold_total_cents + nextTotal,
       lumpy_cents: p.lumpy_cents,
       savings_cents: p.savings_cents,
       planned_free_cents: plannedFree,
       spent_discretionary_cents: spentDiscretionary,
       carryover_cents: carryover,
       available_cents: plannedFree + carryover - spentDiscretionary,
-      holds: p.holds,
-      over_committed: p.over_committed,
+      holds: [...p.holds, ...nextHolds],
+      over_committed: plannedFree < 0,
     };
   });
 }

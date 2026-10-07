@@ -81,6 +81,7 @@ export function run(h: Household) {
       available_cents: p.available_cents,
     })),
     unfunded: summary.unfunded,
+    periods_vs_month: summary.periods_vs_month,
     savings_goals: core.goalProgress(h.savingsGoals, summary.income_cents).map((p) => ({
       name: p.goal.name,
       balance_cents: p.balance_cents,
@@ -248,6 +249,14 @@ function checkInvariants(
   if (s.carryover_cents > 0) problems.push(`carryover ${s.carryover_cents} is positive`);
   if (s.available_cents !== s.planned_free_cents + s.carryover_cents - s.spent.discretionary)
     problems.push("month available is inconsistent");
+  // The paycheck view is cash flow and the month is the calendar; they differ by
+  // exactly what periods_vs_month names, or one of them has lost money.
+  const g = s.periods_vs_month;
+  const periodsAvail = s.periods.reduce((a, p) => a + p.available_cents, 0);
+  const reconciled = s.available_cents + g.held_last_month_cents + g.unfunded_cents
+    - g.held_for_next_month_cents + g.spent_outside_periods_cents;
+  if (s.periods.length > 0 && periodsAvail !== reconciled)
+    problems.push(`periods sum to ${periodsAvail}, month reconciles to ${reconciled}`);
   const periodCarry = s.periods.reduce((a, p) => a + p.carryover_cents, 0);
   if (s.periods.length > 0 && periodCarry !== s.carryover_cents)
     problems.push(`period carry ${periodCarry} != month carry ${s.carryover_cents}`);

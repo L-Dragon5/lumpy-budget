@@ -104,8 +104,57 @@ test("a period runs from one paycheck to the day before the next", () => {
   expect(p2!.spent_discretionary_cents).toBe(10000); // groceries on the 20th
   expect(p3!.spent_discretionary_cents).toBe(0);
   expect(p1!.available_cents).toBe(p1!.planned_free_cents - 25000);
-  // Period free cash sums to the month's free cash minus what a prior paycheck carries.
-  expect(s.periods.reduce((a, p) => a + p.planned_free_cents, 0)).toBe(780000 - 50000 - 10000 - 89000);
+  // April's rent is due the 1st with three days' lead, so the 31st is too late and
+  // the 15th sets it aside. Its period used to read that $1,500 as free money.
+  expect(p2!.holds.map((h) => `${h.name} ${h.due_date}`)).toEqual([
+    "Car loan 2026-03-16", "Internet 2026-03-20", "Rent 2026-04-01",
+  ]);
+  expect(p2!.fixed_cents).toBe(42000 + 8000 + 150000);
+  // A month that pays its rent the way it is paid every month: last month's paycheck
+  // held this month's, this month's holds next month's, and the periods sum to the month.
+  expect(s.periods.reduce((a, p) => a + p.planned_free_cents, 0)).toBe(s.planned_free_cents);
+  expect(s.periods_vs_month.held_last_month_cents).toBe(150000);
+  expect(s.periods_vs_month.held_for_next_month_cents).toBe(150000);
+});
+
+test("the periods reconcile to the month to the cent", () => {
+  // Spending before the first payday (the 3rd) and after month end (April 2nd):
+  // the first is in the month and no period, the second in a period and not the month.
+  const s = monthSummary(inputs({
+    expenses: [
+      expense({ txn_date: "2026-03-03", amount_cents: 7000, category_id: groceries.id }),
+      expense({ txn_date: "2026-03-20", amount_cents: 10000, category_id: groceries.id }),
+      expense({ txn_date: "2026-04-02", amount_cents: 4000, category_id: groceries.id }),
+      expense({ txn_date: "2026-02-10", amount_cents: planFor("2026-02") + 30000, category_id: groceries.id }),
+    ],
+  }));
+  const g = s.periods_vs_month;
+  expect(s.carryover_cents).toBe(-30000);
+  expect(g.spent_outside_periods_cents).toBe(7000 - 4000);
+  expect(s.periods.at(-1)!.spent_discretionary_cents).toBe(4000);
+  const periods = s.periods.reduce((a, p) => a + p.available_cents, 0);
+  expect(periods).toBe(s.available_cents + g.held_last_month_cents + g.unfunded_cents
+    - g.held_for_next_month_cents + g.spent_outside_periods_cents);
+});
+
+test("a month whose paychecks hold more of next month's bills than last month's held reads lower by period", () => {
+  // Both incomes start in March, so no February paycheck held March's rent (it is
+  // late, on the 5th's), while the 15th still sets April's aside.
+  const streams = [stream({ ...dayJob, starts_on: "2026-03-01" }), stream({ ...rental, starts_on: "2026-03-01" })];
+  const s = monthSummary(inputs({ streams }));
+  expect(s.periods_vs_month.held_last_month_cents).toBe(0);
+  expect(s.periods_vs_month.held_for_next_month_cents).toBe(150000);
+  const periods = s.periods.reduce((a, p) => a + p.available_cents, 0);
+  expect(periods).toBe(s.available_cents - s.periods_vs_month.held_for_next_month_cents
+    + s.periods_vs_month.spent_outside_periods_cents);
+});
+
+test("a month with no paychecks owes no reconciliation", () => {
+  const s = monthSummary(inputs({ streams: [] }));
+  expect(s.periods).toHaveLength(0);
+  expect(s.periods_vs_month).toEqual({
+    held_last_month_cents: 0, held_for_next_month_cents: 0, unfunded_cents: 0, spent_outside_periods_cents: 0,
+  });
 });
 
 test("a 3-paycheck month shows up as surplus over the normalized average", () => {

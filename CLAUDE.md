@@ -241,8 +241,20 @@ Four places, in this order, or reads silently drop it:
   "result" is the plan with nothing imported against it. `budgetInputs` fetches
   expenses from the start of the previous month for this. Narrow the window back
   and the carry silently goes to zero (an API test pins it). The first in-month
-  period takes the carry, and `periodPace` counts it, so the periods still add up
-  to the month.
+  period takes the carry, and `periodPace` counts it.
+- **A period holds next month's bills too; the month does not.** `ownMonth` runs
+  `planMonth` for the next month and hands its `prior_month` holds to
+  `periodSummaries`, matched by `paycheckKeys` (date, stream, *and* which one,
+  because a clamp can put two of one stream on a day). Without it the late-month
+  paycheck's period showed next month's rent as free money. `budgetInputs` reads
+  expenses through `monthEnd + PERIOD_HORIZON_DAYS` because the last period runs to
+  the next payday; stop at month end and that period's spending past the 31st
+  reads as zero (an API test pins it). The periods therefore do not sum to the
+  month, by exactly `periods_vs_month`, and the scenario lane checks the identity.
+  `held_for_next_month_cents` is derived from the periods, so the identity cannot
+  catch a lost next-month hold. The unit tests in `summary.test.ts` are what do.
+  A negative period is real: `allocateMonth` falls back to the latest paycheck
+  when none can cover a bill, and inside the 31-day lookback there is often only one.
 - **Only discretionary spending subtracts from available.** Fixed / lumpy /
   savings transactions are reconciliation; counting them twice is the bug this
   app exists to avoid.

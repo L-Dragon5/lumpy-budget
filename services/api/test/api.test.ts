@@ -572,6 +572,25 @@ describe("computed endpoints", () => {
     expect((await api("/api/summary?month=2026-04")).body.carryover_cents).toBe(0);
   });
 
+  test("the last paycheck period sees spending past month end, and the periods reconcile", async () => {
+    // The 31st's paycheck lasts until the next one in April. budgetInputs used to stop
+    // reading at month end, so that period's April spending was silently zero.
+    await post("/api/import", {
+      filename: "apr.csv", profile_id: null,
+      rows: [{ txn_date: "2026-04-02", amount_cents: 4200, merchant: "WEGMANS", description: "", category_id: null, source: "import" }],
+    });
+    const s = (await api("/api/summary?month=2026-03")).body;
+    const last = s.periods.at(-1);
+    expect(last.end > "2026-03-31").toBe(true);
+    expect(last.spent_discretionary_cents).toBe(4200);
+    expect(s.spent.discretionary).toBe(0);
+    const g = s.periods_vs_month;
+    expect(g.spent_outside_periods_cents).toBe(-4200);
+    const periods = s.periods.reduce((a: number, p: { available_cents: number }) => a + p.available_cents, 0);
+    expect(periods).toBe(s.available_cents + g.held_last_month_cents + g.unfunded_cents
+      - g.held_for_next_month_cents + g.spent_outside_periods_cents);
+  });
+
   test("a paycheck off a checking statement does not raise what is available", async () => {
     // The live undercount this app existed to avoid. A checking statement writes
     // every deposit as a credit; before the income bucket, the one the rules

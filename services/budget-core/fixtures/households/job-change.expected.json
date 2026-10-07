@@ -81,21 +81,27 @@
     {
       "window": "2026-01-15..2026-01-30",
       "income_cents": 300000,
-      "planned_free_cents": 288666,
+      "planned_free_cents": 138666,
       "spent_discretionary_cents": 7600,
       "carryover_cents": 0,
-      "available_cents": 281066
+      "available_cents": 131066
     },
     {
       "window": "2026-01-31..2026-02-14",
       "income_cents": 300000,
-      "planned_free_cents": 288667,
+      "planned_free_cents": 281167,
       "spent_discretionary_cents": 0,
       "carryover_cents": 0,
-      "available_cents": 288667
+      "available_cents": 281167
     }
   ],
   "unfunded": [],
+  "periods_vs_month": {
+    "held_last_month_cents": 157500,
+    "held_for_next_month_cents": 157500,
+    "unfunded_cents": 0,
+    "spent_outside_periods_cents": 9400
+  },
   "savings_goals": [
     {
       "name": "Emergency fund",
