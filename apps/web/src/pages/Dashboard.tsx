@@ -33,9 +33,10 @@ export default function Dashboard() {
 
   const nothingSetUp = s.income_cents === 0 && s.fixed_cents === 0 && s.lumpy_cents === 0;
   const overBudget = s.available_cents < 0;
-  const spentShare = s.planned_free_cents > 0
-    ? Math.min(100, (s.spent.discretionary / s.planned_free_cents) * 100)
-    : 100;
+  // Last month's overspend comes off the top, so the bar measures against what is really left to plan with.
+  const plan = s.planned_free_cents + s.carryover_cents;
+  const carried = s.carryover_cents < 0;
+  const spentShare = plan > 0 ? Math.min(100, (s.spent.discretionary / plan) * 100) : 100;
   const stale = (freshness.data ?? []).filter((f) => f.stale);
   const upcoming = (timeline.data?.rows ?? []).flatMap((r) => r.due).slice(0, 4);
   // The clock is read here, once: budget-core never reads one, which is what
@@ -125,6 +126,7 @@ export default function Dashboard() {
             caption={
               <>
                 {money(s.planned_free_cents)} planned, {money(s.spent.discretionary)} spent.
+                {carried ? ` ${money(-s.carryover_cents)} carried over from ${monthLabel(s.carryover_from)}.` : null}
                 {s.spent.fixed + s.spent.lumpy + s.spent.savings > 0 ? (
                   <>
                     {" "}
@@ -197,6 +199,7 @@ export default function Dashboard() {
                     ["Lumpy fund", -s.lumpy_cents, "out"],
                     ["Savings", -s.savings_cents, "out"],
                     ["Planned free cash", s.planned_free_cents, "sub"],
+                    ...(carried ? [[`Carried from ${monthLabel(s.carryover_from)}`, s.carryover_cents, "out"]] : []),
                     ["Discretionary spending", -s.spent.discretionary, "out"],
                     ["Available to spend", s.available_cents, "total"],
                   ].map(([label, cents, kind]) => (
@@ -234,6 +237,11 @@ export default function Dashboard() {
                       In <Money cents={p.income_cents} /> · bills <Money cents={p.fixed_cents} /> · lumpy{" "}
                       <Money cents={p.lumpy_cents} /> · savings <Money cents={p.savings_cents} /> · spent{" "}
                       <Money cents={p.spent_discretionary_cents} />
+                      {p.carryover_cents < 0 ? (
+                        <>
+                          {" "}· carried from {monthLabel(s.carryover_from)} <Money cents={p.carryover_cents} />
+                        </>
+                      ) : null}
                     </div>
                     {p.holds.length > 0 ? (
                       <div className="mt-2 flex flex-wrap gap-1">

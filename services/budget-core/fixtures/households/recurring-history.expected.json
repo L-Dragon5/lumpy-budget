@@ -20,6 +20,7 @@
       "income": 0,
       "total": 25700
     },
+    "carryover_cents": 0,
     "available_cents": 185200
   },
   "paychecks": [
@@ -70,6 +71,7 @@
       "income_cents": 210000,
       "planned_free_cents": 174950,
       "spent_discretionary_cents": 0,
+      "carryover_cents": 0,
       "available_cents": 174950
     },
     {
@@ -77,6 +79,7 @@
       "income_cents": 210000,
       "planned_free_cents": 195950,
       "spent_discretionary_cents": 0,
+      "carryover_cents": 0,
       "available_cents": 195950
     }
   ],

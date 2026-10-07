@@ -555,6 +555,23 @@ describe("computed endpoints", () => {
     expect(id("Housing")).toBeGreaterThan(0);
   });
 
+  test("last month's overspend is carried into this month's available", async () => {
+    // Only reachable if budgetInputs reads the previous month's expenses too.
+    const feb = (await api("/api/summary?month=2026-02")).body;
+    await post("/api/import", {
+      filename: "feb.csv", profile_id: null,
+      rows: [{ txn_date: "2026-02-12", amount_cents: feb.planned_free_cents + 200000, merchant: "BIG TV", description: "", category_id: null, source: "import" }],
+    });
+    expect((await api("/api/summary?month=2026-02")).body.available_cents).toBe(-200000);
+    const res = await api("/api/summary?month=2026-03");
+    expect(res.body.carryover_cents).toBe(-200000);
+    expect(res.body.carryover_from).toBe("2026-02");
+    expect(res.body.available_cents).toBe(562000 - 200000);
+    expect(res.body.periods[0].carryover_cents).toBe(-200000);
+    // And no further: April is clean even though February was not.
+    expect((await api("/api/summary?month=2026-04")).body.carryover_cents).toBe(0);
+  });
+
   test("a paycheck off a checking statement does not raise what is available", async () => {
     // The live undercount this app existed to avoid. A checking statement writes
     // every deposit as a credit; before the income bucket, the one the rules

@@ -234,6 +234,15 @@ Four places, in this order, or reads silently drop it:
   full month's history to five days of spending reads as 80% under budget every
   month until the 25th. It is a median, not a mean, and it skips months with no
   transactions at all for the same reason `fixedCostVariance` does.
+- **The carryover is the previous month's `ownMonth`, never its `monthSummary`.**
+  `monthSummary` carries last month's result when it is negative, and that result
+  must not include *its* carry. Otherwise one bad month is repaid every month
+  after it. A previous month with no transactions carries nothing, because its
+  "result" is the plan with nothing imported against it. `budgetInputs` fetches
+  expenses from the start of the previous month for this. Narrow the window back
+  and the carry silently goes to zero (an API test pins it). The first in-month
+  period takes the carry, and `periodPace` counts it, so the periods still add up
+  to the month.
 - **Only discretionary spending subtracts from available.** Fixed / lumpy /
   savings transactions are reconciliation; counting them twice is the bug this
   app exists to avoid.

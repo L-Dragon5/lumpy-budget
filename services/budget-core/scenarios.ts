@@ -57,6 +57,7 @@ export function run(h: Household) {
       savings_cents: summary.savings_cents,
       planned_free_cents: summary.planned_free_cents,
       spent: summary.spent,
+      carryover_cents: summary.carryover_cents,
       available_cents: summary.available_cents,
     },
     paychecks: summary.paychecks.map((p) => ({
@@ -76,6 +77,7 @@ export function run(h: Household) {
       income_cents: p.income_cents,
       planned_free_cents: p.planned_free_cents,
       spent_discretionary_cents: p.spent_discretionary_cents,
+      carryover_cents: p.carryover_cents,
       available_cents: p.available_cents,
     })),
     unfunded: summary.unfunded,
@@ -239,9 +241,16 @@ function checkInvariants(
   const spending = core.SPENDING.reduce((a, b) => a + s.spent[b], 0);
   if (s.spent.total !== spending) problems.push(`spent total ${s.spent.total} != spending buckets ${spending}`);
   for (const p of s.periods) {
-    const expected = p.planned_free_cents - p.spent_discretionary_cents;
+    const expected = p.planned_free_cents + p.carryover_cents - p.spent_discretionary_cents;
     if (p.available_cents !== expected) problems.push(`period ${p.start} available is inconsistent`);
   }
+  // Last month's overspend is carried once and only ever down, and the paychecks carry it too.
+  if (s.carryover_cents > 0) problems.push(`carryover ${s.carryover_cents} is positive`);
+  if (s.available_cents !== s.planned_free_cents + s.carryover_cents - s.spent.discretionary)
+    problems.push("month available is inconsistent");
+  const periodCarry = s.periods.reduce((a, p) => a + p.carryover_cents, 0);
+  if (s.periods.length > 0 && periodCarry !== s.carryover_cents)
+    problems.push(`period carry ${periodCarry} != month carry ${s.carryover_cents}`);
   return problems;
 }
 

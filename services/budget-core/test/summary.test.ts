@@ -209,3 +209,70 @@ test("the current period is the one today falls in", () => {
   // Every period the month reports is covered, so "today" always finds one.
   for (const p of s.periods) expect(currentPeriod(s.periods, p.start)!.start).toBe(p.start);
 });
+
+// --- Carrying last month's overspend, one month and no further ---
+
+const planFor = (month: string) => monthSummary(inputs({ month, expenses: [] })).planned_free_cents;
+/** A discretionary charge that lands `month`'s own result at exactly `result` cents. */
+const landAt = (month: string, result: number) =>
+  expense({ txn_date: `${month}-12`, amount_cents: planFor(month) - result, category_id: groceries.id });
+
+test("last month's overspend is carried into this month", () => {
+  const base = monthSummary(inputs());
+  const s = monthSummary(inputs({ expenses: [...inputs().expenses, landAt("2026-02", -200000)] }));
+  expect(s.carryover_cents).toBe(-200000);
+  expect(s.carryover_from).toBe("2026-02");
+  expect(s.available_cents).toBe(base.available_cents - 200000);
+  expect(s.available_cents).toBe(s.planned_free_cents + s.carryover_cents - s.spent.discretionary);
+});
+
+test("a month that came in under plan carries nothing, and not -0", () => {
+  const s = monthSummary(inputs({ expenses: [...inputs().expenses, landAt("2026-02", 50000)] }));
+  expect(s.carryover_cents).toBe(0);
+  expect(Object.is(s.carryover_cents, 0)).toBe(true);
+});
+
+test("a month that landed on exactly zero carries a real zero", () => {
+  const s = monthSummary(inputs({ expenses: [landAt("2026-02", 0)] }));
+  expect(Object.is(s.carryover_cents, 0)).toBe(true);
+});
+
+test("an overspend two months back does not reach this month", () => {
+  const s = monthSummary(inputs({
+    expenses: [...inputs().expenses, landAt("2026-01", -300000), landAt("2026-02", 50000)],
+  }));
+  expect(s.carryover_cents).toBe(0);
+});
+
+test("the carry is last month's own result, not what it inherited", () => {
+  // January -3000, February -500 on its own (and -3500 with January's carry).
+  const expenses = [...inputs().expenses, landAt("2026-01", -300000), landAt("2026-02", -50000)];
+  expect(monthSummary(inputs({ month: "2026-02", expenses })).available_cents).toBe(-350000);
+  expect(monthSummary(inputs({ expenses })).carryover_cents).toBe(-50000);
+});
+
+test("a previous month with no transactions was never imported and carries nothing", () => {
+  // The job starts in March, so February's plan is the bills with no paycheck: deeply negative,
+  // but nothing was ever imported against it. Every expense in `inputs()` is in March.
+  const streams = [stream({ ...dayJob, starts_on: "2026-03-01" })];
+  expect(monthSummary(inputs({ month: "2026-02", streams })).available_cents).toBeLessThan(0);
+  expect(monthSummary(inputs({ streams })).carryover_cents).toBe(0);
+});
+
+test("the first paycheck period takes the carry and the periods still add up", () => {
+  const base = monthSummary(inputs());
+  const s = monthSummary(inputs({ expenses: [...inputs().expenses, landAt("2026-02", -200000)] }));
+  expect(s.periods.map((p) => p.carryover_cents)).toEqual([-200000, 0, 0]);
+  expect(s.periods[0]!.available_cents).toBe(base.periods[0]!.available_cents - 200000);
+  expect(s.periods.slice(1).map((p) => p.available_cents)).toEqual(base.periods.slice(1).map((p) => p.available_cents));
+  for (const p of s.periods) expect(p.available_cents).toBe(p.planned_free_cents + p.carryover_cents - p.spent_discretionary_cents);
+});
+
+test("pace counts the carry as money the period no longer has", () => {
+  const period = { start: "2026-03-01", end: "2026-03-10", planned_free_cents: 100000, spent_discretionary_cents: 0 };
+  const plain = periodPace(period, "2026-03-01")!;
+  const carried = periodPace({ ...period, carryover_cents: -50000 }, "2026-03-01")!;
+  expect(plain.daily_left_cents).toBe(10000);
+  expect(carried.daily_left_cents).toBe(5000);
+  expect(carried.on_track_cents).toBe(5000);
+});

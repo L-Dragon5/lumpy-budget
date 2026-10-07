@@ -34,6 +34,8 @@ export type PeriodSummary = {
   savings_cents: Cents;
   planned_free_cents: Cents;
   spent_discretionary_cents: Cents;
+  /** Last month's overspend, on the month's first paycheck only. Zero or negative. */
+  carryover_cents: Cents;
   available_cents: Cents;
   holds: PaycheckPlan["holds"];
   over_committed: boolean;
@@ -51,6 +53,9 @@ export type MonthSummary = {
   savings_cents: Cents;
   planned_free_cents: Cents;
   spent: BucketTotals;
+  /** Last month's own overspend, carried one month and no further. Zero or negative. */
+  carryover_cents: Cents;
+  carryover_from: ISOMonth;
   available_cents: Cents;
   paychecks: PaycheckPlan[];
   periods: PeriodSummary[];
@@ -62,8 +67,24 @@ export type MonthSummary = {
  * The whole month in one object. Only discretionary spending is subtracted from
  * what is available: a mortgage payment that shows up in an imported statement is
  * the fixed cost being *paid*, not a second, extra expense.
+ *
+ * A month that ended below zero is carried into the next one, once. The carry is
+ * the previous month's *own* result (`ownMonth`, which never looks back), so a
+ * deficit reaches one month and stops there instead of chaining forever; a
+ * surplus is never carried. A previous month with no transactions at all was
+ * never imported, and its "result" is just the plan with nothing spent against
+ * it, so it carries nothing -- the same reason `monthsWithoutStatements` exists.
+ * `expenses` has to include the previous month for any of this to fire.
  */
 export function monthSummary(input: BudgetInputs): MonthSummary {
+  const prev = d.addMonths(input.month, -1);
+  const imported = input.expenses.some((e) => inWindow(e, d.monthStart(prev), d.monthEnd(prev)));
+  const prevAvailable = imported ? ownMonth({ ...input, month: prev }, 0).available_cents : 0;
+  // A ternary, not Math.min: Math.min(0, -0) is -0, which JSON hides and toBe does not.
+  return ownMonth(input, prevAvailable < 0 ? prevAvailable : 0);
+}
+
+function ownMonth(input: BudgetInputs, carry: Cents): MonthSummary {
   const { streams, fixedCosts, lumpyItems, savingsGoals, expenses, categories, month } = input;
   const mode = input.lumpyMode ?? "recommended";
 
@@ -104,9 +125,11 @@ export function monthSummary(input: BudgetInputs): MonthSummary {
     savings_cents: savings,
     planned_free_cents: plannedFree,
     spent,
-    available_cents: plannedFree - spent.discretionary,
+    carryover_cents: carry,
+    carryover_from: d.addMonths(month, -1),
+    available_cents: plannedFree + carry - spent.discretionary,
     paychecks: alloc.paychecks,
-    periods: periodSummaries(input, alloc.paychecks),
+    periods: periodSummaries(input, alloc.paychecks, carry),
     savings_breakdown: monthlySavings(savingsGoals, income).map((g) => ({
       name: g.goal.name,
       amount_cents: g.amount_cents,
@@ -118,8 +141,9 @@ export function monthSummary(input: BudgetInputs): MonthSummary {
 /**
  * One row per paycheck in the month. A period runs from the day the money lands
  * until the day before the next paycheck, which is how the money is really spent.
+ * The first period takes the month's carryover, so the periods add up to the month.
  */
-export function periodSummaries(input: BudgetInputs, paychecks: PaycheckPlan[]): PeriodSummary[] {
+export function periodSummaries(input: BudgetInputs, paychecks: PaycheckPlan[], carry: Cents = 0): PeriodSummary[] {
   const { streams, expenses, categories, month } = input;
   const byId = categoryIndex(categories);
   const inMonth = paychecks.filter((p) => !p.prior_month);
@@ -128,7 +152,7 @@ export function periodSummaries(input: BudgetInputs, paychecks: PaycheckPlan[]):
   const horizon = d.addDays(d.monthEnd(month), 45);
   const future = allOccurrences(streams.filter((s) => s.active), d.monthStart(month), horizon);
 
-  return inMonth.map((p) => {
+  return inMonth.map((p, i) => {
     const next = future.find((o) => d.compare(o.date, p.date) > 0);
     const end = next ? d.addDays(next.date, -1) : d.monthEnd(month);
     const spentDiscretionary = sum(
@@ -137,6 +161,7 @@ export function periodSummaries(input: BudgetInputs, paychecks: PaycheckPlan[]):
         .map((e) => e.amount_cents),
     );
     const plannedFree = p.free_cents;
+    const carryover = i === 0 ? carry : 0;
     return {
       label: `${p.stream_name} ${p.date}`,
       start: p.date,
@@ -148,7 +173,8 @@ export function periodSummaries(input: BudgetInputs, paychecks: PaycheckPlan[]):
       savings_cents: p.savings_cents,
       planned_free_cents: plannedFree,
       spent_discretionary_cents: spentDiscretionary,
-      available_cents: plannedFree - spentDiscretionary,
+      carryover_cents: carryover,
+      available_cents: plannedFree + carryover - spentDiscretionary,
       holds: p.holds,
       over_committed: p.over_committed,
     };
@@ -186,7 +212,8 @@ export type PeriodPace = {
  * budget-core does not read a clock.
  */
 export function periodPace(
-  period: Pick<PeriodSummary, "start" | "end" | "planned_free_cents" | "spent_discretionary_cents">,
+  period: Pick<PeriodSummary, "start" | "end" | "planned_free_cents" | "spent_discretionary_cents">
+    & Partial<Pick<PeriodSummary, "carryover_cents">>,
   today: ISODate,
 ): PeriodPace | null {
   if (d.compare(today, period.start) < 0 || d.compare(today, period.end) > 0) return null;
@@ -194,7 +221,8 @@ export function periodPace(
   const days = d.diffDays(period.start, period.end) + 1;
   const day = d.diffDays(period.start, today) + 1;
   const daysLeft = days - day + 1;
-  const planned = period.planned_free_cents;
+  // Last month's overspend is money this period no longer has to spend.
+  const planned = period.planned_free_cents + (period.carryover_cents ?? 0);
   const spent = period.spent_discretionary_cents;
   const dayShare = day / days;
   const onTrack = Math.round(planned * dayShare);

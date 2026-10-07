@@ -556,6 +556,13 @@ a planned fixed cost and as a real transaction; subtracting both would double
 count it. Fixed, lumpy and savings transactions are reconciliation, never a
 second subtraction.
 
+**Last month's overspend comes out of this month, once.** If September ends at
+-$2,000, October's available starts $2,000 lower and its first paycheck period
+carries the shortfall. It goes back one month and no further. November's carry is
+October's *own* result, not counting September, so a bad month is paid back once
+and then forgotten. A surplus never carries. A previous month with no transactions
+at all was never imported, so it carries nothing.
+
 **A re-imported statement is a no-op.** Every expense carries a unique hash of
 its date, amount, normalized merchant, and which occurrence of those it is, so
 overlapping statements insert only what is new. Imports are grouped in batches

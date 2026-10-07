@@ -336,7 +336,8 @@ export async function budgetInputs(month: string, lumpyMode: "steady" | "recomme
     streams(), fixedCosts(), lumpyItems(), savingsGoals(), categories(),
     setting("lumpy_opening_balance_cents", "0"),
   ]);
-  const expenses = await expensesBetween(core.monthStart(month), core.monthEnd(month));
+  // From the previous month: monthSummary carries last month's overspend and has to see it.
+  const expenses = await expensesBetween(core.monthStart(core.addMonths(month, -1)), core.monthEnd(month));
   return {
     streams: s, fixedCosts: f, lumpyItems: l, savingsGoals: g, categories: c, expenses, month, lumpyMode,
     lumpyOpeningBalanceCents: Number(opening) || 0,
