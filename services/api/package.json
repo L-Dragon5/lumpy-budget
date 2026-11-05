@@ -4,13 +4,13 @@
   "type": "module",
   "main": "src/server.ts",
   "dependencies": {
-    "@elysiajs/cors": "1.4.2",
+    "@elysiajs/cors": "1.4.3",
     "@lumpy/budget-core": "workspace:*",
     "@lumpy/contracts": "workspace:*",
     "@lumpy/csv-import": "workspace:*",
     "@lumpy/db": "workspace:*",
-    "elysia": "1.4.30",
-    "zod": "^3.23.8",
+    "elysia": "1.4.31",
+    "zod": "^3.25.76",
     "@lumpy/llm": "workspace:*"
   },
   "exports": {

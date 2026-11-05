@@ -9,5 +9,7 @@
     "./seed": "./src/seed.ts",
     "./tables": "./src/tables.ts"
   },
-  "dependencies": { "@lumpy/contracts": "workspace:*" }
+  "dependencies": {
+    "@lumpy/contracts": "workspace:*"
+  }
 }
